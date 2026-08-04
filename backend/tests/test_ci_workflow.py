@@ -120,11 +120,52 @@ def test_boundary_negative_tests_run_in_ci(workflow: dict[str, Any]) -> None:
     assert "tests/test_boundaries.py" in run_commands(workflow, "boundaries")
 
 
-def test_boundary_job_installs_nothing(workflow: dict[str, Any]) -> None:
-    """🔒 The checker is stdlib-only (Arch §3.5) so it survives a broken
-    dependency tree — which is exactly when a boundary gets crossed in a hurry.
+def test_boundary_check_does_not_depend_on_installed_packages(
+    workflow: dict[str, Any],
+) -> None:
+    """🔒 The checker is stdlib-only (Arch §3.5), and CI must keep proving it.
+
+    The property worth protecting is that ``check_boundaries.py`` runs with
+    nothing installed, so it still works when the dependency tree is broken —
+    which is exactly when someone is crossing a boundary in a hurry.
+
+    That is an ordering claim, not a job-wide one. The job *does* install the
+    backend, because the negative tests below it need pytest. What must not
+    happen is the boundary check drifting to *after* that install, because then
+    an accidental third-party import in the checker would go unnoticed until the
+    day the install is what's failing.
     """
-    assert "pip install" not in run_commands(workflow, "boundaries")
+    ordered = [
+        step.get("name", "")
+        for step in steps_of(workflow, "boundaries")
+        if step.get("run")
+    ]
+    check = next(i for i, name in enumerate(ordered) if name == "Check boundaries")
+    installs = [i for i, name in enumerate(ordered) if "Install" in name]
+
+    assert check < min(installs, default=len(ordered)), (
+        "`Check boundaries` must run before any install step, or the "
+        "stdlib-only guarantee of Arch §3.5 stops being verified"
+    )
+
+
+def test_boundary_negative_tests_may_run_after_install(workflow: dict[str, Any]) -> None:
+    """The negative tests need pytest, so they may — and must — run after install.
+
+    Asserted explicitly because the previous version of this file forbade any
+    install in this job, which made the suite fail the moment the job was
+    corrected. The distinction is the point: the *checker* is dependency-free,
+    the *test suite exercising it* is not.
+    """
+    steps = [step for step in steps_of(workflow, "boundaries") if step.get("run")]
+    names = [step.get("name", "") for step in steps]
+
+    install = next(i for i, name in enumerate(names) if "Install" in name)
+    negative = next(
+        i for i, step in enumerate(steps) if "tests/test_boundaries.py" in step["run"]
+    )
+
+    assert install < negative, "the negative tests need pytest installed first"
 
 
 @pytest.mark.parametrize(
