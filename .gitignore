@@ -1,0 +1,44 @@
+# ─── Secrets ─────────────────────────────────────────────────────────────
+# NFR-034: secrets MUST NOT be committed to source control.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ─── Python ──────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ─── Node ────────────────────────────────────────────────────────────────
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+coverage/
+playwright-report/
+test-results/
+.turbo/
+
+# ─── Editors / OS ────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/settings.json.example
+.idea/
+.DS_Store
+Thumbs.db
+
+# ─── Local artefacts ─────────────────────────────────────────────────────
+*.log
+.tmp/
+scratch/

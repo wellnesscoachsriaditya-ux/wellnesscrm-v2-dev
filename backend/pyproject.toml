@@ -1,0 +1,96 @@
+[project]
+name = "wellnesscrm"
+version = "0.1.0"
+description = "WellnessCRM V2 — practice management for Indian nutrition practitioners"
+requires-python = ">=3.12"
+
+# NFR-040: dependencies MUST be pinned to exact versions.
+# NFR-078: every dependency must be justifiable and actively maintained.
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "pydantic==2.10.4",
+    "pydantic-settings==2.7.0",
+    "sqlalchemy==2.0.36",
+    "alembic==1.14.0",
+    "psycopg[binary]==3.2.3",
+    "python-json-logger==3.2.1",
+    "sentry-sdk==2.19.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+    "httpx==0.28.1",
+    "ruff==0.8.4",
+    "mypy==1.14.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+# ─── Ruff ────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["."]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "N",        # pep8-naming
+    "UP",       # pyupgrade
+    "B",        # bugbear
+    "C4",       # comprehensions
+    "SIM",      # simplify
+    "TID",      # tidy-imports (relative-import bans support Arch §3 boundaries)
+    "RUF",
+]
+ignore = [
+    "B008",    # FastAPI's Depends() in defaults is idiomatic
+    # RUF002/RUF003 flag en-dashes and similar typography as "ambiguous".
+    # This codebase's docstrings deliberately quote the approved documents,
+    # which use en-dashes and arrows throughout. Rewriting prose to satisfy a
+    # homoglyph check would degrade the documentation for no safety benefit —
+    # the rule exists to catch confusable characters in *identifiers*, and
+    # RUF001 (which covers those) remains enabled.
+    "RUF002",  # ambiguous unicode in docstrings
+    "RUF003",  # ambiguous unicode in comments
+]
+
+[tool.ruff.lint.flake8-tidy-imports]
+# Arch §3.1 R1-R6: module boundaries are enforced by tooling, not discipline.
+# Relative imports across package roots make boundary analysis unreliable.
+ban-relative-imports = "all"
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+# ─── mypy ────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+# ─── pytest ──────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q --strict-markers"
+markers = [
+    "isolation: tenant-isolation tests (AC-M0-003) — mandatory, never skip",
+    "safety: clinical safety corpus (AC-M5-003) — mandatory, never skip",
+]

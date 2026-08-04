@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat PRD.md PRD-part2.md PRD-part3.md PRD-part4.md)",
+      "Bash(rm PRD.md PRD-part2.md PRD-part3.md PRD-part4.md)"
+    ]
+  }
+}

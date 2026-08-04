@@ -1,0 +1,35 @@
+{
+  "name": "wellnesscrm-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "dev:practitioner": "npm run dev -w @wellnesscrm/practitioner",
+    "dev:portal": "npm run dev -w @wellnesscrm/client-pwa",
+    "dev:operator": "npm run dev -w @wellnesscrm/operator",
+    "gallery": "npm run dev -w @wellnesscrm/design-system"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.17.0",
+    "@types/react": "18.3.18",
+    "@types/react-dom": "18.3.5",
+    "@vitejs/plugin-react": "4.3.4",
+    "eslint": "9.17.0",
+    "eslint-plugin-react-hooks": "5.1.0",
+    "globals": "15.14.0",
+    "typescript": "5.7.2",
+    "typescript-eslint": "8.18.2",
+    "vite": "6.0.7"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
