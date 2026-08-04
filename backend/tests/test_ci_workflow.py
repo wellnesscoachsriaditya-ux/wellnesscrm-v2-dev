@@ -82,16 +82,12 @@ def test_permissions_are_read_only(workflow: dict[str, Any]) -> None:
 
 def test_main_runs_are_never_cancelled(workflow: dict[str, Any]) -> None:
     """`main`'s result gates deployment, so it must not be superseded mid-run."""
-    assert "github.ref != 'refs/heads/main'" in str(
-        workflow["concurrency"]["cancel-in-progress"]
-    )
+    assert "github.ref != 'refs/heads/main'" in str(workflow["concurrency"]["cancel-in-progress"])
 
 
 def test_every_job_has_a_timeout(workflow: dict[str, Any]) -> None:
     """A hung job on a free tier consumes the month's minutes silently."""
-    missing = [
-        name for name, job in workflow["jobs"].items() if "timeout-minutes" not in job
-    ]
+    missing = [name for name, job in workflow["jobs"].items() if "timeout-minutes" not in job]
     assert missing == [], f"jobs without a timeout: {missing}"
 
 
@@ -185,9 +181,9 @@ def test_backend_gates_do_not_short_circuit(workflow: dict[str, Any]) -> None:
     ]
     assert len(gates) >= 4
     for step in gates:
-        assert "cancelled()" in str(step.get("if", "")), (
-            f"step {step.get('name')!r} short-circuits the remaining gates"
-        )
+        assert "cancelled()" in str(
+            step.get("if", "")
+        ), f"step {step.get('name')!r} short-circuits the remaining gates"
 
 
 # ─── Aggregate gate ──────────────────────────────────────────────────────
@@ -225,9 +221,7 @@ def test_python_version_matches_pyproject(workflow: dict[str, Any]) -> None:
 def test_node_version_matches_frontend_engines(workflow: dict[str, Any]) -> None:
     import json
 
-    manifest = json.loads(
-        (_REPO / "frontend" / "package.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((_REPO / "frontend" / "package.json").read_text(encoding="utf-8"))
     assert manifest["engines"]["node"] == ">=20.0.0"
     assert workflow["env"]["NODE_VERSION"] == "20"
 
@@ -264,9 +258,7 @@ def test_npm_scripts_invoked_by_ci_are_declared(workflow: dict[str, Any]) -> Non
     import json
     import re
 
-    manifest = json.loads(
-        (_REPO / "frontend" / "package.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((_REPO / "frontend" / "package.json").read_text(encoding="utf-8"))
     declared = set(manifest["scripts"])
     invoked = set(re.findall(r"npm run ([\w:-]+)", run_commands(workflow, "frontend")))
 
