@@ -101,14 +101,24 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
 
-      # 🔒 No `pip install`. The checker is deliberately dependency-free
-      # (stdlib ast + json only, Arch §3.5), so it runs even if the dependency
-      # tree is broken — which is exactly when a boundary is most likely to be
-      # crossed in a hurry.
+      # 🔒 The boundary check runs FIRST, with nothing installed. The checker is
+      # deliberately stdlib-only (ast + json, Arch §3.5) so it still works when
+      # the dependency tree is broken — which is exactly when a boundary is most
+      # likely to be crossed in a hurry. Running it before the install is what
+      # keeps that guarantee honest: an accidental third-party import in the
+      # checker fails here rather than going unnoticed.
       - name: Check boundaries
         working-directory: backend
         run: python tools/check_boundaries.py
+
+      # The negative tests below need pytest, so the install happens after the
+      # dependency-free check above has already passed.
+      - name: Install backend
+        working-directory: backend
+        run: pip install -e ".[dev]"
 
       - name: Verify the checker still fails on real violations
         working-directory: backend
