@@ -15,9 +15,14 @@ the logs, which are scrubbed by the same rules.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any, cast
+
 from app.kernel.scrubbing import sentry_before_send
 from app.platform.config import Environment, Settings
 from app.platform.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = get_logger(__name__)
 
@@ -51,7 +56,15 @@ def configure_observability(settings: Settings, *, component: str) -> None:
         # 🔒 NFR-033 — never collect PII automatically.
         send_default_pii=False,
         # 🔒 NFR-033 — and scrub whatever our code attached.
-        before_send=sentry_before_send,
+        #
+        # The cast is the price of keeping the scrubber SDK-agnostic. Sentry
+        # types this hook against its own ``Event`` TypedDict; ``sentry_before_send``
+        # takes a plain dict so that ``kernel.scrubbing`` has no dependency on
+        # sentry-sdk and its NFR-033 tests run without one. The shapes are
+        # structurally identical — Event *is* a TypedDict over str keys — so this
+        # narrows a nominal mismatch at the one boundary where the SDK is known,
+        # rather than leaking the SDK's types into the kernel.
+        before_send=cast("Callable[[Any, Any], Any]", sentry_before_send),
         traces_sample_rate=settings.sentry_traces_sample_rate,
         # Breadcrumbs record recent activity; capped so an error report cannot
         # accumulate a long trail of request data.

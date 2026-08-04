@@ -1,0 +1,246 @@
+# WellnessCRM V2 — continuous integration.
+#
+# 🔒 DoD §4.1 gate 1: "CI green: lint, types, boundary checker, tests, bundle
+# budget, API-client freshness." Every one of those is a job or a step here.
+#
+# The pipeline exists at S0 rather than later because of Principle 8
+# (Arch §1): scaffolding, boundaries and CI exist before module #1. A boundary
+# rule that is not enforced on every push is a comment.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Manual runs make it possible to verify the pipeline on a scratch branch,
+  # which is an explicit S0 testing-strategy item.
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  # A superseded run is wasted minutes on a free tier. Never cancel `main`,
+  # because its result gates deployment.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# 🔒 Least privilege (NFR-034). CI reads code; it does not write to the repo.
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: '3.12'   # 🔒 must match backend/pyproject.toml requires-python
+  NODE_VERSION: '20'       # 🔒 must match frontend/package.json engines.node
+
+jobs:
+  # ─── Backend ───────────────────────────────────────────────────────────
+  # DoD §4.1 gates 1: lint · types · tests. Boundaries run in their own job
+  # so that "which rule failed" is visible from the job list alone.
+  backend:
+    name: Backend — lint, types, tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend
+        working-directory: backend
+        run: pip install -e ".[dev]"
+
+      # Each gate is its own step and none is allowed to short-circuit the
+      # others: a formatting failure must not hide a type error, or the second
+      # push only reveals the next problem.
+      - name: Ruff format
+        if: '!cancelled()'
+        working-directory: backend
+        run: ruff format --check .
+
+      - name: Ruff lint
+        if: '!cancelled()'
+        working-directory: backend
+        run: ruff check --output-format=github .
+
+      - name: MyPy (strict)
+        if: '!cancelled()'
+        working-directory: backend
+        run: mypy app tools
+
+      - name: Pytest
+        if: '!cancelled()'
+        working-directory: backend
+        run: pytest
+
+  # ─── Architectural boundaries ──────────────────────────────────────────
+  # 🔒 Arch §3.5, and the S0 Definition of Done: this job failing is the
+  # mechanism that makes the module boundaries real rather than aspirational.
+  #
+  # Separate from `backend` because it is the one check whose failure is an
+  # architectural decision rather than a code defect, and because it needs both
+  # trees — it checks Python imports *and* frontend dependencies (ADR-02).
+  boundaries:
+    name: Boundaries — Arch §3.5 R1–R8
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # 🔒 No `pip install`. The checker is deliberately dependency-free
+      # (stdlib ast + json only, Arch §3.5), so it runs even if the dependency
+      # tree is broken — which is exactly when a boundary is most likely to be
+      # crossed in a hurry.
+      - name: Check boundaries
+        working-directory: backend
+        run: python tools/check_boundaries.py
+
+      - name: Verify the checker still fails on real violations
+        working-directory: backend
+        run: python -m pytest tests/test_boundaries.py -q
+        # 🔒 A linter never seen to fail is indistinguishable from one that
+        # cannot. The negative tests are part of the gate, not a nicety.
+
+  # ─── Frontend ──────────────────────────────────────────────────────────
+  # DoD §4.1: lint · types · build · bundle budget · API-client freshness.
+  #
+  # ⚠️ The frontend workspace is scaffolded later in S0 (design system, three
+  # app shells). Until then `frontend/packages/*` and `frontend/apps/*` are
+  # empty, there is no lockfile, and these commands have nothing to act on.
+  #
+  # The job therefore detects whether the workspace exists and skips its steps
+  # if it does not, rather than being commented out or hard-coded to pass. It
+  # starts enforcing automatically on the commit that adds the first workspace
+  # package — no one has to remember to switch it on. The `scaffolded` output
+  # is reported in the summary either way, so "skipped" is never silent.
+  frontend:
+    name: Frontend — lint, types, build, budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect workspace state
+        id: detect
+        run: |
+          shopt -s nullglob
+          packages=(frontend/packages/*/package.json frontend/apps/*/package.json)
+          if (( ${#packages[@]} > 0 )); then
+            echo 'scaffolded=true' >> "$GITHUB_OUTPUT"
+            echo "Found ${#packages[@]} workspace package(s); frontend gates will run."
+          else
+            echo 'scaffolded=false' >> "$GITHUB_OUTPUT"
+            echo 'No workspace packages yet; frontend gates are inactive.'
+          fi
+
+          if [[ -f frontend/package-lock.json ]]; then
+            echo 'lockfile=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'lockfile=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node
+        if: steps.detect.outputs.scaffolded == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: ${{ steps.detect.outputs.lockfile == 'true' && 'npm' || '' }}
+          cache-dependency-path: frontend/package-lock.json
+
+      # 🔒 `npm ci` once a lockfile exists: reproducible installs (NFR-040).
+      # `npm install` is tolerated only for the first commits after scaffolding,
+      # before the lockfile is committed.
+      - name: Install
+        if: steps.detect.outputs.scaffolded == 'true'
+        working-directory: frontend
+        run: |
+          if [[ '${{ steps.detect.outputs.lockfile }}' == 'true' ]]; then
+            npm ci
+          else
+            echo '::warning::No package-lock.json — falling back to `npm install`. Commit the lockfile (NFR-040).'
+            npm install --no-audit --no-fund
+          fi
+
+      - name: ESLint
+        if: steps.detect.outputs.scaffolded == 'true' && !cancelled()
+        working-directory: frontend
+        run: npm run lint
+
+      - name: TypeScript
+        if: steps.detect.outputs.scaffolded == 'true' && !cancelled()
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Build
+        if: steps.detect.outputs.scaffolded == 'true' && !cancelled()
+        working-directory: frontend
+        run: npm run build
+
+      - name: Test
+        if: steps.detect.outputs.scaffolded == 'true' && !cancelled()
+        working-directory: frontend
+        run: npm test
+
+      # 🔒 NFR-002 — ≤2.5s on 4G. A budget checked only at launch is a budget
+      # already blown; the regression is cheap to fix on the commit that causes
+      # it and expensive three months later.
+      - name: Bundle budget
+        if: steps.detect.outputs.scaffolded == 'true' && !cancelled()
+        working-directory: frontend
+        run: node scripts/check-bundle-budget.mjs
+
+      # 🔒 NFR-079 — `packages/api-client` is build output. If the committed
+      # client does not match the backend's current OpenAPI schema, the
+      # frontend is compiling against a contract that no longer exists.
+      #
+      # ⏳ The generator itself is a separate S0 backend task. This step runs
+      # as soon as the script exists and reports its absence until then.
+      - name: API client freshness
+        if: steps.detect.outputs.scaffolded == 'true' && !cancelled()
+        working-directory: frontend
+        run: |
+          if [[ -f scripts/check-client-freshness.mjs ]]; then
+            node scripts/check-client-freshness.mjs
+          else
+            echo '::warning::API-client freshness check not implemented yet (NFR-079, separate S0 task).'
+          fi
+
+  # ─── Aggregate gate ────────────────────────────────────────────────────
+  # One required status check for branch protection. Without this, adding a job
+  # means remembering to add it to the protected-branch list, and a job that is
+  # not required is a job that can fail unnoticed.
+  ci:
+    name: CI
+    if: always()
+    needs: [backend, boundaries, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify every job succeeded
+        run: |
+          results='${{ join(needs.*.result, ' ') }}'
+          echo "Job results: $results"
+          for result in $results; do
+            if [[ "$result" != 'success' ]]; then
+              echo '::error::A required CI job did not succeed.'
+              exit 1
+            fi
+          done
+          echo 'All CI gates passed.'

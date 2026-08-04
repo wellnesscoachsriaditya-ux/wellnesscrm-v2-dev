@@ -148,8 +148,7 @@ class Settings(BaseSettings):
 
         if problems:
             raise ValueError(
-                "Unsafe configuration for "
-                f"{self.app_env.value}:\n  - " + "\n  - ".join(problems)
+                "Unsafe configuration for " f"{self.app_env.value}:\n  - " + "\n  - ".join(problems)
             )
 
         return self

@@ -223,9 +223,7 @@ class EntitlementError(AppError):
         if upgrade_to:
             parts.append(f"upgrade to {upgrade_to.title()}")
         action = (
-            f"You can {' or '.join(parts)}."
-            if parts
-            else "Contact support to increase this limit."
+            f"You can {' or '.join(parts)}." if parts else "Contact support to increase this limit."
         )
 
         return cls(

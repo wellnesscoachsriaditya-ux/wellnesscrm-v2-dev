@@ -34,60 +34,183 @@ _MAX_STRING: Final = 2048
 # ─── Key-based scrubbing ─────────────────────────────────────────────────
 # Matched case-insensitively against a *normalised* key (non-alphanumerics
 # stripped), so `client_name`, `clientName` and `CLIENT-NAME` all match.
+#
+# fmt: off — these sets are grouped by meaning, several keys to a line. One key
+# per line is the formatter's default and would trade ~120 lines of scrolling
+# for no information: what makes these sets reviewable is seeing a category at
+# a glance and noticing what is missing from it. Reviewing them is how a
+# clinical field avoids reaching a log file (NFR-033).
 
 _CREDENTIAL_KEYS: Final[frozenset[str]] = frozenset(
     {
-        "password", "passwd", "secret", "token", "accesstoken", "refreshtoken",
-        "apikey", "authorization", "auth", "credential", "privatekey",
-        "servicekey", "anonkey", "jwt", "bearer", "signature", "otp",
-        "tokenhash", "magiclink", "sessiontoken", "csrf", "cookie",
+        "password",
+        "passwd",
+        "secret",
+        "token",
+        "accesstoken",
+        "refreshtoken",
+        "apikey",
+        "authorization",
+        "auth",
+        "credential",
+        "privatekey",
+        "servicekey",
+        "anonkey",
+        "jwt",
+        "bearer",
+        "signature",
+        "otp",
+        "tokenhash",
+        "magiclink",
+        "sessiontoken",
+        "csrf",
+        "cookie",
     }
 )
 
 _IDENTITY_KEYS: Final[frozenset[str]] = frozenset(
     {
-        "fullname", "firstname", "lastname", "name", "clientname",
-        "email", "emailaddress", "mobile", "phone", "phonenumber", "whatsapp",
-        "dateofbirth", "dob", "address", "city", "pincode", "postcode",
-        "recipientaddress", "guardianname", "gstin", "ipaddress", "useragent",
+        "fullname",
+        "firstname",
+        "lastname",
+        "name",
+        "clientname",
+        "email",
+        "emailaddress",
+        "mobile",
+        "phone",
+        "phonenumber",
+        "whatsapp",
+        "dateofbirth",
+        "dob",
+        "address",
+        "city",
+        "pincode",
+        "postcode",
+        "recipientaddress",
+        "guardianname",
+        "gstin",
+        "ipaddress",
+        "useragent",
     }
 )
 
 # 🔒 The clinical set. These are the values that make this product regulated.
 _CLINICAL_KEYS: Final[frozenset[str]] = frozenset(
     {
-        "weightkg", "weight", "heightcm", "height", "bmi", "bodyfatpct",
-        "waistcm", "hipcm", "waisthipratio", "measurement", "measurements",
-        "diagnosis", "condition", "conditions", "medication", "medications",
-        "supplement", "supplements", "allergy", "allergies", "allergen",
-        "labvalue", "labvalues", "biochemical", "hba1c", "tsh", "haemoglobin",
-        "assessment", "answers", "response", "responses", "note", "notes",
-        "consultationnote", "clinicalnote", "dietplan", "planitems",
-        "mealitems", "foodlog", "adherence", "symptom", "symptoms",
-        "menstrual", "pregnancy", "goal", "goals",
+        "weightkg",
+        "weight",
+        "heightcm",
+        "height",
+        "bmi",
+        "bodyfatpct",
+        "waistcm",
+        "hipcm",
+        "waisthipratio",
+        "measurement",
+        "measurements",
+        "diagnosis",
+        "condition",
+        "conditions",
+        "medication",
+        "medications",
+        "supplement",
+        "supplements",
+        "allergy",
+        "allergies",
+        "allergen",
+        "labvalue",
+        "labvalues",
+        "biochemical",
+        "hba1c",
+        "tsh",
+        "haemoglobin",
+        "assessment",
+        "answers",
+        "response",
+        "responses",
+        "note",
+        "notes",
+        "consultationnote",
+        "clinicalnote",
+        "dietplan",
+        "planitems",
+        "mealitems",
+        "foodlog",
+        "adherence",
+        "symptom",
+        "symptoms",
+        "menstrual",
+        "pregnancy",
+        "goal",
+        "goals",
     }
 )
 
-_SENSITIVE_KEYS: Final[frozenset[str]] = (
-    _CREDENTIAL_KEYS | _IDENTITY_KEYS | _CLINICAL_KEYS
-)
+_SENSITIVE_KEYS: Final[frozenset[str]] = _CREDENTIAL_KEYS | _IDENTITY_KEYS | _CLINICAL_KEYS
 
 # Keys that are safe and useful, even though a substring rule might catch them.
 # 🔒 Identifiers only — an id references a record; it does not disclose content.
 _ALWAYS_ALLOWED: Final[frozenset[str]] = frozenset(
     {
-        "id", "tenantid", "clientid", "userid", "subjectid", "actorid",
-        "requestid", "sessionid", "planid", "planversionid", "foodid",
-        "appointmentid", "messageid", "jobid", "fileid", "generationid",
-        "resourceid", "operatorid", "invoiceid", "templateid", "noticeid",
-        "purposeid", "definitionid", "actortype", "realm", "role", "status",
-        "state", "stage", "action", "outcome", "eventtype", "errortype",
-        "endpoint", "method", "path", "count", "limit", "used", "duration",
-        "durationms", "latencyms", "attempt", "attemptcount", "version",
-        "schemaversion", "promptversion", "transport", "provider", "severity",
-        "rulecode", "resource", "plancode", "upgradeto", "retryafterseconds",
+        "id",
+        "tenantid",
+        "clientid",
+        "userid",
+        "subjectid",
+        "actorid",
+        "requestid",
+        "sessionid",
+        "planid",
+        "planversionid",
+        "foodid",
+        "appointmentid",
+        "messageid",
+        "jobid",
+        "fileid",
+        "generationid",
+        "resourceid",
+        "operatorid",
+        "invoiceid",
+        "templateid",
+        "noticeid",
+        "purposeid",
+        "definitionid",
+        "actortype",
+        "realm",
+        "role",
+        "status",
+        "state",
+        "stage",
+        "action",
+        "outcome",
+        "eventtype",
+        "errortype",
+        "endpoint",
+        "method",
+        "path",
+        "count",
+        "limit",
+        "used",
+        "duration",
+        "durationms",
+        "latencyms",
+        "attempt",
+        "attemptcount",
+        "version",
+        "schemaversion",
+        "promptversion",
+        "transport",
+        "provider",
+        "severity",
+        "rulecode",
+        "resource",
+        "plancode",
+        "upgradeto",
+        "retryafterseconds",
     }
 )
+# fmt: on
 
 
 def _normalise_key(key: str) -> str:
@@ -197,11 +320,7 @@ def filter_audit_metadata(
     author did not anticipate, which is precisely the failure mode that matters
     when the cost is a compliance breach.
     """
-    return {
-        key: scrub_value(value)
-        for key, value in metadata.items()
-        if key in allowed_keys
-    }
+    return {key: scrub_value(value) for key, value in metadata.items() if key in allowed_keys}
 
 
 # ─── Sentry integration ──────────────────────────────────────────────────
@@ -233,8 +352,7 @@ def sentry_before_send(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str
 
     if tags := event.get("tags"):
         event["tags"] = {
-            k: (REDACTED if is_sensitive_key(k) else scrub_text(str(v)))
-            for k, v in tags.items()
+            k: (REDACTED if is_sensitive_key(k) else scrub_text(str(v))) for k, v in tags.items()
         }
 
     # 🔒 Keep only the actor identifier — never name, email or IP.

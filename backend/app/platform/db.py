@@ -147,15 +147,14 @@ async def transaction(
     only if its transaction commits (Arch §11.1).
     """
     factory = get_session_factory()
-    async with factory() as session:
-        async with session.begin():
-            await set_tenant_scope(
-                session,
-                tenant_id=tenant_id,
-                actor_id=actor_id,
-                actor_role=actor_role,
-            )
-            yield session
+    async with factory() as session, session.begin():
+        await set_tenant_scope(
+            session,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+            actor_role=actor_role,
+        )
+        yield session
 
 
 # ─── Startup verification ────────────────────────────────────────────────
@@ -222,9 +221,7 @@ async def verify_pooler_isolation(session: AsyncSession) -> None:
             text(f"SELECT set_config('{TENANT_SETTING}', :v, true)"), {"v": probe}
         )
         seen = (
-            await session.execute(
-                text(f"SELECT current_setting('{TENANT_SETTING}', true)")
-            )
+            await session.execute(text(f"SELECT current_setting('{TENANT_SETTING}', true)"))
         ).scalar()
         if seen != probe:
             raise RuntimeError(
@@ -234,9 +231,7 @@ async def verify_pooler_isolation(session: AsyncSession) -> None:
 
     async with session.begin():
         leaked = (
-            await session.execute(
-                text(f"SELECT current_setting('{TENANT_SETTING}', true)")
-            )
+            await session.execute(text(f"SELECT current_setting('{TENANT_SETTING}', true)"))
         ).scalar()
 
     if leaked == probe:

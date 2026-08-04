@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Any
+from typing import Any, ClassVar
 
 from pythonjsonlogger.json import JsonFormatter
 
@@ -74,10 +74,15 @@ class ScrubbingFilter(logging.Filter):
 class HumanFormatter(logging.Formatter):
     """Readable local output: ``HH:MM:SS LEVEL logger — message [ctx]``."""
 
-    _COLOURS = {
-        "DEBUG": "\033[36m", "INFO": "\033[32m", "WARNING": "\033[33m",
-        "ERROR": "\033[31m", "CRITICAL": "\033[35m",
+    # fmt: off — the level→colour mapping is read as a table.
+    _COLOURS: ClassVar[dict[str, str]] = {
+        "DEBUG": "\033[36m",
+        "INFO": "\033[32m",
+        "WARNING": "\033[33m",
+        "ERROR": "\033[31m",
+        "CRITICAL": "\033[35m",
     }
+    # fmt: on
     _RESET = "\033[0m"
     _CONTEXT_KEYS = ("request_id", "tenant_id", "actor_type")
 

@@ -23,6 +23,7 @@ logging behave identically in both processes — one implementation, not two
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import signal
 from types import FrameType
 
@@ -75,13 +76,11 @@ class Worker:
                 logger.exception("Worker tick failed; continuing")
 
             # Wake early on shutdown rather than sleeping out the interval.
-            try:
+            with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(
                     self._shutdown.wait(),
                     timeout=self._poll_interval,
                 )
-            except TimeoutError:
-                pass
 
         await self._drain()
         logger.info("Worker stopped")
