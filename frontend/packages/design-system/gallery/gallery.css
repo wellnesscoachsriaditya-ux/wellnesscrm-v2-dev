@@ -1,0 +1,151 @@
+/* Gallery chrome only. The components style themselves; this is the page
+ * around them. Uses the same tokens, so the gallery cannot drift from the
+ * system it documents. */
+
+body {
+  margin: 0;
+}
+
+.gallery {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: var(--wc-space-8) var(--wc-space-6) var(--wc-space-20);
+}
+
+.gallery-header {
+  padding-bottom: var(--wc-space-6);
+  border-bottom: 2px solid var(--wc-neutral-300);
+}
+
+.gallery-header h1 {
+  margin: 0;
+  font-size: var(--wc-font-size-3xl);
+  font-weight: var(--wc-font-weight-bold);
+  color: var(--wc-neutral-900);
+}
+
+.gallery-header p {
+  max-width: 60ch;
+  margin: var(--wc-space-3) 0 0;
+  font-size: var(--wc-font-size-sm);
+  line-height: var(--wc-line-height-relaxed);
+  color: var(--wc-neutral-600);
+}
+
+.gallery-section {
+  margin-top: var(--wc-space-12);
+}
+
+.gallery-section h2 {
+  margin: 0 0 var(--wc-space-2);
+  font-size: var(--wc-font-size-xl);
+  font-weight: var(--wc-font-weight-semibold);
+  color: var(--wc-neutral-900);
+}
+
+.gallery-note {
+  max-width: 70ch;
+  margin: 0 0 var(--wc-space-6);
+  font-size: var(--wc-font-size-sm);
+  color: var(--wc-neutral-600);
+}
+
+.gallery-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wc-space-6);
+}
+
+.gallery-row {
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  gap: var(--wc-space-5);
+  align-items: start;
+  padding: var(--wc-space-5);
+  background: var(--wc-neutral-0);
+  border: 1px solid var(--wc-neutral-200);
+  border-radius: var(--wc-radius-lg);
+}
+
+.gallery-label {
+  font-size: var(--wc-font-size-sm);
+  font-weight: var(--wc-font-weight-semibold);
+  color: var(--wc-neutral-700);
+}
+
+.gallery-items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--wc-space-3);
+  min-width: 0;
+}
+
+/* ─── Token displays ──────────────────────────────────────── */
+
+.gallery-swatch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wc-space-1);
+  font-size: var(--wc-font-size-xs);
+}
+
+.gallery-swatch-chip {
+  display: block;
+  width: var(--wc-space-16);
+  height: var(--wc-space-10);
+  border: 1px solid var(--wc-neutral-300);
+  border-radius: var(--wc-radius-sm);
+}
+
+.gallery-swatch-value {
+  color: var(--wc-neutral-500);
+}
+
+.gallery-spacing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wc-space-2);
+}
+
+.gallery-spacing-item {
+  display: flex;
+  align-items: center;
+  gap: var(--wc-space-3);
+  font-size: var(--wc-font-size-xs);
+}
+
+.gallery-spacing-bar {
+  display: block;
+  height: var(--wc-space-4);
+  background: var(--wc-brand-300);
+  border-radius: var(--wc-radius-sm);
+}
+
+/* ─── Shell previews ──────────────────────────────────────────
+ * The shells are full-viewport by design, so they are clipped
+ * into a fixed frame here rather than taking over the page.
+ * ──────────────────────────────────────────────────────────── */
+
+.gallery-frame {
+  width: 100%;
+  height: 22rem;
+  overflow: hidden;
+  border: 1px solid var(--wc-neutral-300);
+  border-radius: var(--wc-radius-md);
+  /* `contain` gives the fixed-position elements inside the shells a
+   * containing block, so the drawer and bottom nav stay in the frame. */
+  contain: layout paint;
+}
+
+.gallery-frame-phone {
+  max-width: 22rem;
+  height: 26rem;
+}
+
+@media (max-width: 767px) {
+  .gallery-row {
+    grid-template-columns: 1fr;
+    gap: var(--wc-space-3);
+  }
+}

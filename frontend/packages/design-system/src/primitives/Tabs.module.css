@@ -1,0 +1,95 @@
+/* Tabs — ADR-03. */
+
+.tabs {
+  display: flex;
+  flex-direction: column;
+}
+
+.list {
+  display: flex;
+  gap: var(--wc-space-1);
+  border-bottom: 1px solid var(--wc-neutral-200);
+  /* Many tabs on a narrow screen scroll rather than wrap — a wrapped tab list
+   * shifts the content below it every time the selection changes. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.list::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wc-space-2);
+  /* 🔒 NFR-059 — tabs are frequently-hit targets. */
+  min-height: var(--wc-touch-target-min);
+  padding: 0 var(--wc-space-4);
+
+  font-family: inherit;
+  font-size: var(--wc-font-size-sm);
+  font-weight: var(--wc-font-weight-medium);
+  color: var(--wc-neutral-600);
+  white-space: nowrap;
+
+  background: transparent;
+  border: 0;
+  /* Reserve the indicator's space at rest, so selecting a tab does not shift
+   * the row by 2px. */
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+
+  transition:
+    color var(--wc-duration-fast) var(--wc-easing-standard),
+    border-color var(--wc-duration-fast) var(--wc-easing-standard);
+}
+
+.tab:hover:not(:disabled) {
+  color: var(--wc-neutral-900);
+}
+
+.tab:disabled {
+  color: var(--wc-neutral-400);
+  cursor: not-allowed;
+}
+
+/* 🔒 WCAG 1.4.1 — the selected tab is marked by weight and an underline, not
+ * colour alone, so the selection is visible without hue discrimination. */
+.selected {
+  color: var(--wc-brand-700);
+  border-bottom-color: var(--wc-brand-600);
+  font-weight: var(--wc-font-weight-semibold);
+}
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--wc-space-5);
+  padding: 0 var(--wc-space-1);
+  font-size: var(--wc-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--wc-neutral-700);
+  background: var(--wc-neutral-100);
+  border-radius: var(--wc-radius-full);
+}
+
+.selected .count {
+  color: var(--wc-brand-700);
+  background: var(--wc-brand-50);
+}
+
+.panel {
+  padding-top: var(--wc-space-5);
+}
+
+/* The panel is focusable so Tab can reach it, but it is not an interactive
+ * control — the default focus ring on a large block is visually heavy, so it
+ * is drawn inset. */
+.panel:focus-visible {
+  outline: 2px solid var(--wc-brand-500);
+  outline-offset: -2px;
+  border-radius: var(--wc-radius-sm);
+}

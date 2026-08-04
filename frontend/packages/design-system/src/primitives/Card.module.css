@@ -1,0 +1,70 @@
+/* Card — ADR-03. */
+
+.card {
+  background: var(--wc-neutral-0);
+  border: 1px solid var(--wc-neutral-200);
+  border-radius: var(--wc-radius-lg);
+  /* A card is a surface, not a floating object: a subtle shadow reads as
+   * "grouped", a heavy one competes with modals for depth. */
+  box-shadow: var(--wc-shadow-sm);
+}
+
+/* ─── Regions ─────────────────────────────────────────────────
+ * The header/body/footer subcomponents own their own padding, so
+ * a card composed of them needs none. `.flush` exists for the
+ * case where a table or image should meet the card's edges.
+ * ──────────────────────────────────────────────────────────── */
+
+.flush > .body {
+  padding: 0;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--wc-space-4);
+  padding: var(--wc-space-4) var(--wc-space-5);
+  border-bottom: 1px solid var(--wc-neutral-200);
+}
+
+.headerText {
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--wc-font-size-base);
+  font-weight: var(--wc-font-weight-semibold);
+  line-height: var(--wc-line-height-snug);
+  color: var(--wc-neutral-900);
+}
+
+.description {
+  margin: var(--wc-space-1) 0 0;
+  font-size: var(--wc-font-size-sm);
+  line-height: var(--wc-line-height-normal);
+  color: var(--wc-neutral-600);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--wc-space-2);
+  flex-shrink: 0;
+}
+
+.body {
+  padding: var(--wc-space-5);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--wc-space-3);
+  padding: var(--wc-space-4) var(--wc-space-5);
+  border-top: 1px solid var(--wc-neutral-200);
+  background: var(--wc-neutral-50);
+  border-radius: 0 0 var(--wc-radius-lg) var(--wc-radius-lg);
+}

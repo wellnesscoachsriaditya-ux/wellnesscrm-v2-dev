@@ -1,0 +1,121 @@
+/* AdminShell — operator console frame. Arch §4.1. */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--wc-neutral-100);
+}
+
+.skipLink {
+  position: absolute;
+  top: calc(var(--wc-space-16) * -1);
+  left: var(--wc-space-4);
+  z-index: var(--wc-z-sticky);
+  padding: var(--wc-space-3) var(--wc-space-4);
+  background: var(--wc-neutral-900);
+  color: var(--wc-neutral-0);
+  text-decoration: none;
+  font-size: var(--wc-font-size-sm);
+}
+
+.skipLink:focus {
+  top: 0;
+}
+
+/* ─── Environment banner ──────────────────────────────────────
+ * ⚠️ Loud on purpose. An operator who thinks they are in staging
+ * while editing production data is the failure this prevents.
+ * ──────────────────────────────────────────────────────────── */
+
+.environment {
+  padding: var(--wc-space-2) var(--wc-space-4);
+  text-align: center;
+  font-size: var(--wc-font-size-xs);
+  font-weight: var(--wc-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--wc-neutral-0);
+  background: var(--wc-neutral-700);
+}
+
+.production {
+  background: var(--wc-danger-600);
+}
+
+/* ─── Header ──────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--wc-space-6);
+  padding: var(--wc-space-3) var(--wc-space-4);
+  background: var(--wc-neutral-900);
+  color: var(--wc-neutral-0);
+}
+
+.brand {
+  font-size: var(--wc-font-size-sm);
+  font-weight: var(--wc-font-weight-semibold);
+  white-space: nowrap;
+}
+
+.nav {
+  display: flex;
+  gap: var(--wc-space-1);
+  flex: 1;
+  overflow-x: auto;
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--wc-touch-target-min);
+  padding: 0 var(--wc-space-3);
+
+  font-size: var(--wc-font-size-sm);
+  /* 🔒 neutral-300 on neutral-900 clears 4.5:1; neutral-500 would not. */
+  color: var(--wc-neutral-300);
+  text-decoration: none;
+  border-radius: var(--wc-radius-sm);
+  white-space: nowrap;
+}
+
+.navLink:hover {
+  color: var(--wc-neutral-0);
+  background: var(--wc-neutral-800);
+}
+
+.navLinkActive {
+  color: var(--wc-neutral-0);
+  background: var(--wc-neutral-800);
+  font-weight: var(--wc-font-weight-medium);
+}
+
+.operator {
+  font-size: var(--wc-font-size-sm);
+  color: var(--wc-neutral-300);
+  white-space: nowrap;
+}
+
+.main {
+  flex: 1;
+  padding: var(--wc-space-6);
+}
+
+.main:focus {
+  outline: none;
+}
+
+/* The console is a desktop tool; below `md` it simply stacks rather than
+ * getting a bespoke mobile design. */
+@media (max-width: 767px) {
+  .header {
+    flex-wrap: wrap;
+    gap: var(--wc-space-3);
+  }
+
+  .main {
+    padding: var(--wc-space-4);
+  }
+}

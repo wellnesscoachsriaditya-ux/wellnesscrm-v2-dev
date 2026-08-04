@@ -1,0 +1,160 @@
+/* Button — ADR-03.  Every value here is a token; no raw colours or spacing. */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--wc-space-2);
+
+  border: 1px solid transparent;
+  border-radius: var(--wc-radius-md);
+  font-family: inherit;
+  font-weight: var(--wc-font-weight-medium);
+  line-height: var(--wc-line-height-tight);
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+
+  transition:
+    background-color var(--wc-duration-fast) var(--wc-easing-standard),
+    border-color var(--wc-duration-fast) var(--wc-easing-standard),
+    color var(--wc-duration-fast) var(--wc-easing-standard);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ─── Sizes ───────────────────────────────────────────────────
+ * 🔒 NFR-059 — `min-height` rather than padding alone, so the
+ * target stays large even when the label is short. `md` is the
+ * 44px WCAG 2.5.5 minimum; `lg` is the 48px comfortable size
+ * used for client-facing actions in the PWA.
+ * ──────────────────────────────────────────────────────────── */
+
+.sm {
+  min-height: var(--wc-space-8);
+  padding: 0 var(--wc-space-3);
+  font-size: var(--wc-font-size-sm);
+}
+
+.md {
+  min-height: var(--wc-touch-target-min);
+  padding: 0 var(--wc-space-4);
+  font-size: var(--wc-font-size-base);
+}
+
+.lg {
+  min-height: var(--wc-touch-target-comfortable);
+  padding: 0 var(--wc-space-6);
+  font-size: var(--wc-font-size-base);
+}
+
+/* ─── Variants ────────────────────────────────────────────────
+ * Contrast ratios against their own backgrounds are asserted in
+ * `contrast.test.ts`; a palette change that breaks AA fails CI
+ * rather than shipping.
+ * ──────────────────────────────────────────────────────────── */
+
+.primary {
+  background: var(--wc-brand-600);
+  color: var(--wc-neutral-0);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--wc-brand-700);
+}
+
+.primary:active:not(:disabled) {
+  background: var(--wc-brand-800);
+}
+
+.secondary {
+  background: var(--wc-neutral-0);
+  border-color: var(--wc-neutral-300);
+  color: var(--wc-neutral-800);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--wc-neutral-50);
+  border-color: var(--wc-neutral-400);
+}
+
+.secondary:active:not(:disabled) {
+  background: var(--wc-neutral-100);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--wc-neutral-700);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--wc-neutral-100);
+  color: var(--wc-neutral-900);
+}
+
+/* 🔒 NFR-065 — destructive actions confirm and state what is lost.
+ * The colour is a signal, never the mechanism: `ConfirmDialog`
+ * is what actually enforces it. */
+.danger {
+  background: var(--wc-danger-500);
+  color: var(--wc-neutral-0);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--wc-danger-600);
+}
+
+/* ─── Modifiers ───────────────────────────────────────────── */
+
+.fullWidth {
+  width: 100%;
+}
+
+.loading {
+  /* The label stays visible so the button does not change width mid-action —
+   * a resizing button under the pointer causes mis-clicks. */
+  position: relative;
+}
+
+.iconStart,
+.iconEnd {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.spinner {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.spinnerSvg {
+  width: 1em;
+  height: 1em;
+}
+
+.spinnerCircle {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 36;
+  stroke-linecap: round;
+  transform-origin: center;
+  animation: spin 800ms linear infinite;
+}
+
+/* Motion is opt-out globally via the token override in tokens.css, but an
+ * animation with a hard-coded duration would escape that. Guard it here too. */
+@media (prefers-reduced-motion: reduce) {
+  .spinnerCircle {
+    animation-duration: 2400ms;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

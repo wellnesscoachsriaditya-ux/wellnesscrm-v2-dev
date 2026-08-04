@@ -1,0 +1,50 @@
+/* DataList — ADR-03. */
+
+.list {
+  margin: 0;
+}
+
+.item {
+  padding: var(--wc-space-3) 0;
+  border-bottom: 1px solid var(--wc-neutral-200);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+.label {
+  font-size: var(--wc-font-size-sm);
+  color: var(--wc-neutral-600);
+}
+
+.value {
+  margin: 0;
+  font-size: var(--wc-font-size-base);
+  line-height: var(--wc-line-height-normal);
+  color: var(--wc-neutral-900);
+  /* Long values — an address, a list of medications — must wrap rather than
+   * overflow their container. */
+  overflow-wrap: anywhere;
+}
+
+/* ─── Stacked ─────────────────────────────────────────────── */
+
+.stacked .label {
+  margin-bottom: var(--wc-space-1);
+}
+
+/* ─── Inline ──────────────────────────────────────────────────
+ * Two columns, label fixed. Falls back to stacked below `sm` —
+ * a 40% label column leaves too little room for the value on a
+ * phone.
+ * ──────────────────────────────────────────────────────────── */
+
+@media (min-width: 480px) {
+  .inline .item {
+    display: grid;
+    grid-template-columns: minmax(8rem, 30%) 1fr;
+    gap: var(--wc-space-4);
+    align-items: baseline;
+  }
+}

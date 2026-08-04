@@ -50,7 +50,7 @@ const RAW_VALUE_PATTERNS = [
 ]
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**', '**/*.config.js', '**/api-client/generated/**'] },
+  { ignores: ['**/dist/**', '**/dist-gallery/**', '**/node_modules/**', '**/*.config.js', '**/api-client/generated/**'] },
 
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -95,6 +95,25 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/consistent-type-imports': 'off',
+    },
+  },
+
+  // Build and tooling scripts are plain Node ESM, outside any tsconfig.
+  //
+  // ⚠️ Must come last. Flat config applies matching blocks in order, so this
+  // has to follow `recommendedTypeChecked` to switch the type-aware rules back
+  // off — placed earlier, the later block re-enables them and the parser fails
+  // on a file that belongs to no TypeScript project.
+  {
+    files: ['**/*.mjs', '**/*.cjs'],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+    rules: {
+      // A CLI script reports by printing; that is its interface. The rule is
+      // aimed at stray debugging left in application code.
+      'no-console': 'off',
     },
   },
 )

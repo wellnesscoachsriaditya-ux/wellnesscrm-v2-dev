@@ -1,0 +1,50 @@
+/* Badge — ADR-03.
+ *
+ * Tones use a tinted background with a dark foreground of the same hue. Each
+ * pair is asserted at ≥4.5:1 in `contrast.test.ts` — badges carry status, and
+ * unreadable status is worse than no badge.
+ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wc-space-1);
+  padding: var(--wc-space-1) var(--wc-space-2);
+
+  font-size: var(--wc-font-size-xs);
+  font-weight: var(--wc-font-weight-medium);
+  line-height: var(--wc-line-height-tight);
+  white-space: nowrap;
+
+  border-radius: var(--wc-radius-sm);
+}
+
+.neutral {
+  background: var(--wc-neutral-100);
+  color: var(--wc-neutral-700);
+}
+
+.brand {
+  background: var(--wc-brand-50);
+  color: var(--wc-brand-700);
+}
+
+.success {
+  background: var(--wc-success-50);
+  color: var(--wc-success-500);
+}
+
+.warning {
+  background: var(--wc-warning-50);
+  color: var(--wc-warning-500);
+}
+
+.danger {
+  background: var(--wc-danger-50);
+  color: var(--wc-danger-600);
+}
+
+.info {
+  background: var(--wc-info-50);
+  color: var(--wc-info-500);
+}

@@ -74,6 +74,7 @@ _SKIP_DIRS: Final[frozenset[str]] = frozenset(
     {
         "node_modules",
         "dist",
+        "dist-gallery",
         "build",
         ".venv",
         "venv",

@@ -1,0 +1,60 @@
+/* EmptyState — ADR-03, NFR-064. */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.md {
+  padding: var(--wc-space-16) var(--wc-space-6);
+}
+
+.sm {
+  padding: var(--wc-space-10) var(--wc-space-4);
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--wc-space-4);
+  color: var(--wc-neutral-400);
+}
+
+.md .icon svg {
+  width: var(--wc-space-12);
+  height: var(--wc-space-12);
+}
+
+.sm .icon svg {
+  width: var(--wc-space-8);
+  height: var(--wc-space-8);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--wc-font-size-base);
+  font-weight: var(--wc-font-weight-semibold);
+  color: var(--wc-neutral-900);
+}
+
+.description {
+  /* Constrained width: a centred paragraph running the full width of a desktop
+   * table is unreadable. */
+  max-width: 32rem;
+  margin: var(--wc-space-2) 0 0;
+  font-size: var(--wc-font-size-sm);
+  line-height: var(--wc-line-height-relaxed);
+  color: var(--wc-neutral-600);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--wc-space-3);
+  margin-top: var(--wc-space-6);
+}

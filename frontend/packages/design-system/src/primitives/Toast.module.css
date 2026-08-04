@@ -1,0 +1,140 @@
+/* Toast — ADR-03. */
+
+.region {
+  position: fixed;
+  z-index: var(--wc-z-toast);
+  bottom: var(--wc-space-4);
+  right: var(--wc-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--wc-space-2);
+  /* The region spans the corner but must not intercept clicks on the page
+   * beneath it; individual toasts re-enable pointer events. */
+  pointer-events: none;
+  max-width: min(24rem, calc(100vw - var(--wc-space-8)));
+}
+
+.liveRegion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wc-space-2);
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--wc-space-3);
+  padding: var(--wc-space-3) var(--wc-space-4);
+
+  background: var(--wc-neutral-0);
+  border: 1px solid var(--wc-neutral-200);
+  border-left-width: 3px;
+  border-radius: var(--wc-radius-md);
+  box-shadow: var(--wc-shadow-lg);
+
+  pointer-events: auto;
+  animation: slide var(--wc-duration-normal) var(--wc-easing-decelerate);
+}
+
+/* The left border carries the tone; the icon and the screen-reader label
+ * carry it for everyone who cannot rely on the colour. */
+.success {
+  border-left-color: var(--wc-success-500);
+}
+.success .icon {
+  color: var(--wc-success-500);
+}
+
+.error {
+  border-left-color: var(--wc-danger-500);
+}
+.error .icon {
+  color: var(--wc-danger-500);
+}
+
+.warning {
+  border-left-color: var(--wc-warning-500);
+}
+.warning .icon {
+  color: var(--wc-warning-500);
+}
+
+.info {
+  border-left-color: var(--wc-info-500);
+}
+.info .icon {
+  color: var(--wc-info-500);
+}
+
+.icon {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.message {
+  flex: 1;
+  font-size: var(--wc-font-size-sm);
+  line-height: var(--wc-line-height-snug);
+  color: var(--wc-neutral-800);
+}
+
+.dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--wc-space-6);
+  height: var(--wc-space-6);
+  margin: calc(var(--wc-space-1) * -1) calc(var(--wc-space-2) * -1) 0 0;
+
+  color: var(--wc-neutral-500);
+  background: transparent;
+  border: 0;
+  border-radius: var(--wc-radius-sm);
+  cursor: pointer;
+}
+
+.dismiss:hover {
+  color: var(--wc-neutral-800);
+  background: var(--wc-neutral-100);
+}
+
+/* Visually hidden but available to assistive technology.
+ * `clip-path` + 1px box rather than `display: none`, which would remove it
+ * from the accessibility tree entirely. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* On a phone, toasts belong at the top: the bottom is where the thumb and the
+ * OS gesture bar are, and a toast there covers the primary action. */
+@media (max-width: 479px) {
+  .region {
+    top: var(--wc-space-3);
+    bottom: auto;
+    left: var(--wc-space-3);
+    right: var(--wc-space-3);
+    max-width: none;
+  }
+}
+
+@keyframes slide {
+  from {
+    opacity: 0;
+    transform: translateX(var(--wc-space-4));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}

@@ -1,0 +1,143 @@
+/* Shared field styling for Input, Select and Textarea.
+ * One stylesheet because these three must be visually indistinguishable at
+ * rest — a form where the select is 2px taller than the input looks broken. */
+
+.field {
+  display: block;
+  width: 100%;
+  font-family: inherit;
+  font-size: var(--wc-font-size-base);
+  line-height: var(--wc-line-height-normal);
+  color: var(--wc-neutral-900);
+  background: var(--wc-neutral-0);
+  border: 1px solid var(--wc-neutral-400);
+  border-radius: var(--wc-radius-md);
+  transition:
+    border-color var(--wc-duration-fast) var(--wc-easing-standard),
+    box-shadow var(--wc-duration-fast) var(--wc-easing-standard);
+}
+
+/* 🔒 NFR-059 — a field is a touch target too. */
+.input,
+.select {
+  min-height: var(--wc-touch-target-min);
+  padding: var(--wc-space-2) var(--wc-space-3);
+}
+
+.textarea {
+  padding: var(--wc-space-3);
+  min-height: calc(var(--wc-touch-target-min) * 2);
+  resize: vertical;
+}
+
+.field:hover:not(:disabled):not([aria-invalid='true']) {
+  border-color: var(--wc-neutral-500);
+}
+
+.field:focus {
+  outline: none;
+  border-color: var(--wc-brand-500);
+  /* A ring rather than only a border change: a 1px colour shift is not a
+   * sufficient focus indicator for anyone with low vision (WCAG 2.4.7). */
+  box-shadow: 0 0 0 3px var(--wc-brand-100);
+}
+
+.field:disabled {
+  background: var(--wc-neutral-100);
+  color: var(--wc-neutral-600);
+  cursor: not-allowed;
+}
+
+.field::placeholder {
+  color: var(--wc-neutral-500);
+}
+
+/* 🔒 Invalid state is carried by `aria-invalid`, not a CSS class, so the
+ * visual and the accessible state cannot diverge — they are the same source. */
+.field[aria-invalid='true'] {
+  border-color: var(--wc-danger-500);
+}
+
+.field[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 3px var(--wc-danger-50);
+}
+
+/* ─── Select ─────────────────────────────────────────────────── */
+
+.select {
+  /* Room for the chevron; the native arrow is hidden below. */
+  padding-right: var(--wc-space-10);
+  appearance: none;
+  /* The stroke colour is the hex form of --wc-neutral-600: a data URI cannot
+   * reference a custom property, so this is the one place a raw value is
+   * unavoidable. Keep it in step with the token. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2363696f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--wc-space-3) center;
+}
+
+/* ─── Checkbox and Radio ─────────────────────────────────────── */
+
+.control {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--wc-space-3);
+  /* The whole row is the target, not just the 16px box — NFR-059. */
+  min-height: var(--wc-touch-target-min);
+  padding: var(--wc-space-2) 0;
+  cursor: pointer;
+}
+
+.control:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.controlInput {
+  flex-shrink: 0;
+  width: var(--wc-space-5);
+  height: var(--wc-space-5);
+  /* Nudge onto the first line's optical centre. */
+  margin-top: 0.125rem;
+  accent-color: var(--wc-brand-600);
+  cursor: inherit;
+}
+
+.controlLabel {
+  font-size: var(--wc-font-size-base);
+  line-height: var(--wc-line-height-normal);
+  color: var(--wc-neutral-900);
+}
+
+.controlDescription {
+  display: block;
+  margin-top: var(--wc-space-1);
+  font-size: var(--wc-font-size-sm);
+  color: var(--wc-neutral-600);
+}
+
+/* ─── RadioGroup ─────────────────────────────────────────────
+ * A `fieldset` carries the group's question to assistive
+ * technology. Browser default fieldset styling is unusable, so
+ * it is reset to nothing and rebuilt.
+ * ──────────────────────────────────────────────────────────── */
+
+.group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  padding: 0;
+  margin-bottom: var(--wc-space-2);
+  font-size: var(--wc-font-size-sm);
+  font-weight: var(--wc-font-weight-medium);
+  color: var(--wc-neutral-800);
+}
+
+.groupError {
+  margin: var(--wc-space-2) 0 0;
+  font-size: var(--wc-font-size-sm);
+  color: var(--wc-danger-600);
+}

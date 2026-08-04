@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "jsx": "react-jsx",
+    "types": ["node", "vitest/globals"]
+  },
+  // `gallery/` and the config files are included so ESLint's type-aware rules
+  // can resolve them. They are not part of the published package — `main` and
+  // `exports` in package.json point only at `src/`.
+  "include": ["src", "gallery", "vite.config.ts", "vitest.config.ts"]
+}

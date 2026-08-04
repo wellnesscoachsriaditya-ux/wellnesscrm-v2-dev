@@ -1,0 +1,166 @@
+/* Modal — ADR-03. */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--wc-z-modal);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--wc-space-4);
+
+  background: rgb(0 0 0 / 0.45);
+
+  animation: fade var(--wc-duration-fast) var(--wc-easing-decelerate);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  /* Never taller than the viewport: the body scrolls, the header and footer
+   * stay put, so the actions are always reachable. */
+  max-height: calc(100vh - var(--wc-space-8));
+
+  background: var(--wc-neutral-0);
+  border-radius: var(--wc-radius-lg);
+  box-shadow: var(--wc-shadow-xl);
+
+  animation: rise var(--wc-duration-normal) var(--wc-easing-decelerate);
+}
+
+.sm {
+  max-width: 24rem;
+}
+
+.md {
+  max-width: 32rem;
+}
+
+.lg {
+  max-width: 48rem;
+}
+
+/* ─── Regions ─────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--wc-space-4);
+  padding: var(--wc-space-5) var(--wc-space-6);
+  border-bottom: 1px solid var(--wc-neutral-200);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--wc-font-size-lg);
+  font-weight: var(--wc-font-weight-semibold);
+  line-height: var(--wc-line-height-snug);
+  color: var(--wc-neutral-900);
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  /* 🔒 NFR-059 — a close button is the one control everyone reaches for. */
+  width: var(--wc-touch-target-min);
+  height: var(--wc-touch-target-min);
+  /* Pull it back so the icon aligns optically with the title. */
+  margin: calc(var(--wc-space-2) * -1) calc(var(--wc-space-2) * -1) 0 0;
+
+  color: var(--wc-neutral-600);
+  background: transparent;
+  border: 0;
+  border-radius: var(--wc-radius-md);
+  cursor: pointer;
+  transition: background-color var(--wc-duration-fast) var(--wc-easing-standard);
+}
+
+.close:hover {
+  background: var(--wc-neutral-100);
+  color: var(--wc-neutral-900);
+}
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--wc-space-6);
+  color: var(--wc-neutral-800);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--wc-space-3);
+  padding: var(--wc-space-4) var(--wc-space-6);
+  border-top: 1px solid var(--wc-neutral-200);
+  background: var(--wc-neutral-50);
+  border-radius: 0 0 var(--wc-radius-lg) var(--wc-radius-lg);
+}
+
+/* ─── Mobile ──────────────────────────────────────────────────
+ * Below `sm`, a centred card wastes space and puts the actions
+ * mid-screen. A bottom sheet puts them under the thumb, which is
+ * where they belong on a phone (NFR-055, NFR-059).
+ * ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 479px) {
+  .backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .dialog,
+  .sm,
+  .md,
+  .lg {
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: var(--wc-radius-xl) var(--wc-radius-xl) 0 0;
+    animation: sheet var(--wc-duration-normal) var(--wc-easing-decelerate);
+  }
+
+  .footer {
+    border-radius: 0;
+    /* Clear of the iOS home indicator. */
+    padding-bottom: max(var(--wc-space-4), env(safe-area-inset-bottom));
+  }
+}
+
+/* ─── Motion ──────────────────────────────────────────────── */
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--wc-space-4)) scale(0.98);
+  }
+}
+
+@keyframes sheet {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+/* 🔒 An entrance animation is exactly the kind of motion that triggers
+ * vestibular symptoms. Under `reduce`, the dialog simply appears. */
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .dialog,
+  .sm,
+  .md,
+  .lg {
+    animation: none;
+  }
+}

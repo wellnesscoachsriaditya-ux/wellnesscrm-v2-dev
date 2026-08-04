@@ -1,0 +1,233 @@
+/* AppShell — practitioner application frame. Arch §4.2. */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--wc-neutral-50);
+}
+
+/* ─── Skip link ───────────────────────────────────────────────
+ * 🔒 WCAG 2.4.1. Off-screen until focused, then it slides into
+ * view. `clip-path` alone would keep it unreachable; moving it
+ * with `top` is what makes it appear for keyboard users only.
+ * ──────────────────────────────────────────────────────────── */
+
+.skipLink {
+  position: absolute;
+  top: calc(var(--wc-space-16) * -1);
+  left: var(--wc-space-4);
+  z-index: var(--wc-z-sticky);
+
+  padding: var(--wc-space-3) var(--wc-space-4);
+  background: var(--wc-brand-700);
+  color: var(--wc-neutral-0);
+  border-radius: 0 0 var(--wc-radius-md) var(--wc-radius-md);
+  text-decoration: none;
+  font-size: var(--wc-font-size-sm);
+  font-weight: var(--wc-font-weight-medium);
+
+  transition: top var(--wc-duration-fast) var(--wc-easing-decelerate);
+}
+
+.skipLink:focus {
+  top: 0;
+}
+
+/* ─── Header ──────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--wc-space-3);
+  height: var(--wc-space-16);
+  padding: 0 var(--wc-space-4);
+  flex-shrink: 0;
+
+  background: var(--wc-neutral-0);
+  border-bottom: 1px solid var(--wc-neutral-200);
+  position: sticky;
+  top: 0;
+  z-index: var(--wc-z-sticky);
+}
+
+.menuButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--wc-touch-target-min);
+  height: var(--wc-touch-target-min);
+  margin-left: calc(var(--wc-space-2) * -1);
+
+  color: var(--wc-neutral-700);
+  background: transparent;
+  border: 0;
+  border-radius: var(--wc-radius-md);
+  cursor: pointer;
+}
+
+.menuButton:hover {
+  background: var(--wc-neutral-100);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--wc-space-2);
+  font-size: var(--wc-font-size-base);
+  font-weight: var(--wc-font-weight-semibold);
+  color: var(--wc-neutral-900);
+}
+
+.userMenu {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--wc-space-2);
+}
+
+/* ─── Body ────────────────────────────────────────────────── */
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar {
+  width: 15rem;
+  flex-shrink: 0;
+  padding: var(--wc-space-4) var(--wc-space-3);
+  background: var(--wc-neutral-0);
+  border-right: 1px solid var(--wc-neutral-200);
+  overflow-y: auto;
+}
+
+.navList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wc-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: var(--wc-space-3);
+  min-height: var(--wc-touch-target-min);
+  padding: 0 var(--wc-space-3);
+
+  font-size: var(--wc-font-size-sm);
+  font-weight: var(--wc-font-weight-medium);
+  color: var(--wc-neutral-700);
+  text-decoration: none;
+  border-radius: var(--wc-radius-md);
+
+  transition:
+    background-color var(--wc-duration-fast) var(--wc-easing-standard),
+    color var(--wc-duration-fast) var(--wc-easing-standard);
+}
+
+.navLink:hover {
+  background: var(--wc-neutral-100);
+  color: var(--wc-neutral-900);
+}
+
+/* The active item is marked by background AND weight, not colour alone. */
+.navLinkActive {
+  background: var(--wc-brand-50);
+  color: var(--wc-brand-700);
+  font-weight: var(--wc-font-weight-semibold);
+}
+
+.navIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: var(--wc-space-5);
+  height: var(--wc-space-5);
+}
+
+.navLabel {
+  flex: 1;
+  min-width: 0;
+}
+
+.navBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--wc-space-5);
+  height: var(--wc-space-5);
+  padding: 0 var(--wc-space-1);
+
+  font-size: var(--wc-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--wc-neutral-0);
+  background: var(--wc-brand-600);
+  border-radius: var(--wc-radius-full);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: var(--wc-space-6);
+}
+
+/* The main landmark is focused by the skip link; it is a target, not a
+ * control, so no visible ring. */
+.main:focus {
+  outline: none;
+}
+
+.scrim {
+  display: none;
+}
+
+/* ─── Tablet and below ────────────────────────────────────────
+ * NFR-055 — "fully usable on a tablet." The sidebar becomes a
+ * drawer so the content gets the full width.
+ * ──────────────────────────────────────────────────────────── */
+
+@media (min-width: 1024px) {
+  .menuButton {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .sidebar {
+    position: fixed;
+    top: var(--wc-space-16);
+    bottom: 0;
+    left: 0;
+    z-index: var(--wc-z-overlay);
+    transform: translateX(-100%);
+    transition: transform var(--wc-duration-normal) var(--wc-easing-standard);
+    box-shadow: var(--wc-shadow-lg);
+  }
+
+  .sidebarOpen {
+    transform: translateX(0);
+  }
+
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: var(--wc-space-16) 0 0;
+    z-index: var(--wc-z-dropdown);
+    background: rgb(0 0 0 / 0.35);
+  }
+
+  .main {
+    padding: var(--wc-space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .skipLink {
+    transition: none;
+  }
+}

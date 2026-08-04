@@ -23,6 +23,9 @@ coverage.xml
 # ─── Node ────────────────────────────────────────────────────────────────
 node_modules/
 dist/
+# The design-system gallery builds here rather than to `dist/`, which is
+# reserved for the package's own compiled output (see its tsconfig outDir).
+dist-gallery/
 build/
 .vite/
 *.tsbuildinfo

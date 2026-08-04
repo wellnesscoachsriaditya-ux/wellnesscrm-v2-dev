@@ -1,0 +1,113 @@
+/* PageHeader — ADR-03. */
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wc-space-3);
+  padding-bottom: var(--wc-space-5);
+  border-bottom: 1px solid var(--wc-neutral-200);
+}
+
+/* ─── Breadcrumbs ─────────────────────────────────────────── */
+
+.breadcrumbs {
+  font-size: var(--wc-font-size-sm);
+}
+
+.crumbList {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wc-space-2);
+}
+
+.crumbLink {
+  color: var(--wc-neutral-600);
+  text-decoration: none;
+}
+
+.crumbLink:hover {
+  color: var(--wc-brand-700);
+  text-decoration: underline;
+}
+
+.crumbCurrent {
+  color: var(--wc-neutral-800);
+  font-weight: var(--wc-font-weight-medium);
+}
+
+.separator {
+  color: var(--wc-neutral-400);
+}
+
+/* ─── Title row ───────────────────────────────────────────── */
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--wc-space-4);
+  flex-wrap: wrap;
+}
+
+.titleBlock {
+  min-width: 0;
+}
+
+.titleLine {
+  display: flex;
+  align-items: center;
+  gap: var(--wc-space-3);
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--wc-font-size-2xl);
+  font-weight: var(--wc-font-weight-semibold);
+  line-height: var(--wc-line-height-tight);
+  color: var(--wc-neutral-900);
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--wc-space-2);
+}
+
+.description {
+  max-width: 60ch;
+  margin: var(--wc-space-2) 0 0;
+  font-size: var(--wc-font-size-sm);
+  line-height: var(--wc-line-height-normal);
+  color: var(--wc-neutral-600);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--wc-space-3);
+  flex-shrink: 0;
+}
+
+/* On a phone, actions drop below the title and stretch, so the primary action
+ * is a full-width target under the thumb rather than a small button in the
+ * top-right corner (NFR-055, NFR-059). */
+@media (max-width: 479px) {
+  .actions {
+    width: 100%;
+  }
+
+  .actions > * {
+    flex: 1;
+  }
+}

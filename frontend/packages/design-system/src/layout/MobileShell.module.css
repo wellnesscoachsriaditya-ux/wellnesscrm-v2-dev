@@ -1,0 +1,194 @@
+/* MobileShell — client PWA frame. Arch §4.2, NFR-055. */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  /* `100dvh` accounts for mobile browser chrome that appears and disappears on
+   * scroll; `100vh` leaves the bottom nav cut off in Safari. */
+  min-height: 100dvh;
+  background: var(--wc-neutral-50);
+}
+
+.skipLink {
+  position: absolute;
+  top: calc(var(--wc-space-16) * -1);
+  left: var(--wc-space-3);
+  z-index: var(--wc-z-sticky);
+  padding: var(--wc-space-3) var(--wc-space-4);
+  background: var(--wc-brand-700);
+  color: var(--wc-neutral-0);
+  border-radius: 0 0 var(--wc-radius-md) var(--wc-radius-md);
+  text-decoration: none;
+  font-size: var(--wc-font-size-sm);
+}
+
+.skipLink:focus {
+  top: 0;
+}
+
+/* ─── Top bar ─────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--wc-space-2);
+  min-height: var(--wc-space-12);
+  padding: var(--wc-space-2) var(--wc-space-3);
+  /* Clear of the notch / status bar on an installed PWA. */
+  padding-top: max(var(--wc-space-2), env(safe-area-inset-top));
+
+  background: var(--wc-neutral-0);
+  border-bottom: 1px solid var(--wc-neutral-200);
+  position: sticky;
+  top: 0;
+  z-index: var(--wc-z-sticky);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--wc-touch-target-min);
+  height: var(--wc-touch-target-min);
+  margin-left: calc(var(--wc-space-2) * -1);
+
+  color: var(--wc-neutral-700);
+  background: transparent;
+  border: 0;
+  border-radius: var(--wc-radius-md);
+  cursor: pointer;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--wc-font-size-lg);
+  font-weight: var(--wc-font-weight-semibold);
+  color: var(--wc-neutral-900);
+  /* One line, ellipsised — a wrapping title pushes the content down. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action {
+  flex-shrink: 0;
+}
+
+/* ─── Content ─────────────────────────────────────────────── */
+
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: var(--wc-space-4);
+  /* Clear the bottom nav so the last item is not hidden behind it. */
+  padding-bottom: calc(var(--wc-space-20) + env(safe-area-inset-bottom));
+}
+
+.main:focus {
+  outline: none;
+}
+
+/* ─── Bottom navigation ───────────────────────────────────── */
+
+.bottomNav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--wc-z-sticky);
+
+  background: var(--wc-neutral-0);
+  border-top: 1px solid var(--wc-neutral-200);
+  /* 🔒 The iOS home indicator sits in this strip. Without the inset, the
+   * bottom row of targets is partly in the OS gesture area. */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.navList {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navItem {
+  /* Equal widths, so no item is harder to hit than another. */
+  flex: 1;
+}
+
+.navLink {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--wc-space-1);
+  /* 🔒 NFR-059 — the comfortable 48px size, not the 44px minimum. This is the
+   * most-tapped control in the client app. */
+  min-height: var(--wc-touch-target-comfortable);
+  padding: var(--wc-space-2) var(--wc-space-1);
+
+  color: var(--wc-neutral-600);
+  text-decoration: none;
+}
+
+.navLinkActive {
+  color: var(--wc-brand-700);
+}
+
+.navIcon {
+  position: relative;
+  display: inline-flex;
+  width: var(--wc-space-6);
+  height: var(--wc-space-6);
+}
+
+.navIcon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.navLabel {
+  font-size: var(--wc-font-size-xs);
+  line-height: var(--wc-line-height-tight);
+  /* Weight, not just colour, marks the active item (WCAG 1.4.1). */
+  font-weight: var(--wc-font-weight-medium);
+}
+
+.navLinkActive .navLabel {
+  font-weight: var(--wc-font-weight-semibold);
+}
+
+.navBadge {
+  position: absolute;
+  top: calc(var(--wc-space-1) * -1);
+  right: calc(var(--wc-space-2) * -1);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--wc-space-4);
+  height: var(--wc-space-4);
+  padding: 0 var(--wc-space-1);
+
+  font-size: 0.625rem;
+  font-weight: var(--wc-font-weight-semibold);
+  color: var(--wc-neutral-0);
+  background: var(--wc-danger-500);
+  border-radius: var(--wc-radius-full);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

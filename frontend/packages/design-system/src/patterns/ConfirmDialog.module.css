@@ -1,0 +1,8 @@
+/* ConfirmDialog — ADR-03, NFR-065. */
+
+.consequence {
+  margin: 0;
+  font-size: var(--wc-font-size-base);
+  line-height: var(--wc-line-height-relaxed);
+  color: var(--wc-neutral-800);
+}
