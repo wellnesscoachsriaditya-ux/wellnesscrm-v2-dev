@@ -135,11 +135,7 @@ def test_boundary_check_does_not_depend_on_installed_packages(
     an accidental third-party import in the checker would go unnoticed until the
     day the install is what's failing.
     """
-    ordered = [
-        step.get("name", "")
-        for step in steps_of(workflow, "boundaries")
-        if step.get("run")
-    ]
+    ordered = [step.get("name", "") for step in steps_of(workflow, "boundaries") if step.get("run")]
     check = next(i for i, name in enumerate(ordered) if name == "Check boundaries")
     installs = [i for i, name in enumerate(ordered) if "Install" in name]
 
@@ -161,9 +157,7 @@ def test_boundary_negative_tests_may_run_after_install(workflow: dict[str, Any])
     names = [step.get("name", "") for step in steps]
 
     install = next(i for i, name in enumerate(names) if "Install" in name)
-    negative = next(
-        i for i, step in enumerate(steps) if "tests/test_boundaries.py" in step["run"]
-    )
+    negative = next(i for i, step in enumerate(steps) if "tests/test_boundaries.py" in step["run"])
 
     assert install < negative, "the negative tests need pytest installed first"
 
