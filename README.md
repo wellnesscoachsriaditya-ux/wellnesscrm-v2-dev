@@ -95,9 +95,10 @@ backend/
     modules/        domain; may NOT import each other
     integrations/   third-party adapters behind ports we own
     platform/       framework wiring; no domain logic
-  migrations/       Alembic
+  migrations/       Alembic — versions/ holds the linear chain
   tests/
   tools/            check_boundaries.py — CI boundary enforcement
+                    export_openapi.py   — OpenAPI export (NFR-079)
 frontend/
   packages/
     design-system/  tokens, primitives, patterns, shells  (built first)
@@ -109,7 +110,8 @@ frontend/
     operator/       minimal, austere, 2FA
   types/            ambient declarations shared by every project
 docs/               the five frozen documents
-ops/                environment and deployment notes
+ops/
+  db/               role provisioning and grant verification — run by an operator
 ```
 
 ---
@@ -119,12 +121,18 @@ ops/                environment and deployment notes
 **Prerequisites:** Python ≥3.12, Node ≥20, PostgreSQL 15+ (or a Supabase project).
 
 ```bash
+# Database roles — 🔒 ONCE per database, as a superuser, BEFORE the first migration.
+# Alembic connects as app_migrator and cannot create the role it authenticates as.
+psql "$SUPERUSER_URL" -v ON_ERROR_STOP=1 -f ops/db/001_roles.sql
+# then set both passwords — see ops/db/README.md
+
 # Backend
 cd backend
 python -m venv .venv
 source .venv/Scripts/activate      # Windows (Git Bash);  .venv/bin/activate on macOS/Linux
 pip install -e ".[dev]"
 cp ../.env.example ../.env         # then fill in real values
+alembic upgrade head               # applies migrations as app_migrator
 uvicorn app.main:app --reload      # http://localhost:8000/docs
 
 # Worker (separate terminal — ADR-01: background work never runs in the web process)
@@ -145,17 +153,32 @@ npm run dev:operator               # http://localhost:5175
 # Backend
 cd backend
 ruff check . && ruff format --check .
-mypy app
+mypy app tools
 pytest
 python tools/check_boundaries.py          # architectural boundaries — R1..R8
+python tools/export_openapi.py --check    # committed schema matches the code — NFR-079 ①
 
 # Frontend
 cd frontend
 npm run lint && npm run typecheck && npm test && npm run build
 npm run budget                            # gzipped bundle budgets — NFR-002
+npm run check:client                      # committed types match the schema — NFR-079 ②
 ```
 
 🔒 **All of the above run in CI. A boundary violation fails the build.**
+
+### Changing the API
+
+The generated client is build output, so a contract change is two commands and
+both artefacts go in the same commit as the change that caused them:
+
+```bash
+cd backend  && python tools/export_openapi.py     # rewrite openapi.json
+cd frontend && npm run generate:client            # rewrite generated/schema.ts
+```
+
+⚠️ Skip them and CI fails — which is the point. See
+`frontend/packages/api-client/README.md`.
 
 ---
 

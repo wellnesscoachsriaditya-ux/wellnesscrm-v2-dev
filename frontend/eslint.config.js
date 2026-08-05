@@ -101,15 +101,11 @@ export default tseslint.config(
     },
   },
 
-  // The generated API client is build output (NFR-079) — never hand-edited,
-  // and not subject to authored-code rules.
-  {
-    files: ['packages/api-client/src/generated/**'],
-    rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/consistent-type-imports': 'off',
-    },
-  },
+  // The generated API client is build output (NFR-079) — never hand-edited, and
+  // not subject to authored-code rules. It is in `ignores` above rather than
+  // merely rule-relaxed: it belongs to no authored tsconfig include path that
+  // the type-aware parser can resolve, and there is nothing to lint in a file
+  // whose only correct fix is `npm run generate:client`.
 
   // Build and tooling scripts are plain Node ESM, outside any tsconfig.
   //

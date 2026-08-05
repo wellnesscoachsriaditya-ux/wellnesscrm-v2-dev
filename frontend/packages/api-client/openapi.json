@@ -1,0 +1,128 @@
+{
+  "components": {
+    "schemas": {
+      "DependencyStatus": {
+        "description": "State of one dependency.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "degraded",
+              "unavailable",
+              "not_configured"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "status"
+        ],
+        "title": "DependencyStatus",
+        "type": "object"
+      },
+      "LivenessResponse": {
+        "description": "Process is alive.",
+        "properties": {
+          "status": {
+            "const": "ok",
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "LivenessResponse",
+        "type": "object"
+      },
+      "ReadinessResponse": {
+        "description": "Readiness plus dependency detail.\n\n``ready`` reflects only what is *required* to serve traffic. Optional\ndependencies appear in ``dependencies`` and are surfaced to the operator\nconsole (FR-M11-009) without gating the check.",
+        "properties": {
+          "dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/DependencyStatus"
+            },
+            "title": "Dependencies",
+            "type": "array"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ready"
+        ],
+        "title": "ReadinessResponse",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Practice management for Indian nutrition practitioners.\n\n🔒 Realm-segmented paths (ADR-A01): `/app` practitioner, `/portal` client, `/admin` operator, `/public` unauthenticated.",
+    "title": "WellnessCRM V2 API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/public/health": {
+      "get": {
+        "description": "Return 200 if the process is running.\n\n🔒 Deliberately does nothing else. A liveness probe that touches the\ndatabase will fail during a transient database blip and cause the platform\nto restart a perfectly healthy process — turning a brief outage into a\nlonger one.",
+        "operationId": "healthLiveness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LivenessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness probe",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/v1/public/health/ready": {
+      "get": {
+        "description": "Report whether the application can serve traffic.\n\nReturns 503 when a *required* dependency is unavailable, so the platform\nwithholds traffic rather than serving errors.",
+        "operationId": "healthReadiness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Readiness probe",
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  }
+}

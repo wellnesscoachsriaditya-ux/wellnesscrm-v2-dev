@@ -82,6 +82,16 @@ jobs:
         working-directory: backend
         run: pytest
 
+      # 🔒 NFR-079, link ① of two. The committed OpenAPI document must match what
+      # the code currently produces. The frontend job then checks that the
+      # generated TypeScript matches that document (link ②) — it has no Python,
+      # so the chain is deliberately split across the two jobs that each have the
+      # toolchain for their half.
+      - name: OpenAPI schema freshness
+        if: '!cancelled()'
+        working-directory: backend
+        run: python tools/export_openapi.py --check
+
   # ─── Architectural boundaries ──────────────────────────────────────────
   # 🔒 Arch §3.5, and the S0 Definition of Done: this job failing is the
   # mechanism that makes the module boundaries real rather than aspirational.
@@ -215,21 +225,17 @@ jobs:
         working-directory: frontend
         run: node scripts/check-bundle-budget.mjs
 
-      # 🔒 NFR-079 — `packages/api-client` is build output. If the committed
-      # client does not match the backend's current OpenAPI schema, the
-      # frontend is compiling against a contract that no longer exists.
+      # 🔒 NFR-079, link ② of two — `packages/api-client` is build output. If the
+      # committed client does not match the OpenAPI schema, the frontend is
+      # compiling against a contract that no longer exists.
       #
-      # ⏳ The generator itself is a separate S0 backend task. This step runs
-      # as soon as the script exists and reports its absence until then.
+      # Link ① (schema matches the backend code) runs in the `backend` job,
+      # which has Python. Neither check is sufficient alone; together they make
+      # a contract change break the build rather than production.
       - name: API client freshness
         if: steps.detect.outputs.scaffolded == 'true' && !cancelled()
         working-directory: frontend
-        run: |
-          if [[ -f scripts/check-client-freshness.mjs ]]; then
-            node scripts/check-client-freshness.mjs
-          else
-            echo '::warning::API-client freshness check not implemented yet (NFR-079, separate S0 task).'
-          fi
+        run: node scripts/check-client-freshness.mjs
 
   # ─── Aggregate gate ────────────────────────────────────────────────────
   # One required status check for branch protection. Without this, adding a job

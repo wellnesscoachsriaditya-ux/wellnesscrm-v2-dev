@@ -13,6 +13,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "budget": "node scripts/check-bundle-budget.mjs",
+    "generate:client": "npm run generate -w @wellnesscrm/api-client",
+    "check:client": "node scripts/check-client-freshness.mjs",
     "dev:practitioner": "npm run dev -w @wellnesscrm/practitioner",
     "dev:portal": "npm run dev -w @wellnesscrm/client-pwa",
     "dev:operator": "npm run dev -w @wellnesscrm/operator",

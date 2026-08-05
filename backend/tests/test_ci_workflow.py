@@ -278,14 +278,47 @@ def test_actions_are_pinned_to_a_major_version(workflow: dict[str, Any]) -> None
 def test_referenced_scripts_exist(workflow: dict[str, Any]) -> None:
     """A workflow referencing a missing script fails at runtime, not at review.
 
-    ``check-client-freshness.mjs`` is deliberately excluded: the generator is a
-    separate S0 task and the workflow guards its absence with a warning. Every
-    script invoked unconditionally must be present.
+    Every script CI invokes must be present. This became fully enforceable at
+    S0-7, when `check-client-freshness.mjs` landed; before that it was
+    deliberately excluded, because the workflow guarded its absence.
     """
     commands = all_run_commands(workflow)
     assert "check-bundle-budget.mjs" in commands
     assert (_REPO / "frontend" / "scripts" / "check-bundle-budget.mjs").is_file()
+    assert (_REPO / "frontend" / "scripts" / "check-client-freshness.mjs").is_file()
     assert (_REPO / "backend" / "tools" / "check_boundaries.py").is_file()
+    assert (_REPO / "backend" / "tools" / "export_openapi.py").is_file()
+
+
+# ─── The NFR-079 chain ───────────────────────────────────────────────────
+
+
+def test_openapi_schema_freshness_runs_in_the_backend_job(workflow: dict[str, Any]) -> None:
+    """🔒 NFR-079 link ① — the committed schema must match the backend code.
+
+    ⚠️ This half cannot live in the frontend job: that job installs no Python and
+    no backend, on purpose. Splitting the chain across the two jobs is what keeps
+    each one's install minimal.
+    """
+    assert "export_openapi.py --check" in run_commands(workflow, "backend")
+
+
+def test_client_freshness_runs_unconditionally(workflow: dict[str, Any]) -> None:
+    """🔒 NFR-079 link ② — and it must be a gate, not a notice.
+
+    The step previously tested for the script's existence and emitted a warning
+    when it was absent, because the generator was a later S0 task. A warning does
+    not fail a build; now that the script exists, the guard must be gone or the
+    gate is decorative.
+    """
+    step = next(
+        s
+        for s in steps_of(workflow, "frontend")
+        if "check-client-freshness.mjs" in s.get("run", "")
+    )
+    body = step["run"]
+    assert "::warning" not in body, "the freshness check still only warns; it must fail the build"
+    assert "if [[ -f" not in body, "the freshness check is still guarded by an existence test"
 
 
 def test_npm_scripts_invoked_by_ci_are_declared(workflow: dict[str, Any]) -> None:
