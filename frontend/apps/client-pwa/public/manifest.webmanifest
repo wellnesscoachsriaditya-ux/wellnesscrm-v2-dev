@@ -1,0 +1,20 @@
+{
+  "name": "WellnessCRM — My Plan",
+  "short_name": "My Plan",
+  "description": "Your nutrition plan, progress and messages.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8f9fa",
+  "theme_color": "#38807a",
+  "lang": "en-IN",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ]
+}

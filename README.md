@@ -101,11 +101,13 @@ backend/
 frontend/
   packages/
     design-system/  tokens, primitives, patterns, shells  (built first)
+    ia/             route/nav/breadcrumb manifests — one declared IA per app
     api-client/     GENERATED from OpenAPI — never hand-edited
   apps/
     practitioner/   desktop-first
     client-pwa/     mobile-first, offline-capable, installable
     operator/       minimal, austere, 2FA
+  types/            ambient declarations shared by every project
 docs/               the five frozen documents
 ops/                environment and deployment notes
 ```
@@ -132,7 +134,9 @@ python -m app.worker
 cd frontend
 npm install
 npm run gallery                    # design system component gallery
-npm run dev:practitioner
+npm run dev:practitioner           # http://localhost:5173
+npm run dev:portal                 # http://localhost:5174  (client PWA)
+npm run dev:operator               # http://localhost:5175
 ```
 
 ## Checks
@@ -147,7 +151,8 @@ python tools/check_boundaries.py          # architectural boundaries — R1..R8
 
 # Frontend
 cd frontend
-npm run lint && npm run typecheck && npm run build
+npm run lint && npm run typecheck && npm test && npm run build
+npm run budget                            # gzipped bundle budgets — NFR-002
 ```
 
 🔒 **All of the above run in CI. A boundary violation fails the build.**

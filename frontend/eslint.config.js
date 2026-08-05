@@ -50,7 +50,20 @@ const RAW_VALUE_PATTERNS = [
 ]
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/dist-gallery/**', '**/node_modules/**', '**/*.config.js', '**/api-client/generated/**'] },
+  {
+    ignores: [
+      '**/dist/**',
+      '**/dist-gallery/**',
+      '**/node_modules/**',
+      '**/*.config.js',
+      '**/api-client/generated/**',
+      // Ambient module declarations shared by every project. They belong to no
+      // single tsconfig — each app pulls the directory into its own `include` —
+      // so the type-aware parser cannot resolve a project for them. There is
+      // nothing to lint in a `declare module` block regardless.
+      'types/**',
+    ],
+  },
 
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

@@ -12,6 +12,7 @@
     "lint": "eslint . --max-warnings 0",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "budget": "node scripts/check-bundle-budget.mjs",
     "dev:practitioner": "npm run dev -w @wellnesscrm/practitioner",
     "dev:portal": "npm run dev -w @wellnesscrm/client-pwa",
     "dev:operator": "npm run dev -w @wellnesscrm/operator",

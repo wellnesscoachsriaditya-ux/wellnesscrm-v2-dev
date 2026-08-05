@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- 🔒 `viewport-fit=cover` is what lets the safe-area insets MobileShell
+         relies on resolve to non-zero values on a notched iPhone. Without it the
+         bottom bar sits under the home indicator and taps hit the OS gesture
+         area instead of our buttons. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>My Plan</title>
+    <meta name="description" content="Your nutrition plan, progress and messages." />
+
+    <!-- ⏳ FR-M7-010 (installability) is M7. The manifest link and theme colour
+         are here from the first deployment because they are cheap and because
+         adding them later means testing installation twice. The service worker,
+         offline caching and maskable icons belong to that sprint. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#38807a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="My Plan" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

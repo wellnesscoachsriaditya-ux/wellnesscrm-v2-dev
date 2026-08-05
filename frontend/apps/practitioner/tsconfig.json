@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "jsx": "react-jsx",
+    "types": ["vitest/globals"]
+  },
+  // `../../types` carries the CSS Modules declaration. It is required because
+  // workspace packages resolve to TypeScript source, so this project also
+  // type-checks the design system's own `.module.css` imports.
+  "include": ["src", "vite.config.ts", "vitest.config.ts", "../../types"]
+}

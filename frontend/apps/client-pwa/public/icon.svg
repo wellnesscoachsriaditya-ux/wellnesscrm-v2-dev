@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="WellnessCRM">
+  <rect width="512" height="512" rx="112" fill="#38807a" />
+  <path
+    d="M256 372c-58-34-96-79-96-129a64 64 0 0 1 96-55 64 64 0 0 1 96 55c0 50-38 95-96 129Z"
+    fill="none"
+    stroke="#f0f7f6"
+    stroke-width="26"
+    stroke-linejoin="round"
+  />
+  <path d="M186 190h140" fill="none" stroke="#f0f7f6" stroke-width="26" stroke-linecap="round" />
+</svg>
