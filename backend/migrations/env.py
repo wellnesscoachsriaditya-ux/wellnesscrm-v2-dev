@@ -10,10 +10,11 @@ The URL comes from :func:`app.platform.config.get_settings` rather than from
 ``alembic.ini`` — one typed, validated definition of configuration (NFR-075),
 and no secret in source control (NFR-034).
 
-⚠️ ``Base.metadata`` is imported for ``--autogenerate``. It is empty at S0: the
-platform-core tables (D0) land in S1. Autogenerate against an empty metadata
-would propose dropping every table, so **do not run it until models exist** —
-and always read the generated diff before applying it. Alembic writes what it
+⚠️ ``Base.metadata`` is imported for ``--autogenerate``, and every models module
+must be imported below for its tables to appear in it. Autogenerate infers only
+what SQLAlchemy expresses: it cannot see RLS policies, ``FORCE ROW LEVEL
+SECURITY``, or grant revocations, all of which are load-bearing in this schema.
+Always read the generated diff before applying it — Alembic writes what it
 infers, which is not always what was meant.
 """
 
@@ -24,17 +25,19 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+# Imported for its side effect: subclassing `Base` is what registers a table on
+# `Base.metadata`, so a models module that is never imported is invisible to
+# autogenerate — which would then propose dropping every table it cannot see.
+# Each new module's `models.py` must be added here.
+import app.kernel.models  # noqa: F401
+from app.kernel import Base
 from app.platform.config import get_settings
-from app.platform.db import Base
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Autogenerate compares against this. Models register themselves on it by
-# subclassing `Base`; each module's `models.py` must therefore be imported here
-# once it exists, or autogenerate will not see its tables.
 target_metadata = Base.metadata
 
 

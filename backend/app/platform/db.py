@@ -30,7 +30,6 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase
 
 from app.platform.config import Settings, get_settings
 from app.platform.logging import get_logger
@@ -41,14 +40,6 @@ logger = get_logger(__name__)
 TENANT_SETTING = "app.tenant_id"
 ACTOR_SETTING = "app.actor_id"
 ROLE_SETTING = "app.actor_role"
-
-
-class Base(DeclarativeBase):
-    """Declarative base for all ORM models.
-
-    🔒 Arch R6 — a module's models must not reference another module's tables.
-    Enforced by ``tools/check_boundaries.py``, not by convention.
-    """
 
 
 _engine: AsyncEngine | None = None

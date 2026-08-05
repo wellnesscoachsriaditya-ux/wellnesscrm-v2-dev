@@ -63,6 +63,107 @@ ROLE` needs privileges we deliberately withhold from the migration credential;
 and roles are cluster-scoped, so they do not belong to one database's linear
 history. The full argument is in the header of `001_roles.sql`.
 
+## Verifying tenant isolation (AC-M0-003)
+
+> ⏳ **Status: pending a live PostgreSQL environment.** The tests below are
+> written, committed and executable. They have **not been run against a real
+> server**, because no PostgreSQL instance (local or Docker) exists on the
+> development machine yet. Until an operator completes this section and records
+> the result, **AC-M0-003 is unverified** and the S1 launch gate is open.
+>
+> 🔒 The suite is *not* skipped silently. With no `TEST_DATABASE_URL` set,
+> `pytest` reports the tests as skipped with the reason pointing here, so the gap
+> stays visible in every test summary rather than disappearing into a green run.
+
+AC-M0-003 is the acceptance criterion the whole tenancy model rests on:
+
+> With the application's tenant filter deliberately removed, a cross-tenant read
+> returns **zero rows**.
+
+Nothing that runs without a database can prove this. `backend/tests/test_kernel_schema.py`
+checks that policies are *declared* — enabled, forced, carrying `WITH CHECK` —
+by reading the migration source. Only PostgreSQL can demonstrate that it
+*enforces* them, and that is what `backend/tests/integration/` does.
+
+### What runs
+
+`backend/tests/integration/test_tenant_isolation.py`, nine tests:
+
+| Test | Proves |
+|---|---|
+| `test_cross_tenant_read_returns_nothing_with_the_filter_removed` | 🔒 **AC-M0-003 itself** |
+| `test_unscoped_connection_sees_no_rows_at_all` | A missing scope fails closed, not open |
+| `test_write_carrying_another_tenants_id_is_rejected` | The `WITH CHECK` half — `USING` alone would let a tenant *write into* another |
+| `test_update_cannot_move_a_row_to_another_tenant` | `WITH CHECK` constrains UPDATE too |
+| `test_delete_cannot_reach_another_tenants_row` | An unfiltered `DELETE` is scoped |
+| `test_tenant_b_row_survives_tenant_a_deleting_everything` | …verified as the owner, since `app_user` cannot see the surviving rows |
+| `test_scope_does_not_survive_its_transaction` | 🔒 DB §2.3 — the pooler is in **transaction** mode |
+| `test_app_user_cannot_perform_ddl` | DB §2.4 — `app_user` cannot `DISABLE ROW LEVEL SECURITY` |
+| `test_app_user_cannot_write_the_version_table` | The baseline's `alembic_version` revocation holds |
+
+⚠️ **Every query in that file deliberately omits `WHERE tenant_id`.** That is the
+experiment, not an oversight. A query carrying the filter passes against a
+database with RLS entirely disabled — the false pass the suite exists to prevent.
+`test_ac_m0_003_is_covered_by_an_executable_test` in `tests/test_kernel_schema.py`
+fails if a future refactor "tidies" the filter back in.
+
+### Steps
+
+Steps 1–2 are the ones already above; they are repeated here so this section
+stands alone. ⚠️ Use a **throwaway database**. `seeded_tenants` deletes the rows
+it creates, but a failure mid-test can leave them behind.
+
+```powershell
+# 0. A database to work in (any PostgreSQL 15+; Supabase local, Docker, or native)
+psql "$env:SUPERUSER_URL" -c "CREATE DATABASE wellnesscrm_test"
+
+# 1. Roles — superuser, once per cluster
+psql "$env:SUPERUSER_URL" -v ON_ERROR_STOP=1 -f ops/db/001_roles.sql
+
+# 2. Passwords — local throwaway values only, never a real secret
+psql "$env:SUPERUSER_URL" -c "ALTER ROLE app_migrator WITH PASSWORD 'localdev'"
+psql "$env:SUPERUSER_URL" -c "ALTER ROLE app_user     WITH PASSWORD 'localdev'"
+
+# 3. Migrate, as app_migrator
+cd backend
+$env:DATABASE_MIGRATION_URL = "postgresql+psycopg://app_migrator:localdev@localhost:5432/wellnesscrm_test"
+.venv/Scripts/alembic upgrade head
+
+# 4. Run the gate
+$env:TEST_DATABASE_URL           = "postgresql+psycopg://app_user:localdev@localhost:5432/wellnesscrm_test"
+$env:TEST_DATABASE_MIGRATION_URL = $env:DATABASE_MIGRATION_URL
+.venv/Scripts/python -m pytest tests/integration -v
+
+# 5. Prove the migration reverses cleanly, then re-apply
+.venv/Scripts/alembic downgrade base
+.venv/Scripts/alembic upgrade head
+```
+
+**Both** URLs are required. With only `TEST_DATABASE_URL` the fixtures skip
+rather than run: seeding as `app_user` cannot cross a tenant boundary, so the
+"other tenant's row" would never exist and the cross-tenant read would return
+zero rows for the wrong reason — a pass that proves nothing.
+
+### Preconditions the fixtures enforce
+
+`tests/integration/conftest.py` refuses to run against a database that could
+produce a false pass. Each check names its own fix:
+
+1. **`users` exists** — otherwise every query errors and could be misread as
+   "no rows returned".
+2. **The connecting role has neither `rolbypassrls` nor `rolsuper`** — with
+   either, the policies are inert and the gate is meaningless. Point
+   `TEST_DATABASE_URL` at `app_user`, not `postgres`.
+3. **`pg_class.relforcerowsecurity` is true on `users`** — `ENABLE` alone does
+   not set it, and `app_migrator` *owns* these tables, so without `FORCE` the
+   owner bypasses every policy.
+
+### Recording the result
+
+When the run passes, replace the status block at the top of this section with the
+date, the PostgreSQL version, and the nine test results. AC-M0-003 stays open
+until that happens.
+
 ## ⏳ Not here yet
 
 Deployment configuration — staging and production environments, the web and

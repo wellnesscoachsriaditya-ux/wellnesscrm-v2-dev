@@ -186,14 +186,59 @@ def _revisions() -> list[Path]:
     return sorted((_MIGRATIONS / "versions").glob("*.py"))
 
 
+def _baseline() -> Path:
+    """The root of the chain — the revision with no predecessor.
+
+    ⚠️ Located by its `down_revision = None` rather than by being the only file
+    or the first alphabetically. Filename ordering happens to match revision
+    order today because both are date-prefixed, but that is a convention, not a
+    guarantee, and every assertion below is about the *baseline* specifically.
+    """
+    for path in _revisions():
+        if re.search(r"down_revision:\s*str\s*\|\s*None\s*=\s*None", path.read_text("utf-8")):
+            return path
+    pytest.fail("no baseline revision found (none has down_revision = None)")
+
+
 def test_exactly_one_baseline_revision_exists() -> None:
-    revisions = _revisions()
-    assert len(revisions) == 1, f"expected one baseline revision, found {len(revisions)}"
+    """🔒 One root, and only one.
+
+    Two revisions with `down_revision = None` are two independent chains.
+    Alembic reports "multiple heads" only once they diverge downstream, by which
+    point the fix is a manual merge revision.
+    """
+    roots = [
+        path
+        for path in _revisions()
+        if re.search(r"down_revision:\s*str\s*\|\s*None\s*=\s*None", path.read_text("utf-8"))
+    ]
+    assert len(roots) == 1, f"expected exactly one root revision, found {len(roots)}: {roots}"
+
+
+def test_revision_chain_is_linear() -> None:
+    """🔒 Every non-root revision names a predecessor, and none is named twice.
+
+    A duplicated `down_revision` is a fork: two revisions claiming the same
+    parent. Alembic then has two heads and `upgrade head` refuses to run.
+    """
+    parents: dict[str, Path] = {}
+    for path in _revisions():
+        match = re.search(
+            r'down_revision:\s*str\s*\|\s*None\s*=\s*"([^"]+)"', path.read_text("utf-8")
+        )
+        if match is None:
+            continue  # the root, asserted separately
+        parent = match.group(1)
+        assert parent not in parents, (
+            f"{path.name} and {parents[parent].name} both descend from `{parent}` — "
+            "the chain has forked and Alembic would report multiple heads."
+        )
+        parents[parent] = path
 
 
 def test_baseline_has_no_predecessor() -> None:
     """The chain must start somewhere, and `down_revision = None` is where."""
-    source = _revisions()[0].read_text(encoding="utf-8")
+    source = _baseline().read_text(encoding="utf-8")
     assert re.search(r"down_revision:\s*str\s*\|\s*None\s*=\s*None", source)
 
 
@@ -205,20 +250,20 @@ def test_baseline_revokes_the_version_table_from_app_user() -> None:
     An application that can UPDATE `alembic_version` can convince the next deploy
     that a migration already ran.
     """
-    source = _normalise(_revisions()[0].read_text(encoding="utf-8"))
+    source = _normalise(_baseline().read_text(encoding="utf-8"))
     assert "REVOKE ALL ON TABLE alembic_version FROM app_user" in source
 
 
 def test_baseline_creates_no_application_tables() -> None:
     """🔒 PDR-01 — build vertically. Tables land with the code that owns them (S1),
     not in a scaffolding sprint that has no consumer for them."""
-    source = _revisions()[0].read_text(encoding="utf-8")
+    source = _baseline().read_text(encoding="utf-8")
     assert "create_table" not in source
 
 
 def test_baseline_downgrade_is_not_a_silent_no_op() -> None:
     """A `downgrade` that does nothing makes the chain dishonestly reversible."""
-    source = _revisions()[0].read_text(encoding="utf-8")
+    source = _baseline().read_text(encoding="utf-8")
     downgrade = source.split("def downgrade()")[-1]
     assert "op.execute" in downgrade
 

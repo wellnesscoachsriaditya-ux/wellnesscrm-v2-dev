@@ -89,6 +89,12 @@ disallow_untyped_defs = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Pinned rather than left to the default: pytest-asyncio 0.25 warns that this
+# will change, and the change is not cosmetic. A fixture whose loop scope differs
+# from the test's is created on a loop nothing awaits it from, so a shared engine
+# fails on first connect. Stating "function" makes today's behaviour the
+# behaviour a future upgrade keeps.
+asyncio_default_fixture_loop_scope = "function"
 addopts = "-q --strict-markers"
 markers = [
     "isolation: tenant-isolation tests (AC-M0-003) — mandatory, never skip",
