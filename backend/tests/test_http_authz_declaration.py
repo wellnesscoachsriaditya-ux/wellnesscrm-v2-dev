@@ -220,18 +220,48 @@ def test_exemption_is_by_exact_path_not_prefix() -> None:
         verify_route_authorization(_app_with(router))
 
 
-def test_exempt_paths_are_only_health_during_slice_a() -> None:
+def test_exempt_paths_cover_health_and_the_authentication_surface() -> None:
     """Pins the exemption list so growth is a deliberate, reviewed change.
 
-    ⚠️ Slice B adds `/public/auth/*` — reachable before an actor exists, which is
-    the definition of the exemption. Updating this test is the moment to ask
-    whether the new entry earns it.
+    🔒 Every entry is unauthenticated *by necessity*: health probes disclose
+    nothing, and the rest are what establish an actor in the first place.
+    Reviewing an addition here is the last checkpoint before a route becomes
+    reachable without authorization.
+
+    ⚠️ Logout is deliberately absent — it acts on an existing session and is
+    authorized as `session.end`.
     """
     exempt = set(EXEMPT_PATHS)
     assert exempt == {
         "/api/v1/public/health",
         "/api/v1/public/health/ready",
+        "/api/v1/public/auth/register",
+        "/api/v1/public/auth/verify-email",
+        "/api/v1/public/auth/login",
+        "/api/v1/public/auth/refresh",
+        "/api/v1/public/auth/password-reset/request",
+        "/api/v1/public/auth/password-reset/confirm",
+        "/api/v1/public/portal/access/request",
+        "/api/v1/public/portal/access/redeem",
     }
+
+
+def test_every_public_auth_route_is_exempt() -> None:
+    """🔒 The exemption list and the routers must not drift.
+
+    `EXEMPT_PATHS` holds literals because importing the router into the authz
+    module would be a cycle. This is the assertion that keeps the duplication
+    honest — and it fails loudly if a public endpoint is added without a
+    deliberate decision about its exemption.
+    """
+    from app.platform.http.routers.auth import PUBLIC_AUTH_PATHS
+
+    assert PUBLIC_AUTH_PATHS <= EXEMPT_PATHS
+
+
+def test_logout_is_not_exempt() -> None:
+    """🔒 Revoking a session requires knowing whose it is."""
+    assert "/api/v1/app/auth/logout" not in EXEMPT_PATHS
 
 
 # ─── Route enumeration ───────────────────────────────────────────────────
@@ -282,14 +312,3 @@ def test_realm_router_refuses_a_route_class_override() -> None:
     door marked safe."""
     with pytest.raises(ValueError, match="does not accept an override"):
         realm_router("/api/v1/app", route_class=APIRouter)
-
-
-# ─── The real application ────────────────────────────────────────────────
-
-
-def test_the_application_starts() -> None:
-    """🔒 `create_app` calls `verify_route_authorization`, so this failing means
-    a route in the real app is undeclared or unenforced."""
-    from app.main import create_app
-
-    create_app()

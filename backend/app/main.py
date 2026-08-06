@@ -39,7 +39,12 @@ from app.platform.http.middleware import (
     RequestContextMiddleware,
     SecurityHeadersMiddleware,
 )
-from app.platform.http.pipeline import verify_route_authorization
+from app.platform.http.pipeline import configure_actor_resolver, verify_route_authorization
+from app.platform.http.routers.auth import app_router as auth_app_router
+from app.platform.http.routers.auth import portal_router as auth_portal_router
+from app.platform.http.routers.auth import public_router as auth_public_router
+from app.platform.identity.authentication import resolve_actor as authenticate
+from app.platform.identity.credentials import raise_if_credentials_are_local
 from app.platform.logging import configure_logging, get_logger
 from app.platform.observability import configure_observability, is_production_like
 
@@ -81,6 +86,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         # rather than at import so the default remains the in-memory sink for
         # tests, which must never reach a database.
         configure_audit_sink(SqlAlchemyAuditSink())
+
+        # 🔒 NFR-029 / D1 — credentials belong to the identity provider. The
+        # local store keeps them in process memory: fine for a developer, an
+        # outage and a security incident anywhere else. Refuse to start rather
+        # than run on it, because the failure is otherwise invisible until
+        # someone restarts the process and every password is gone.
+        raise_if_credentials_are_local(settings)
     else:
         logger.warning(
             "Local environment: skipping RLS and pooler verification. "
@@ -114,6 +126,12 @@ def create_app() -> FastAPI:
     configure_logging(level=settings.log_level, json_output=production_like)
     configure_observability(settings, component="web")
 
+    # 🔒 Arch §5.1 step 2 — replace Slice A's anonymous placeholder with real
+    # bearer-token verification. Installed here rather than imported by the
+    # middleware so the seam stays a single, greppable line: what authenticates
+    # this process is decided in one place.
+    configure_actor_resolver(authenticate)
+
     app = FastAPI(
         title="WellnessCRM V2 API",
         version="0.1.0",
@@ -142,8 +160,14 @@ def create_app() -> FastAPI:
     # 🔒 ADR-A01 — health lives under `/public`, the only unauthenticated surface.
     app.include_router(health_router, prefix=f"{API_PREFIX}/public")
 
+    # 🔒 Authentication. These routers carry their own full prefixes because the
+    # exemption list names absolute paths, and a prefix applied here would make
+    # the two disagree silently.
+    app.include_router(auth_public_router)
+    app.include_router(auth_portal_router)
+    app.include_router(auth_app_router)
+
     # Realm routers are registered as their modules land:
-    #   S1  /public/auth        practitioner registration and sign-in
     #   S2  /app/clients        client records; /public/forms  enquiry form
     #   S3  /app/foods          nutrition catalogue
     #   S4  /app/plans          plan authoring

@@ -49,13 +49,37 @@ DECLARED_ACTION_ATTR = "__wellness_authz_action__"
 #: a reviewer sees; inheriting an exemption is neither.
 #:
 #: The two health probes are unauthenticated by design (NFR-086) and disclose
-#: nothing about tenants or configuration. The authentication surface itself
-#: (``/public/auth/*``) joins them in Slice B — it must be reachable *before* an
-#: actor exists, which is the definition of the exemption.
+#: nothing about tenants or configuration.
+#:
+#: 🔒 The authentication surface is exempt because it is what *establishes* an
+#: actor — requiring one would make sign-in unreachable. Each path earns it
+#: individually:
+#:
+#: * `register`, `login`, `verify-email`, `password-reset/*` — no actor exists.
+#: * `refresh` — the caller's access token has expired by definition; the
+#:   refresh token is the credential it presents instead.
+#: * `portal/access/*` — the client realm is passwordless (FR-M0-005); the magic
+#:   link is the credential.
+#:
+#: ⚠️ Logout is **not** here. It acts on an existing session, so it is authorized
+#: like any other action (`session.end`) and lives under `/app`.
+#:
+#: These are literals rather than an import from the router, which would be a
+#: cycle. `tests/test_http_authz_declaration.py` asserts the two agree, and a
+#: public route added without its exemption fails startup — so drift is caught
+#: twice over.
 EXEMPT_PATHS: frozenset[str] = frozenset(
     {
         "/api/v1/public/health",
         "/api/v1/public/health/ready",
+        "/api/v1/public/auth/register",
+        "/api/v1/public/auth/verify-email",
+        "/api/v1/public/auth/login",
+        "/api/v1/public/auth/refresh",
+        "/api/v1/public/auth/password-reset/request",
+        "/api/v1/public/auth/password-reset/confirm",
+        "/api/v1/public/portal/access/request",
+        "/api/v1/public/portal/access/redeem",
     }
 )
 

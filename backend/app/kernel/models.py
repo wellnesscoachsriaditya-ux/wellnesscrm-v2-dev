@@ -69,6 +69,19 @@ class TransportType(str, enum.Enum):
     EMAIL = "email"
 
 
+class AuthTokenPurpose(str, enum.Enum):
+    """What a practitioner-realm one-time token authorises.
+
+    🔒 Purpose is stored, not inferred, and checked on redemption. Without it a
+    verification token would be redeemable at the password-reset endpoint —
+    turning "prove you own this mailbox" into "set a new password", which is
+    account takeover via a link the product itself sent.
+    """
+
+    EMAIL_VERIFICATION = "email_verification"
+    PASSWORD_RESET = "password_reset"
+
+
 class AuthRealm(str, enum.Enum):
     """DB §4.6. 🔒 Three separate realms — FR-M0-004."""
 
@@ -276,6 +289,53 @@ class MagicLink(Base):
     created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
 
     __table_args__ = (Index("ix_magic_links__client_expires", "client_id", "expires_at"),)
+
+
+class AuthToken(Base):
+    """Practitioner-realm one-time tokens — email verification and password reset.
+
+    🔒 The same shape as ``magic_links`` (DDR-04): a hash, never the token; short
+    expiry; single-use enforced by a conditional update rather than an
+    application check. A separate table rather than a `purpose` added to
+    ``magic_links`` because that table is client-realm — it carries `client_id`
+    and a tenant, neither of which applies to a practitioner resetting a
+    password, and one of which (`tenant_id`) does not exist yet at verification
+    time.
+
+    ⚠️ Keyed on ``auth_subject_id``, the identity provider's handle, not on
+    ``users.id``. Verification happens before the account is usable and password
+    reset must work for an account whose user row is archived; both are
+    credential operations, and credentials belong to the provider (NFR-029).
+
+    🔒 No RLS. Like ``sessions``, this is a platform table: a reset token is
+    presented by someone not yet authenticated, so there is no tenant in scope to
+    isolate on. Isolation here is the token's own entropy.
+    """
+
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    auth_subject_id: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="🔒 Identity provider handle — not users.id"
+    )
+    token_hash: Mapped[str] = mapped_column(
+        Text, nullable=False, unique=True, comment="🔒 Hash only — never the token (DDR-04)"
+    )
+    purpose: Mapped[AuthTokenPurpose] = mapped_column(
+        pg_enum(AuthTokenPurpose, "auth_token_purpose"),
+        nullable=False,
+        comment="🔒 Checked on redemption — a verification token must not reset a password",
+    )
+    expires_at: Mapped[datetime] = mapped_column(nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(comment="Single-use enforcement")
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        Index("ix_auth_tokens__subject_purpose", "auth_subject_id", "purpose"),
+        Index("ix_auth_tokens__expires", "expires_at"),
+    )
 
 
 class Session(Base):
