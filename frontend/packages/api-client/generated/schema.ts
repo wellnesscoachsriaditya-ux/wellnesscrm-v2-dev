@@ -4,6 +4,158 @@
  */
 
 export interface paths {
+    "/api/v1/app/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign out
+         * @description Revoke the current session (NFR-042).
+         *
+         *     🔒 Authorized, unlike the other authentication routes: this acts on an
+         *     existing session, so it needs to know whose. The session id comes from the
+         *     verified token, never from the request body — accepting one would let any
+         *     authenticated caller log out any other.
+         */
+        post: operations["authLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in
+         * @description 🔒 One error for every failure mode (NFR-043).
+         */
+        post: operations["authLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a new password
+         * @description 🔒 Revokes every session for the account (NFR-042).
+         */
+        post: operations["authPasswordResetConfirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/password-reset/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a password reset
+         * @description 🔒 202 with an identical body whether or not the address is known.
+         */
+        post: operations["authPasswordResetRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate the session
+         * @description 🔒 DDR-05 — rotate, and revoke the family on reuse.
+         *
+         *     Public because a caller with an expired access token must still be able to
+         *     renew; the refresh token is the credential being presented.
+         */
+        post: operations["authRefresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register a practice
+         * @description Create a tenant and its owner (FR-M0-001).
+         *
+         *     🔒 201 with the same body whether the address was free or already taken. The
+         *     difference is which email the address receives — confirmation, or a "someone
+         *     tried to register with your address" notice (API §2.2).
+         */
+        post: operations["authRegister"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm an email address
+         * @description Redeem a verification token and sign the user in (FR-M0-002).
+         */
+        post: operations["authVerifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/health": {
         parameters: {
             query?: never;
@@ -52,10 +204,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/portal/access/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem a portal link
+         * @description Exchange a magic link for a client session (FR-M0-005).
+         *
+         *     🔒 Single use and expiry are enforced by the redeeming UPDATE (DDR-04), so
+         *     two taps on the same link cannot both open a session.
+         */
+        post: operations["portalAccessRedeem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/portal/access/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a portal link
+         * @description 🔒 Self-service link re-request (EC-M7-01).
+         *
+         *     ⚠️ **On the critical path, not an error path.** With a 15–30 minute expiry, a
+         *     client opening a WhatsApp message an hour later *will* need a new link, and
+         *     this must never require the practitioner.
+         *
+         *     🔒 Always 202 with an identical body. Anything else makes this a
+         *     client-enumeration oracle against a practitioner's client list.
+         *
+         *     ⚠️ Issuing requires resolving an identifier to a client, which is the
+         *     `clients` module's data (S2). Until that module exists this endpoint
+         *     correctly acknowledges and sends nothing — the privacy-preserving response is
+         *     identical to the one it will give for an unknown identifier afterwards.
+         */
+        post: operations["portalAccessRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AcceptedResponse
+         * @description 🔒 The deliberately uninformative acknowledgement.
+         *
+         *     Returned by password reset whether or not the address is registered. The
+         *     message is phrased conditionally — "if an account exists" — so it is honest
+         *     in both cases rather than implying an account was found.
+         */
+        AcceptedResponse: {
+            /**
+             * Message
+             * @default If an account exists for that address, a reset link is on its way.
+             */
+            message: string;
+        };
         /**
          * DependencyStatus
          * @description State of one dependency.
@@ -71,6 +293,11 @@ export interface components {
              */
             status: "ok" | "degraded" | "unavailable" | "not_configured";
         };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
         /**
          * LivenessResponse
          * @description Process is alive.
@@ -82,6 +309,67 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /** LoginRequest */
+        LoginRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Password */
+            password: string;
+        };
+        /** PasswordResetConfirm */
+        PasswordResetConfirm: {
+            /** Password */
+            password: string;
+            /** Token */
+            token: string;
+        };
+        /** PasswordResetRequest */
+        PasswordResetRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+        };
+        /** PortalAccessRequest */
+        PortalAccessRequest: {
+            /** Mobile Or Email */
+            mobile_or_email: string;
+        };
+        /** PortalRedeemRequest */
+        PortalRedeemRequest: {
+            /** Token */
+            token: string;
+        };
+        /** PortalSessionResponse */
+        PortalSessionResponse: {
+            /** Access Token */
+            access_token: string;
+            /** Expires In */
+            expires_in: number;
+            /** Refresh Token */
+            refresh_token: string;
+            target: components["schemas"]["PortalTarget"];
+            /**
+             * Token Type
+             * @default Bearer
+             * @constant
+             */
+            token_type: "Bearer";
+        };
+        /**
+         * PortalTarget
+         * @description 🔒 FR-M7-013 — redemption and navigation in one hop.
+         */
+        PortalTarget: {
+            /** Ref */
+            ref?: string | null;
+            /** Type */
+            type: string;
         };
         /**
          * ReadinessResponse
@@ -97,6 +385,85 @@ export interface components {
             /** Ready */
             ready: boolean;
         };
+        /** RefreshRequest */
+        RefreshRequest: {
+            /** Refresh Token */
+            refresh_token: string;
+        };
+        /**
+         * RegisterRequest
+         * @description API §2.2. 🔒 Password rules are length plus a denylist, not composition.
+         */
+        RegisterRequest: {
+            /** Accepted Terms Version */
+            accepted_terms_version: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Full Name */
+            full_name: string;
+            /** Mobile */
+            mobile?: string | null;
+            /** Password */
+            password: string;
+            /** Practice Name */
+            practice_name: string;
+        };
+        /**
+         * RegisterResponse
+         * @description 🔒 Carries no tokens and no identifiers.
+         *
+         *     Verification precedes access (FR-M0-002), and the body is byte-identical
+         *     whether or not the address was already registered (NFR-043) — returning a
+         *     `tenant_id` on the success path alone would restore the oracle the flat
+         *     response exists to remove.
+         */
+        RegisterResponse: {
+            /**
+             * Email Verification Required
+             * @default true
+             * @constant
+             */
+            email_verification_required: true;
+        };
+        /**
+         * TokenResponse
+         * @description What a client needs to make an authenticated request and to renew.
+         *
+         *     🔒 No user object. The client fetches its own profile from a dedicated
+         *     endpoint; embedding one here would put a name and email in every token
+         *     refresh and in whatever logs the response passes through.
+         */
+        TokenResponse: {
+            /** Access Token */
+            access_token: string;
+            /** Expires In */
+            expires_in: number;
+            /** Refresh Token */
+            refresh_token: string;
+            /**
+             * Token Type
+             * @default Bearer
+             * @constant
+             */
+            token_type: "Bearer";
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+        };
+        /** VerifyEmailRequest */
+        VerifyEmailRequest: {
+            /** Token */
+            token: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -106,6 +473,220 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    authLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    authLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authPasswordResetConfirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetConfirm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authPasswordResetRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authRegister: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisterResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authVerifyEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     healthLiveness: {
         parameters: {
             query?: never;
@@ -142,6 +723,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadinessResponse"];
+                };
+            };
+        };
+    };
+    portalAccessRedeem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalRedeemRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    portalAccessRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalAccessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

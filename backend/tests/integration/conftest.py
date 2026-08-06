@@ -30,6 +30,8 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
+from app.platform.db import TENANT_SETTING
+
 #: Set by the operator running the suite. Absent on a machine without PostgreSQL,
 #: which is the normal case for this project today (see ops/db/README.md).
 APP_URL_VAR = "TEST_DATABASE_URL"
@@ -194,15 +196,44 @@ async def _table_exists(connection: AsyncConnection, table: str) -> bool:
     )
 
 
+async def scope_to(connection: AsyncConnection, tenant_id: uuid.UUID | None) -> None:
+    """Adopt a tenant scope for the rest of the current transaction.
+
+    🔒 **Required even on ``migrator_engine``.** ``app_migrator`` owns these
+    tables, and owners normally bypass RLS — but revision 0002 sets ``FORCE ROW
+    LEVEL SECURITY`` precisely to remove that exemption, and ``001_roles.sql``
+    creates the role ``NOBYPASSRLS``. So the owner is subject to
+    ``tenant_id = current_tenant_id()`` like anyone else.
+
+    ⚠️ This is the trap that broke the fixture below: an unscoped owner
+    connection is not "unrestricted", it is scoped to *nothing*. Reads return no
+    rows and writes are rejected by ``WITH CHECK``, because ``current_tenant_id()``
+    is NULL and ``tenant_id = NULL`` is NULL rather than true.
+
+    ``set_config(..., true)`` is transaction-local, so the caller must already be
+    inside a transaction — outside one it applies to a statement nobody sees.
+    """
+    await connection.execute(
+        text(f"SELECT set_config('{TENANT_SETTING}', :value, true)"),
+        {"value": str(tenant_id) if tenant_id else ""},
+    )
+
+
 @pytest_asyncio.fixture
 async def seeded_tenants(migrator_engine: AsyncEngine) -> AsyncIterator[tuple[uuid.UUID, ...]]:
     """Create two tenants, each with one user, and clean up afterwards.
 
-    Seeded as ``app_migrator`` deliberately: ``app_user`` cannot insert a row
-    carrying a ``tenant_id`` it is not scoped to — the ``WITH CHECK`` half of the
-    policy forbids it, and that is asserted separately. Building the fixture
-    through the application role would therefore be impossible, not merely
-    inconvenient.
+    Seeded as ``app_migrator`` because ``app_user`` cannot create the fixture:
+    the ``WITH CHECK`` half of the policy forbids writing a row for a tenant it
+    is not scoped to, so building *both* tenants through one application
+    connection is impossible by construction — and that restriction is itself
+    asserted, in ``test_write_carrying_another_tenants_id_is_rejected``.
+
+    🔒 The owner does not escape RLS here; it only escapes the *grant* problem.
+    Each ``users`` insert therefore runs under its own tenant's scope — see
+    :func:`scope_to`. ``tenants`` needs no scope: it is keyed by ``id`` rather
+    than ``tenant_id`` and carries no policy (it is absent from ``_TENANT_SCOPED``
+    in revision 0002, by design).
     """
     tenant_a, tenant_b = uuid.uuid4(), uuid.uuid4()
 
@@ -215,6 +246,11 @@ async def seeded_tenants(migrator_engine: AsyncEngine) -> AsyncIterator[tuple[uu
                 ),
                 {"id": tenant_id, "name": f"Tenant {index}", "slug": f"ac-m0-003-{tenant_id}"},
             )
+            # 🔒 Adopt this tenant's scope before its `users` row, or the policy
+            # rejects the insert. Set per iteration, not once: the second row
+            # carries a different `tenant_id` and would fail the WITH CHECK
+            # against the first tenant's scope.
+            await scope_to(connection, tenant_id)
             await connection.execute(
                 text(
                     "INSERT INTO users "
@@ -232,10 +268,14 @@ async def seeded_tenants(migrator_engine: AsyncEngine) -> AsyncIterator[tuple[uu
     try:
         yield (tenant_a, tenant_b)
     finally:
-        # 🔒 As the owner, and in FK order. Leaving rows behind would make a
-        # re-run's uniqueness assertions fail for an unrelated reason.
+        # 🔒 In FK order, and — like the insert — under each tenant's own scope.
+        # ⚠️ An unscoped `DELETE FROM users` here does not error; it deletes
+        # *zero* rows and returns quietly, because `USING` admits nothing. The
+        # leftover rows then collide with the next run's unique constraints and
+        # the failure surfaces somewhere unrelated.
         async with migrator_engine.begin() as connection:
             for tenant_id in (tenant_a, tenant_b):
+                await scope_to(connection, tenant_id)
                 await connection.execute(
                     text("DELETE FROM users WHERE tenant_id = :id"), {"id": tenant_id}
                 )

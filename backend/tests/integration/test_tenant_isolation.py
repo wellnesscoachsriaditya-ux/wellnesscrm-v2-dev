@@ -197,9 +197,10 @@ async def test_delete_cannot_reach_another_tenants_row(
     Under RLS it can only reach rows ``USING`` admits, so it deletes the scoped
     tenant's row and leaves the other tenant untouched.
 
-    ⚠️ Asserted by counting the *other* tenant's rows as the owner afterwards —
-    ``app_user`` cannot see them by construction, so asking it would prove
-    nothing.
+    ⚠️ Asserted here only by the deleted row *count*. That tenant B's row is
+    still present is the next test's job, on a separate connection — the
+    deleting transaction is the last thing that should be asked whether the
+    delete stayed in bounds.
     """
     tenant_a, tenant_b = seeded_tenants
 
@@ -215,10 +216,17 @@ async def test_delete_cannot_reach_another_tenants_row(
 async def test_tenant_b_row_survives_tenant_a_deleting_everything(
     app_engine: AsyncEngine, migrator_engine: AsyncEngine, seeded_tenants: tuple[uuid.UUID, ...]
 ) -> None:
-    """The other half of the previous test, verified as the owner.
+    """The other half of the previous test: B's row is still there afterwards.
 
-    Separated because it needs a second engine: the assertion is about rows
-    ``app_user`` is structurally unable to observe.
+    Read on a second connection so the answer cannot come from the transaction
+    that did the deleting.
+
+    ⚠️ The owner connection is scoped to tenant B first. ``users`` is FORCE ROW
+    LEVEL SECURITY, so ``app_migrator`` is subject to the policy despite owning
+    the table — an unscoped read here returns 0 and this test would report "an
+    unfiltered DELETE crossed the tenant boundary" when nothing of the sort
+    happened. A false alarm on this particular assertion is expensive: it points
+    the reader at the tenancy model when the bug is in the fixture.
     """
     tenant_a, tenant_b = seeded_tenants
 
@@ -226,7 +234,8 @@ async def test_tenant_b_row_survives_tenant_a_deleting_everything(
         await _scope_to(connection, tenant_a)
         await connection.execute(text("DELETE FROM users"))
 
-    async with migrator_engine.connect() as connection:
+    async with migrator_engine.connect() as connection, connection.begin():
+        await _scope_to(connection, tenant_b)
         surviving = (
             await connection.execute(
                 text("SELECT count(*) FROM users WHERE tenant_id = :id"), {"id": tenant_b}
@@ -236,6 +245,38 @@ async def test_tenant_b_row_survives_tenant_a_deleting_everything(
     assert surviving == 1, (
         f"Tenant B had {surviving} rows after tenant A deleted everything it could "
         "see. An unfiltered DELETE crossed the tenant boundary."
+    )
+
+
+async def test_force_rls_binds_the_table_owner_too(
+    migrator_engine: AsyncEngine, seeded_tenants: tuple[uuid.UUID, ...]
+) -> None:
+    """🔒 ``FORCE`` is enforced, not merely declared.
+
+    ``app_migrator`` owns every table here. Without ``FORCE ROW LEVEL SECURITY``
+    an owner bypasses all policies, which would make a fix-up script or a
+    migration the one context where tenant isolation silently does not apply —
+    the context where a mistake reaches every tenant at once.
+
+    ⚠️ The structural counterpart reads ``pg_class.relforcerowsecurity``, and the
+    ``conftest`` precondition does the same. Both check the flag is *set*. This
+    checks it *bites*, which is a different claim: an unscoped owner sees zero
+    of the two rows it just inserted.
+
+    This is also the property that broke this suite's own fixture — seeding
+    assumed owner bypass, and the INSERT was rejected by the policy's
+    ``WITH CHECK``. Asserted explicitly so the next person meets it as a stated
+    rule rather than as a confusing failure.
+    """
+    async with migrator_engine.connect() as connection, connection.begin():
+        # 🔒 No _scope_to() call. Deliberate — that is the experiment.
+        visible = (await connection.execute(text("SELECT count(*) FROM users"))).scalar()
+
+    assert visible == 0, (
+        f"The table owner saw {visible} user row(s) without a tenant scope. "
+        "`users` is missing FORCE ROW LEVEL SECURITY, so migrations and any "
+        "script run as `app_migrator` bypass tenant isolation entirely. "
+        "Revision 0002_platform_kernel sets it."
     )
 
 
