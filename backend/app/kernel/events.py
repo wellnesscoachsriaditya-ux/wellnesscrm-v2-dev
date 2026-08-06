@@ -38,6 +38,7 @@ from enum import Enum
 from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from app.kernel.context import get_context
+from app.kernel.jobs import MAX_PAYLOAD_STRING_LENGTH
 
 # ─── Events ───────────────────────────────────────────────────────────────
 
@@ -49,11 +50,12 @@ from app.kernel.context import get_context
 #: out of logs and payloads.
 _ALLOWED_SCALARS: tuple[type, ...] = (str, int, bool, uuid.UUID, datetime, date, Enum)
 
-#: 🔒 Longest permitted string in an event field. An identifier, code, slug or
-#: enum value fits comfortably; a note, message body or AI-generated summary does
-#: not. Chosen to be obviously too short for prose, so the failure arrives in
-#: development rather than as a leak in production.
-_TEXT_FIELD_LIMIT = 128
+#: 🔒 Longest permitted string in an event field. Imported from `kernel.jobs`
+#: rather than restated, because an event's fields become a job payload verbatim:
+#: two independent limits would let an event pass its own check and then fail at
+#: enqueue, inside the publisher's transaction, where the only visible symptom is
+#: a rolled-back write nobody attributes to a length rule.
+_TEXT_FIELD_LIMIT = MAX_PAYLOAD_STRING_LENGTH
 
 
 class EventContractError(RuntimeError):
