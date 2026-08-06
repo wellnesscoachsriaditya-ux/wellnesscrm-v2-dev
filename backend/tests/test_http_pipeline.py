@@ -19,6 +19,7 @@ PostgreSQL property and it is tested against PostgreSQL in
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
@@ -916,7 +917,16 @@ def test_record_audit_rejects_a_value_where_a_field_name_belongs(
     response = _client(router).post("/api/v1/app/things")
 
     assert response.status_code == 500
-    assert "82" not in response.text
+
+    # ⚠️ Assert on the envelope with `request_id` removed, not on `response.text`.
+    # The request ID is random hex, so a raw substring search for "82" matches it
+    # roughly one run in twenty — a flake that reads like a leak, in the one test
+    # whose failure must always be believed. The envelope's *own* fields are what
+    # FR-M0-035 is about; the correlation ID cannot carry a submitted value.
+    envelope = json.loads(response.text)["error"]
+    del envelope["request_id"]
+    assert "82" not in json.dumps(envelope)
+
     assert transactions.last.rolled_back
 
 
