@@ -21,6 +21,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.platform.audit import (
+    LoggingAuditSink,
+    SqlAlchemyAuditSink,
+    configure_audit_sink,
+)
 from app.platform.config import Environment, get_settings
 from app.platform.db import (
     dispose_engine,
@@ -34,6 +39,7 @@ from app.platform.http.middleware import (
     RequestContextMiddleware,
     SecurityHeadersMiddleware,
 )
+from app.platform.http.pipeline import verify_route_authorization
 from app.platform.logging import configure_logging, get_logger
 from app.platform.observability import configure_observability, is_production_like
 
@@ -70,10 +76,24 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             await verify_no_rls_bypass(session)
         async with factory() as session:
             await verify_pooler_isolation(session)
+
+        # 🔒 FR-M0-031 — audit rows go to the append-only table. Installed here
+        # rather than at import so the default remains the in-memory sink for
+        # tests, which must never reach a database.
+        configure_audit_sink(SqlAlchemyAuditSink())
     else:
         logger.warning(
             "Local environment: skipping RLS and pooler verification. "
             "Both are mandatory launch gates and run automatically in staging."
+        )
+        # ⚠️ Logs are not an audit trail — they rotate, they are mutable, and
+        # they are not retained for the statutory period. Acceptable only
+        # because a developer may have no database, and said loudly rather than
+        # degraded quietly.
+        configure_audit_sink(LoggingAuditSink())
+        logger.warning(
+            "Local environment: audit entries are logged, not persisted. "
+            "This is NOT an audit trail (FR-M0-031)."
         )
 
     yield
@@ -130,6 +150,14 @@ def create_app() -> FastAPI:
     #   S5  /public/webhooks    provider callbacks
     #   S6  /portal/*           client portal
     #   S12 /admin/*            operator console
+
+    # 🔒 ADR-05 — last, after every router is registered, so it sees the whole
+    # route table. A route that declares no authorization action, declares one
+    # nobody registered, or declares one correctly while bypassing the pipeline
+    # aborts startup here. Deliberately at import time rather than in `lifespan`:
+    # the check needs no I/O, and a failure should be visible to whoever runs
+    # the process rather than to whoever first calls the endpoint.
+    verify_route_authorization(app)
 
     logger.info(
         "Application configured",

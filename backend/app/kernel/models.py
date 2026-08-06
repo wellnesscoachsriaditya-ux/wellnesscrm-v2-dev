@@ -8,13 +8,17 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, text
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, String, Text, text
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.kernel import Base
+from app.kernel.audit import AuditOutcome
+from app.kernel.context import ActorType
 from app.kernel.db import pg_enum
 
 
@@ -314,3 +318,82 @@ class Session(Base):
     )
 
     __table_args__ = (Index("ix_sessions__subject_expires", "subject_id", "expires_at"),)
+
+
+class AuditLog(Base):
+    """DB §15.3 — the immutable record of who did what (FR-M0-031..036).
+
+    🔒 **Append-only at the grant level** (DDR-15). ``app_user`` holds
+    ``INSERT`` and ``SELECT`` and nothing else; there is no ``UPDATE`` or
+    ``DELETE`` to revoke because none is ever granted. A log the application can
+    rewrite proves nothing, and the application is what is being audited.
+
+    🔒 **No foreign keys, deliberately.** ``tenant_id`` and ``resource_id`` are
+    references, not relationships. An audited row may later be deleted under a
+    retention policy or a DPDP erasure request; a foreign key would either block
+    that deletion or cascade away the evidence that it happened. The audit trail
+    must outlive what it describes.
+
+    🔒 **No RLS** (Pattern D). This table is not tenant-readable at all — it is
+    reached by platform tooling and by ``kernel.audit``, never by a tenant
+    query. Adding a tenant-isolation policy would imply practitioners can read
+    their audit log, which is a product decision nobody has taken.
+    """
+
+    __tablename__ = "audit_log"
+
+    # bigserial, not uuid: this is the highest-volume table in the schema and
+    # the only access pattern is an ordered scan within a tenant. A monotonic
+    # key keeps that scan on a dense B-tree rather than scattering inserts
+    # across it, which is the difference between an append and a rewrite.
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+
+    tenant_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), comment="🔒 Reference only — NULL for platform-level actions"
+    )
+    actor_type: Mapped[ActorType] = mapped_column(
+        pg_enum(ActorType, "actor_type"), nullable=False, comment="DB §15.1"
+    )
+    actor_realm: Mapped[AuthRealm | None] = mapped_column(pg_enum(AuthRealm, "auth_realm"))
+    actor_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), comment="user / client / operator id — NULL for system"
+    )
+
+    action: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="Registered action, e.g. client.update"
+    )
+    resource_type: Mapped[str] = mapped_column(Text, nullable=False)
+    resource_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True))
+    outcome: Mapped[AuditOutcome] = mapped_column(
+        pg_enum(AuditOutcome, "audit_outcome"),
+        nullable=False,
+        comment="🔒 Denials are recorded, not only successes (FR-M0-033)",
+    )
+
+    changed_fields: Mapped[list[str] | None] = mapped_column(
+        ARRAY(Text),
+        comment="🔒 Field NAMES only — never values (FR-M0-035)",
+    )
+    # `metadata` is taken by SQLAlchemy's declarative machinery, so the
+    # attribute is renamed while the column keeps the name the schema specifies.
+    entry_metadata: Mapped[dict[str, Any] | None] = mapped_column(
+        "metadata",
+        JSONB,
+        comment="🔒 Allowlisted keys only (DB §15.3)",
+    )
+
+    request_id: Mapped[str | None] = mapped_column(Text, comment="Correlates with logs")
+    ip_hash: Mapped[str | None] = mapped_column(
+        Text, comment="🔒 Hashed — an IP is personal data (NFR-033)"
+    )
+    occurred_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        # "What happened in this tenant recently" — the support query.
+        Index("ix_audit_log__tenant_occurred", "tenant_id", "occurred_at"),
+        # "What happened to this record" — the investigation query.
+        Index("ix_audit_log__resource", "resource_type", "resource_id"),
+        # 🔒 "What did this operator touch" — the one that answers a DPDP
+        # enquiry about platform staff access (FR-M0-032).
+        Index("ix_audit_log__actor_occurred", "actor_id", "occurred_at"),
+    )

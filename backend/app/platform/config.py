@@ -80,6 +80,14 @@ class Settings(BaseSettings):
     # (EC-M7-01) is a routine path, not an error path.
     magic_link_ttl_minutes: int = Field(default=20, ge=5, le=30)
 
+    # ─── Audit ───────────────────────────────────────────────────────────
+    # 🔒 Salt for hashing client IPs into the audit trail (NFR-033). An IP is
+    # personal data under the DPDP Act and audit rows are retained for years, so
+    # the raw value is never stored. The salt must be stable for the retention
+    # period — rotating it makes historical rows incomparable — and secret: the
+    # IPv4 space is 2^32, so an unsalted hash is reversed in seconds.
+    audit_ip_salt: SecretStr = SecretStr("dev-only-audit-salt")
+
     # ─── Supabase (infrastructure, not a backend — ADR-02) ───────────────
     supabase_url: str | None = None
     supabase_anon_key: SecretStr | None = None
@@ -126,6 +134,9 @@ class Settings(BaseSettings):
             ("JWT_SECRET_PRACTITIONER", self.jwt_secret_practitioner),
             ("JWT_SECRET_CLIENT", self.jwt_secret_client),
             ("JWT_SECRET_OPERATOR", self.jwt_secret_operator),
+            # 🔒 A placeholder salt makes every audit IP hash reversible by
+            # anyone who has read this file.
+            ("AUDIT_IP_SALT", self.audit_ip_salt),
         ):
             if secret.get_secret_value().startswith(dev_key_prefix):
                 problems.append(f"{name} is still the development placeholder")
