@@ -32,6 +32,10 @@ from app.kernel import Base
 from app.kernel.models import (
     AccessStatus,
     AuthRealm,
+    IdempotencyState,
+    JobClass,
+    JobOutcome,
+    JobStatus,
     LinkPurpose,
     Operator,
     Session,
@@ -313,6 +317,10 @@ def test_every_timestamp_is_timezone_aware(table: str) -> None:
         (LinkPurpose, "link_purpose"),
         (TransportType, "transport_type"),
         (AuthRealm, "auth_realm"),
+        (JobClass, "job_class"),
+        (JobStatus, "job_status"),
+        (JobOutcome, "job_outcome"),
+        (IdempotencyState, "idempotency_state"),
     ],
 )
 def test_enum_types_are_named_per_convention(python_enum: type, type_name: str) -> None:
