@@ -19,7 +19,10 @@ guarantee the whole tenancy model rests on.
 from __future__ import annotations
 
 import configparser
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -468,3 +471,77 @@ def test_ops_readme_states_the_running_order() -> None:
     assert "001_roles.sql" in text
     assert "alembic upgrade head" in text
     assert text.index("001_roles.sql") < text.index("alembic upgrade head")
+
+
+# ─── The gate must not be able to skip itself ────────────────────────────
+#
+# 🔒 AC-M0-003 spent all of S0 and most of S1 reporting "skipped", which is
+# green. These two tests protect the mechanism that ends that:
+# `REQUIRE_LIVE_DATABASE` turns a missing database into a failure.
+#
+# ⚠️ Both directions are asserted, and both matter. A gate that cannot fail in
+# CI protects nothing; a gate that always fails on a developer machine with no
+# PostgreSQL gets switched off, and a switched-off gate protects nothing either.
+# The flag must be the *only* difference between the two behaviours.
+#
+# These run the suite in a subprocess rather than inspecting the source, because
+# what needs protecting is the observable outcome — the exit code — not the
+# continued presence of a particular function name in a file.
+
+
+def _run_integration_suite(*, require: bool) -> subprocess.CompletedProcess[str]:
+    """Run `tests/integration` with no database configured.
+
+    🔒 The two connection variables are cleared explicitly. A developer who
+    happens to have a live database configured would otherwise run the real
+    suite here, which proves nothing about the fail-closed path.
+    """
+    env = dict(os.environ)
+    env.pop("TEST_DATABASE_URL", None)
+    env.pop("TEST_DATABASE_MIGRATION_URL", None)
+    if require:
+        env["REQUIRE_LIVE_DATABASE"] = "1"
+    else:
+        env.pop("REQUIRE_LIVE_DATABASE", None)
+
+    return subprocess.run(
+        # ⚠️ No `-q` here: `addopts` in pyproject.toml already sets it, and a
+        # second one means `-qq`, which suppresses the very summary line these
+        # assertions read.
+        [sys.executable, "-m", "pytest", "tests/integration", "--no-header"],
+        cwd=_BACKEND,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_require_flag_turns_a_missing_database_into_a_failure() -> None:
+    """🔒 With the flag set and no database, the suite must fail, not skip."""
+    result = _run_integration_suite(require=True)
+
+    assert result.returncode != 0, (
+        "REQUIRE_LIVE_DATABASE=1 with no database configured exited zero. "
+        "The isolation gate can silently skip itself in CI, which is the one "
+        "failure mode the flag exists to prevent.\n"
+        f"{result.stdout[-2000:]}"
+    )
+    assert "REQUIRE_LIVE_DATABASE" in result.stdout, (
+        "the suite failed, but not with the message naming the fix; a reader of "
+        f"the CI log would not know what to do:\n{result.stdout[-2000:]}"
+    )
+
+
+def test_suite_still_skips_without_the_flag() -> None:
+    """The other half — a machine with no PostgreSQL gets a green, skipped run."""
+    result = _run_integration_suite(require=False)
+
+    assert result.returncode == 0, (
+        "the integration suite fails when no database is configured. It must "
+        "skip, or developers without PostgreSQL cannot run the test suite at "
+        f"all:\n{result.stdout[-2000:]}"
+    )
+    assert (
+        "skipped" in result.stdout
+    ), f"expected skips without the require flag:\n{result.stdout[-2000:]}"

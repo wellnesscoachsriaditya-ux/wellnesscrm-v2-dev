@@ -35,10 +35,30 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_en
 APP_URL_VAR = "TEST_DATABASE_URL"
 MIGRATION_URL_VAR = "TEST_DATABASE_MIGRATION_URL"
 
-_SKIP_REASON = (
+#: 🔒 Set to `1` in CI. Turns the skip below into a failure.
+#:
+#: ⚠️ Without this, the gate has a hole shaped exactly like its own purpose. A
+#: skip is green. If the CI job's `services:` block were removed, its env vars
+#: renamed, or the database made unreachable, these tests would report "skipped"
+#: and the pipeline would pass — and the one guarantee the whole tenancy model
+#: rests on would go unverified with no visible signal. Skipping is legitimate on
+#: a developer machine with no PostgreSQL; it is never legitimate in CI, and the
+#: difference has to be something the environment asserts rather than something a
+#: reader of the log notices.
+REQUIRE_VAR = "REQUIRE_LIVE_DATABASE"
+
+_MISSING_DATABASE = (
     f"No live PostgreSQL: set {APP_URL_VAR} (as app_user) and {MIGRATION_URL_VAR} "
     f"(as app_migrator) to run the AC-M0-003 tenant-isolation gate. "
     f"See ops/db/README.md > 'Verifying tenant isolation (AC-M0-003)'."
+)
+
+_REQUIRED_BUT_MISSING = (
+    f"{REQUIRE_VAR} is set, but {APP_URL_VAR} and/or {MIGRATION_URL_VAR} are not.\n\n"
+    "This suite is mandatory here and must not be skipped. Either the database "
+    "service failed to start or the connection variables were not passed to "
+    "pytest. Fix the environment — do not unset "
+    f"{REQUIRE_VAR}, which would turn the sprint gate back into a silent skip."
 )
 
 #: Tables the isolation gate exercises. `users` is the representative
@@ -53,16 +73,21 @@ def _url(variable: str) -> str | None:
 
 
 def require_database() -> tuple[str, str]:
-    """Return both URLs, or skip the test.
+    """Return both URLs, or skip the test — unless skipping is forbidden.
 
     Both are required. Running with only one would silently test something
     weaker than the gate: seeding as ``app_user`` cannot cross a tenant
     boundary, so the "other tenant's row" would never exist and the read would
     return zero rows for the wrong reason — the most dangerous kind of pass.
+
+    🔒 When ``REQUIRE_LIVE_DATABASE`` is set, a missing URL is a *failure*, not a
+    skip. See :data:`REQUIRE_VAR` for why the distinction is load-bearing.
     """
     app_url, migration_url = _url(APP_URL_VAR), _url(MIGRATION_URL_VAR)
     if not app_url or not migration_url:
-        pytest.skip(_SKIP_REASON)
+        if _url(REQUIRE_VAR):
+            pytest.fail(_REQUIRED_BUT_MISSING)
+        pytest.skip(_MISSING_DATABASE)
     return app_url, migration_url
 
 
