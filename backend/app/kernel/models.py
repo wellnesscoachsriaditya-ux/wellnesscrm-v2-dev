@@ -82,6 +82,58 @@ class TransportType(str, enum.Enum):
     EMAIL = "email"
 
 
+class ConsentSubjectType(str, enum.Enum):
+    """DB §16.4. Who the consent is about.
+
+    `prospect` exists because the enquiry form captures consent before a client
+    record does (FR-M2-004) — the ledger entry is identified by
+    `subject_mobile_hash` until a `client_id` exists to point at.
+    """
+
+    CLIENT = "client"
+    PROSPECT = "prospect"
+
+
+class ConsentAction(str, enum.Enum):
+    """DB §16.4. 🔒 The three things a ledger entry can assert.
+
+    `reconfirmed` is distinct from `granted` because FR-M0-029 asks a different
+    question — not "does consent exist" but "was it re-obtained against the
+    notice version now in force". Collapsing it into `granted` would make a
+    material-change re-consent indistinguishable from the original grant.
+    """
+
+    GRANTED = "granted"
+    WITHDRAWN = "withdrawn"
+    RECONFIRMED = "reconfirmed"
+
+
+class ConsentChannel(str, enum.Enum):
+    """DB §16.4. Where the consent was captured."""
+
+    ENQUIRY_FORM = "enquiry_form"
+    PORTAL = "portal"
+    PRACTITIONER = "practitioner"
+    WHATSAPP = "whatsapp"
+
+
+class DataRequestType(str, enum.Enum):
+    """DB §16.5. DPDP data-principal rights (FR-M0-026/027)."""
+
+    ACCESS = "access"
+    CORRECTION = "correction"
+    ERASURE = "erasure"
+
+
+class DataRequestStatus(str, enum.Enum):
+    """DB §16.5."""
+
+    RECEIVED = "received"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    REJECTED = "rejected"
+
+
 class AuthTokenPurpose(str, enum.Enum):
     """What a practitioner-realm one-time token authorises.
 
@@ -774,4 +826,298 @@ class IdempotencyRecord(Base):
         ),
         # Drives the expiry sweep.
         Index("ix_idempotency_records__expires", "expires_at"),
+    )
+
+
+class ConsentPurpose(Base):
+    """What we might process personal data for, and why — DB §16.2.
+
+    🔒 FR-M0-022 — consent is captured **per purpose**, itemised, never blanket.
+    A single "I agree to the terms" checkbox is the thing this table exists to
+    make impossible to express.
+
+    **Pattern D, platform-wide catalogue.** No `tenant_id`: purposes are defined
+    by us as the data fiduciary, not per tenant. A tenant inventing its own
+    processing purposes is a compliance problem, not a feature.
+
+    ⚠️ `is_essential` is the legally consequential column (ASM-10, OD-05).
+    Essential purposes cannot be withdrawn while the relationship is active;
+    marking too much essential defeats FR-M0-024's requirement that withdrawal
+    be as easy as granting. The seed values are 🟡 PROPOSED pending the privacy
+    lawyer review.
+    """
+
+    __tablename__ = "consent_purposes"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    code: Mapped[str] = mapped_column(
+        Text, nullable=False, unique=True, comment="Stable identifier, e.g. service_delivery"
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="🔒 Plain-language — shown to the data principal"
+    )
+    is_essential: Mapped[bool] = mapped_column(
+        nullable=False,
+        server_default=text("false"),
+        comment="🔒 Required for service delivery; withdrawal refused while active",
+    )
+    data_categories: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, comment="What classes of data this purpose covers"
+    )
+    retention_days: Mapped[int | None] = mapped_column(
+        comment="NULL = retained for the life of the relationship (NFR-049)"
+    )
+    legal_basis: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="DPDP basis — consent, contract, legal obligation"
+    )
+    is_active: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        # 🔒 Marketing can never be essential — the one rule in this table that
+        # is a legal invariant rather than a policy choice, so it is a constraint
+        # rather than a seed-data convention someone can later edit.
+        CheckConstraint(
+            "NOT (code = 'marketing' AND is_essential)",
+            name="ck_consent_purposes__marketing_not_essential",
+        ),
+    )
+
+
+class ConsentNotice(Base):
+    """The versioned notice text actually presented to a person — DB §16.3.
+
+    🔒 **Immutable once effective.** A `consent_records` row references the exact
+    notice version presented, and that reference is what makes NFR-051 —
+    "produce the consent basis for any client" — answerable at all. Editing the
+    body of a live notice would silently rewrite the basis of every consent
+    already given against it, which is why the enforcement is a grant in the
+    migration and not a convention here.
+
+    `requires_reconsent` marks a material change (FR-M0-029): superseding a
+    notice with this set means existing grants no longer cover the processing
+    and must be re-obtained rather than carried forward.
+    """
+
+    __tablename__ = "consent_notices"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    # uuid[] rather than a join table: a notice's purpose set is fixed at
+    # creation and only ever read as a whole. A join table would imply the set
+    # is editable, which for an immutable notice it is not.
+    purpose_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(PG_UUID(as_uuid=True)),
+        nullable=False,
+        comment="🔒 The purposes this notice covers — fixed at creation",
+    )
+    version: Mapped[str] = mapped_column(Text, nullable=False)
+    locale: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="en-IN", comment="India-first (NFR-058)"
+    )
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False, comment="🔒 Immutable once effective")
+    requires_reconsent: Mapped[bool] = mapped_column(
+        nullable=False,
+        server_default=text("false"),
+        comment="🔒 FR-M0-029 — a material change invalidates prior grants",
+    )
+    effective_from: Mapped[datetime] = mapped_column(nullable=False)
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        comment="NULL = currently in force for this locale"
+    )
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        Index("uq_consent_notices__version_locale", "version", "locale", unique=True),
+        # "Which notice is in force for this locale" — the capture-path query.
+        Index("ix_consent_notices__locale_effective", "locale", "effective_from"),
+    )
+
+
+class ConsentRecord(Base):
+    """🔒 **The ledger.** Append-only grants and withdrawals — DB §16.4.
+
+    🔒 NFR-047, DDR-15. Same immutability mechanism as `audit_log`: `app_user`
+    holds INSERT and SELECT and nothing else. This is the legal record of a
+    consent decision; the application must not be able to revise it.
+
+    🔒 **Current state is derived, never stored** (DB §16.3) — the latest record
+    per `(subject, purpose)`. There is deliberately no `is_consented` column,
+    because a mutable flag and an append-only ledger would eventually disagree,
+    and at that point the flag is what code reads while the ledger is what a
+    regulator reads.
+
+    **Pattern D, unreachable.** Carries `tenant_id` but no RLS policy, for the
+    same reason as `audit_log`: it is never read on a tenant-facing path — the
+    portal shows a client their own consents through `kernel.consent`, not by
+    querying this table — and entries are written on the anonymous enquiry path
+    where no tenant context is yet established.
+
+    ⚠️ 🔒 OD-05 (verifiable parental consent for under-18s) is an unresolved
+    launch blocker. The guardian columns exist; the verification *mechanism*
+    needs legal advice. Nutritionists routinely see teenage clients, so this is
+    not an edge case that can be deferred indefinitely.
+    """
+
+    __tablename__ = "consent_records"
+
+    # bigserial, matching audit_log: append-only, written on every consent
+    # interaction, read as an ordered scan per subject.
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+
+    # Reference only, no FK — same reasoning as audit_log. An erasure request
+    # deletes the client; a FK would either block that or cascade away the proof
+    # that consent was ever given, and the basis must outlive the record.
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, comment="🔒 Reference only — see the class docstring"
+    )
+    subject_type: Mapped[ConsentSubjectType] = mapped_column(
+        pg_enum(ConsentSubjectType, "consent_subject"), nullable=False
+    )
+    subject_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), comment="Client id once one exists"
+    )
+    subject_mobile_hash: Mapped[str | None] = mapped_column(
+        Text,
+        comment="🔒 Pre-client consent (FR-M2-004) — hashed, not plain",
+    )
+
+    purpose_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("consent_purposes.id"), nullable=False
+    )
+    notice_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("consent_notices.id"),
+        nullable=False,
+        comment="🔒 The exact version presented (NFR-051)",
+    )
+    action: Mapped[ConsentAction] = mapped_column(
+        pg_enum(ConsentAction, "consent_action"), nullable=False
+    )
+    captured_via: Mapped[ConsentChannel] = mapped_column(
+        pg_enum(ConsentChannel, "consent_channel"), nullable=False
+    )
+    captured_by_actor_type: Mapped[ActorType] = mapped_column(
+        pg_enum(ActorType, "actor_type"), nullable=False
+    )
+    captured_by_actor_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), comment="NULL for anonymous and system capture"
+    )
+
+    guardian_name: Mapped[str | None] = mapped_column(Text, comment="🔒 FR-M0-028 — minors")
+    guardian_relationship: Mapped[str | None] = mapped_column(Text)
+    guardian_verification_method: Mapped[str | None] = mapped_column(
+        Text, comment="⚠️ OD-05 unresolved — mechanism pending legal advice"
+    )
+
+    evidence: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        comment="🔒 Non-clinical only: notice hash, UI version, timestamp",
+    )
+    occurred_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        # 🔒 The derived-state query: latest row per (subject, purpose). Ordered
+        # descending on id so the read is a backwards index scan stopping at the
+        # first row, not a sort over a subject's whole consent history.
+        Index(
+            "ix_consent_records__subject_purpose",
+            "tenant_id",
+            "subject_id",
+            "purpose_id",
+            text("id DESC"),
+        ),
+        # 🔒 The enquiry-form path, where there is no subject_id yet.
+        Index(
+            "ix_consent_records__mobile_purpose",
+            "tenant_id",
+            "subject_mobile_hash",
+            "purpose_id",
+            text("id DESC"),
+        ),
+        # 🔒 A ledger entry nobody can be matched to is not evidence of
+        # anything, so one identifier is mandatory. Enforced here because the
+        # anonymous capture path is exactly where subject_id is legitimately
+        # absent and a NOT NULL on either column alone would be wrong.
+        CheckConstraint(
+            "subject_id IS NOT NULL OR subject_mobile_hash IS NOT NULL",
+            name="ck_consent_records__subject_identified",
+        ),
+    )
+
+
+class DataRequest(Base):
+    """Access, correction and erasure requests — DB §16.5.
+
+    🔒 FR-M0-026/027, NFR-048. The DPDP data-principal rights workflow. Unlike
+    the ledger this table is mutable: a request moves through states, so it is
+    Pattern A with RLS.
+
+    ⚠️ 🔒 **Erasure must traverse object storage** (Arch §13.2) — deleting a
+    `client_documents` row while the file itself persists in the bucket is a
+    compliance failure and a routine oversight. `erasure_scope` records what was
+    actually traversed so the completion is auditable rather than asserted.
+    **Launch gate.**
+    """
+
+    __tablename__ = "data_requests"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id"),
+        nullable=False,
+        index=True,
+        comment="🔒 RLS discriminator (Pattern A)",
+    )
+    client_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        comment="Reference only — survives the erasure it may describe",
+    )
+    request_type: Mapped[DataRequestType] = mapped_column(
+        pg_enum(DataRequestType, "data_request_type"), nullable=False
+    )
+    status: Mapped[DataRequestStatus] = mapped_column(
+        pg_enum(DataRequestStatus, "data_request_status"),
+        nullable=False,
+        server_default="received",
+    )
+    requested_via: Mapped[ConsentChannel] = mapped_column(
+        pg_enum(ConsentChannel, "consent_channel"), nullable=False
+    )
+    requested_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+    # 🟡 The statutory deadline is pending ASM-10. Stored per row rather than
+    # computed on read so that a later change to the legal period does not
+    # retroactively alter the due date of a request already in flight.
+    due_by: Mapped[datetime] = mapped_column(nullable=False, comment="🟡 Period pending ASM-10")
+    completed_at: Mapped[datetime | None]
+    handled_by: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), comment="user or operator id"
+    )
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
+    export_file_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), comment="Set for a fulfilled access request"
+    )
+    erasure_scope: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, comment="⚠️ What was traversed, storage included (Arch §13.2)"
+    )
+
+    __table_args__ = (
+        # The operator queue: what is outstanding, oldest deadline first.
+        Index("ix_data_requests__status_due", "tenant_id", "status", "due_by"),
+        # 🔒 A rejection without a reason is not a defensible response to a
+        # statutory request, and a completion without a timestamp cannot be
+        # shown to have met the deadline.
+        CheckConstraint(
+            "(status <> 'rejected' OR rejection_reason IS NOT NULL)"
+            " AND (status <> 'completed' OR completed_at IS NOT NULL)",
+            name="ck_data_requests__terminal_state_evidenced",
+        ),
     )
