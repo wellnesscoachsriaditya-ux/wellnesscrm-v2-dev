@@ -31,6 +31,8 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any, Protocol
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.kernel.models import JobClass
 
 # ─── Errors ───────────────────────────────────────────────────────────────
@@ -266,9 +268,16 @@ def _validate_value(key: str, value: Any) -> Any:
 class JobHandler(Protocol):
     """Executes one job.
 
-    Receives the validated payload. Runs inside a worker-owned transaction with
-    tenant scope already applied, so a handler queries as though it were serving
-    a request for that tenant.
+    Receives the validated payload and a session. 🔒 The session is
+    worker-owned and already carries the job's tenant scope, so a handler
+    queries exactly as it would while serving a request for that tenant and RLS
+    applies to it identically. A handler that opened its own session would run
+    unscoped and see nothing — or, worse, be written on the assumption that it
+    sees everything.
+
+    ⚠️ **Do not commit.** The runner owns the transaction and rolls it back on
+    failure, which is what makes a handler that fails halfway leave nothing
+    behind. A handler that commits mid-way defeats that.
 
     🔒 **Must be idempotent.** A lease can expire while a job is legitimately
     running — a paused VM, a long GC — and the recovery sweep will hand it to
@@ -278,7 +287,7 @@ class JobHandler(Protocol):
     and retries up to the class ceiling, then dead-letters.
     """
 
-    async def __call__(self, payload: Mapping[str, Any], /) -> None: ...
+    async def __call__(self, payload: Mapping[str, Any], session: AsyncSession, /) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)

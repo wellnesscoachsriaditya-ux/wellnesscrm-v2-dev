@@ -36,6 +36,7 @@ from sqlalchemy import Table, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.kernel.context import get_actor
 from app.kernel.jobs import backoff_delay, get_handler, policy_for, validate_payload
 from app.kernel.models import Job, JobClass, JobOutcome, JobRun, JobStatus
 from app.platform.logging import get_logger
@@ -296,8 +297,16 @@ async def mark_failed(
     error_message: str,
     duration_ms: int,
     timed_out: bool = False,
+    terminal: bool = False,
 ) -> JobStatus:
     """Record a failed attempt, then retry with backoff or dead-letter.
+
+    Args:
+        terminal: Skip the remaining attempts and dead-letter now. 🔒 For
+            failures that cannot succeed on a retry — an unregistered job type,
+            a payload the handler cannot parse. Retrying those buys an identical
+            failure per attempt and delays the dead-letter that tells an operator
+            something is actually wrong.
 
     🔒 The decision is made from ``attempt_count`` as the database recorded it at
     claim time, so a worker that lost its lease and had the job re-claimed cannot
@@ -313,7 +322,7 @@ async def mark_failed(
         attempt ceiling is reached.
     """
     policy = policy_for(job.job_class)
-    dead = job.is_final_attempt
+    dead = terminal or job.is_final_attempt
 
     if dead:
         await session.execute(
@@ -336,6 +345,10 @@ async def mark_failed(
                 "job_type": job.job_type,
                 "attempts": job.attempt_count,
                 "error_class": error_class,
+                # Distinguishes "exhausted its retries" from "could never have
+                # succeeded" — the first is a flaky dependency, the second is a
+                # deploy that dropped a handler. Different operator responses.
+                "terminal": terminal,
             },
         )
     else:
@@ -498,3 +511,46 @@ async def get_runs(session: AsyncSession, job_id: uuid.UUID) -> Sequence[Mapping
         )
     ).mappings()
     return [dict(row) for row in rows]
+
+
+# ─── The event-bus enqueuer (Arch §3.4b) ──────────────────────────────────
+
+
+async def enqueue_for_event(
+    session: AsyncSession,
+    job_type: str,
+    event_name: str,
+    payload: dict[str, Any],
+) -> None:
+    """Enqueue a deferred subscriber's job, on the publisher's session.
+
+    Installed into :mod:`app.kernel.events` at startup — the kernel names the
+    capability, the entry point supplies this (R5).
+
+    🔒 **The tenant comes from the request context, not the payload.** A payload
+    is caller-supplied data; reading a tenant id out of it would let whoever
+    constructed the event choose which tenant the job runs against. The context's
+    tenant was established by authentication.
+
+    🔒 **The idempotency key is derived from the event, not generated.** Key parts:
+    the event's wire name, the job type, and the publisher's request id. That
+    makes a retried HTTP request — same request id, same event — collapse to one
+    job, which is what stops a client's double-tap from sending two WhatsApp
+    messages. It also means a *different* request publishing the same event still
+    enqueues its own job, which is correct: two genuine stage changes deserve two
+    notifications.
+    """
+    request_id = payload.get("_request_id")
+    tenant_id = get_actor().tenant_id
+
+    await enqueue(
+        session,
+        job_type=job_type,
+        payload=payload,
+        tenant_id=tenant_id,
+        # 🔒 `None` when there is no request id to key on — an absent key means
+        # "do not deduplicate", which is the safe direction. A constant fallback
+        # would collapse every job of this type into one row and silently drop
+        # work that should have run.
+        idempotency_key=(f"{event_name}:{job_type}:{request_id}" if request_id else None),
+    )

@@ -20,6 +20,7 @@ double claim and that a lease actually expires need a live PostgreSQL — C6.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import timedelta
 from typing import Any
 
@@ -42,8 +43,15 @@ from app.kernel.models import JobClass
 
 
 @pytest.fixture(autouse=True)
-def _clean_handlers() -> None:
-    """The registry is process-global."""
+def _clean_handlers() -> Iterator[None]:
+    """Clear the registry before and after. 🔒 It is process-global.
+
+    ⚠️ Teardown matters as much as setup: a handler left registered here is
+    visible to every later test in the session, and `verify_handlers_exist`
+    would then pass on a job type this suite invented.
+    """
+    reset_handlers()
+    yield
     reset_handlers()
 
 

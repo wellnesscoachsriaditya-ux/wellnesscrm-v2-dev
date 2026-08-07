@@ -23,6 +23,7 @@ PostgreSQL — no fake here can prove it.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -70,9 +71,31 @@ class ClientCreated(DomainEvent):
 
 
 @pytest.fixture(autouse=True)
-def _clean_subscriptions() -> None:
-    """Clear handlers between tests. 🔒 The registry is process-global."""
+def _clean_subscriptions() -> Iterator[None]:
+    """Clear handlers before *and* after each test. 🔒 The registry is process-global.
+
+    ⚠️ The teardown half is not symmetry for its own sake. Any test here that
+    leaves a `deferred_job_type` subscribed leaks it into every later test in the
+    session — and `create_app()` calls `verify_handlers_exist(deferred_job_types())`
+    at startup, so the next test that builds an app fails with an error naming a
+    job type it has never heard of. Cleaning only on entry made this suite's
+    subscriptions a global side effect.
+    """
     reset_subscriptions()
+    yield
+    reset_subscriptions()
+
+
+@pytest.fixture
+def session() -> object:
+    """A fake session — handlers never inspect it.
+
+    The real session comes from the HTTP pipeline's transaction, which carries
+    the tenant scope for RLS and is committed after the response. For these
+    contract tests the handlers only record that they were called; the argument
+    exists so the signatures match.
+    """
+    return object()
 
 
 # ─── Registration ─────────────────────────────────────────────────────────
@@ -276,14 +299,14 @@ def test_to_payload_refuses_nested_objects() -> None:
 
 
 @pytest.mark.asyncio
-async def test_transactional_handlers_run_inline() -> None:
+async def test_transactional_handlers_run_inline(session: object) -> None:
     """Transactional handlers execute immediately, in registration order."""
     calls: list[str] = []
 
-    async def first(_event: DomainEvent) -> None:
+    async def first(_event: DomainEvent, _session: object) -> None:
         calls.append("first")
 
-    async def second(_event: DomainEvent) -> None:
+    async def second(_event: DomainEvent, _session: object) -> None:
         calls.append("second")
 
     subscribe(StageChanged, transactional=first)
@@ -296,16 +319,16 @@ async def test_transactional_handlers_run_inline() -> None:
         changed_by=uuid.uuid4(),
         occurred_at=datetime.now(),
     )
-    await publish(event)
+    await publish(event, session)
 
     assert calls == ["first", "second"]
 
 
 @pytest.mark.asyncio
-async def test_transactional_handler_raise_propagates() -> None:
+async def test_transactional_handler_raise_propagates(session: object) -> None:
     """A transactional handler's exception rolls back the publisher's transaction."""
 
-    async def failing(_event: DomainEvent) -> None:
+    async def failing(_event: DomainEvent, _session: object) -> None:
         raise ValueError("handler failed")
 
     subscribe(StageChanged, transactional=failing)
@@ -319,15 +342,17 @@ async def test_transactional_handler_raise_propagates() -> None:
     )
 
     with pytest.raises(ValueError, match="handler failed"):
-        await publish(event)
+        await publish(event, session)
 
 
 @pytest.mark.asyncio
-async def test_deferred_handlers_enqueue_via_configured_seam() -> None:
+async def test_deferred_handlers_enqueue_via_configured_seam(session: object) -> None:
     """🔒 Deferred subscribers call the configured enqueuer, which writes a job."""
     enqueued: list[tuple[str, str, dict[str, Any]]] = []
 
-    async def fake_enqueuer(job_type: str, event_name: str, payload: dict[str, Any]) -> None:
+    async def fake_enqueuer(
+        _session: object, job_type: str, event_name: str, payload: dict[str, Any]
+    ) -> None:
         enqueued.append((job_type, event_name, payload))
 
     configure_deferred_enqueuer(fake_enqueuer)
@@ -342,7 +367,7 @@ async def test_deferred_handlers_enqueue_via_configured_seam() -> None:
             changed_by=uuid.uuid4(),
             occurred_at=datetime.now(),
         )
-        await publish(event)
+        await publish(event, session)
 
     assert len(enqueued) == 1
     job_type, event_name, payload = enqueued[0]
@@ -353,7 +378,7 @@ async def test_deferred_handlers_enqueue_via_configured_seam() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unconfigured_enqueuer_fails_loudly() -> None:
+async def test_unconfigured_enqueuer_fails_loudly(session: object) -> None:
     """🔒 A deferred subscriber with no queue wired is a bug, not a skip."""
     reset_subscriptions()
     subscribe(StageChanged, deferred_job_type="job")
@@ -372,11 +397,11 @@ async def test_unconfigured_enqueuer_fails_loudly() -> None:
     )
 
     with pytest.raises(QueueNotConfiguredError, match="no job queue is configured"):
-        await publish(event)
+        await publish(event, session)
 
 
 @pytest.mark.asyncio
-async def test_publish_unregistered_event_refused() -> None:
+async def test_publish_unregistered_event_refused(session: object) -> None:
     """An unregistered event has no wire name and cannot be queued."""
 
     @dataclass(frozen=True, slots=True)
@@ -385,20 +410,22 @@ async def test_publish_unregistered_event_refused() -> None:
 
     event = UnregisteredEvent(field="value")
     with pytest.raises(EventContractError, match="published without a wire name"):
-        await publish(event)
+        await publish(event, session)
 
 
 @pytest.mark.asyncio
-async def test_both_dispositions_fire_for_same_event() -> None:
+async def test_both_dispositions_fire_for_same_event(session: object) -> None:
     """Transactional and deferred subscribers for one event both execute."""
     inline_fired = False
     enqueued: list[str] = []
 
-    async def inline_handler(_event: DomainEvent) -> None:
+    async def inline_handler(_event: DomainEvent, _session: object) -> None:
         nonlocal inline_fired
         inline_fired = True
 
-    async def fake_enqueuer(job_type: str, _event_name: str, _payload: dict[str, Any]) -> None:
+    async def fake_enqueuer(
+        _session: object, job_type: str, _event_name: str, _payload: dict[str, Any]
+    ) -> None:
         enqueued.append(job_type)
 
     configure_deferred_enqueuer(fake_enqueuer)
@@ -413,7 +440,7 @@ async def test_both_dispositions_fire_for_same_event() -> None:
         changed_by=uuid.uuid4(),
         occurred_at=datetime.now(),
     )
-    await publish(event)
+    await publish(event, session)
 
     assert inline_fired
     assert "deferred_job" in enqueued

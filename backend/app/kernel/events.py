@@ -35,7 +35,9 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, fields
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, ClassVar, Protocol, runtime_checkable
+from typing import Any, ClassVar, Protocol
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.kernel.context import get_context
 from app.kernel.jobs import MAX_PAYLOAD_STRING_LENGTH
@@ -99,11 +101,6 @@ class DomainEvent:
     event_name: ClassVar[str] = ""
 
 
-@runtime_checkable
-class _Publishable(Protocol):
-    event_name: ClassVar[str]
-
-
 # ─── Registry ─────────────────────────────────────────────────────────────
 
 #: Wire name → event class. Populated by :func:`register_event`.
@@ -119,16 +116,19 @@ _DEFERRED: dict[type[DomainEvent], list[str]] = {}
 class TransactionalHandler(Protocol):
     """A handler running inside the publisher's transaction.
 
-    May raise: the exception propagates to the publisher and rolls the
-    transaction back, which is the entire point of choosing this disposition.
+    Receives the event and the publisher's session. 🔒 The session is passed
+    rather than opened: the handler's write must commit or roll back with the
+    change that triggered the event, which is the entire reason for choosing
+    this disposition over a deferred job.
 
-    The event parameter is positional-only (``/``) so a handler may name it
-    whatever reads best — ``event``, ``_event`` when unused, or the concrete
-    event type. Without that, mypy requires every handler to use the same
-    parameter name as this protocol, which is friction for no benefit.
+    May raise: the exception propagates to the publisher and rolls the
+    transaction back.
+
+    Both parameters are positional-only (``/``) so a handler may name them
+    whatever reads best — ``_event`` when unused, or the concrete event type.
     """
 
-    async def __call__(self, event: Any, /) -> None: ...
+    async def __call__(self, event: Any, session: AsyncSession, /) -> None: ...
 
 
 def register_event(name: str) -> Callable[[type[DomainEvent]], type[DomainEvent]]:
@@ -286,13 +286,27 @@ def _handler_identity(handler: TransactionalHandler) -> str:
 # capability it needs and the entry point installs the implementation. Same
 # shape as the pipeline's actor-resolver and transaction-provider seams.
 
-#: Enqueues a deferred job. Takes the job type, the event's wire name and its
-#: payload; returns nothing. Raises to fail the publisher's transaction — a
-#: deferred handler that silently fails to enqueue is a message never sent.
-DeferredEnqueuer = Callable[[str, str, dict[str, Any]], Awaitable[None]]
+#: Enqueues a deferred job **inside the publisher's transaction**. Takes that
+#: session, the job type, the event's wire name and its payload.
+#:
+#: 🔒 The session is the first argument and is not optional. Arch §11.1's
+#: transactional enqueue — the property that made PostgreSQL the right queue —
+#: only holds if the job row is written by the transaction that published the
+#: event. An enqueuer that opened its own connection would reintroduce exactly
+#: the outbox problem an external broker has: a committed job whose cause rolled
+#: back, or a committed change whose job vanished.
+#:
+#: Raises to fail the publisher's transaction. A deferred handler that silently
+#: fails to enqueue is a message never sent.
+DeferredEnqueuer = Callable[[AsyncSession, str, str, dict[str, Any]], Awaitable[None]]
 
 
-async def _unconfigured_enqueuer(job_type: str, event_name: str, _payload: dict[str, Any]) -> None:
+async def _unconfigured_enqueuer(
+    _session: AsyncSession,
+    job_type: str,
+    event_name: str,
+    _payload: dict[str, Any],
+) -> None:
     """🔒 The default: refuse, loudly.
 
     Not a no-op. A silently-dropped enqueue means a plan is approved and never
@@ -320,17 +334,22 @@ def configure_deferred_enqueuer(enqueuer: DeferredEnqueuer) -> None:
 # ─── Publishing ───────────────────────────────────────────────────────────
 
 
-async def publish(event: DomainEvent) -> None:
-    """Publish an event to its subscribers.
+async def publish(event: DomainEvent, session: AsyncSession) -> None:
+    """Publish an event to its subscribers, inside the caller's transaction.
 
-    Transactional handlers run first, in registration order, inside the caller's
-    transaction. A raise propagates and rolls that transaction back.
+    Transactional handlers run first, in registration order, on ``session``. A
+    raise propagates and rolls that transaction back.
 
-    Deferred handlers are then enqueued. The enqueue writes a row in the *same*
-    transaction, so the job exists only if the publisher commits (Arch §11.1) —
-    an approved plan cannot fail to schedule its delivery, and a rolled-back
-    approval cannot leave a ghost job. That is the property an external broker
-    would need an outbox pattern to reproduce.
+    Deferred handlers are then enqueued, on the same ``session``, so a job exists
+    only if the publisher commits (Arch §11.1) — an approved plan cannot fail to
+    schedule its delivery, and a rolled-back approval cannot leave a ghost job.
+    That is the property an external broker would need an outbox to reproduce.
+
+    Args:
+        session: 🔒 The publisher's transaction, required rather than optional.
+            Publishing outside a transaction has no correct meaning here: the
+            handlers write, and their writes must commit or roll back with the
+            change that triggered them (DDR-06).
 
     Raises:
         EventContractError: If the event is unregistered, or carries a field
@@ -344,13 +363,17 @@ async def publish(event: DomainEvent) -> None:
             "with @register_event('<resource>.<verb>')."
         )
 
+    # 🔒 Encode before running anything. `to_payload` is where NFR-033 is
+    # enforced, and a violation must abort the publish rather than let
+    # transactional handlers commit work for an event whose deferred half will
+    # then refuse to enqueue.
     payload = to_payload(event)
 
     for handler in tuple(_TRANSACTIONAL.get(event_type, ())):
-        await handler(event)
+        await handler(event, session)
 
     for job_type in tuple(_DEFERRED.get(event_type, ())):
-        await _enqueuer(job_type, name, payload)
+        await _enqueuer(session, job_type, name, payload)
 
 
 def to_payload(event: DomainEvent) -> dict[str, Any]:

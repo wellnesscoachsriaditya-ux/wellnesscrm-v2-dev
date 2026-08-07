@@ -21,6 +21,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.kernel.events import configure_deferred_enqueuer, deferred_job_types
+from app.kernel.jobs import verify_handlers_exist
 from app.platform.audit import (
     LoggingAuditSink,
     SqlAlchemyAuditSink,
@@ -45,6 +47,7 @@ from app.platform.http.routers.auth import portal_router as auth_portal_router
 from app.platform.http.routers.auth import public_router as auth_public_router
 from app.platform.identity.authentication import resolve_actor as authenticate
 from app.platform.identity.credentials import raise_if_credentials_are_local
+from app.platform.jobs import enqueue_for_event
 from app.platform.logging import configure_logging, get_logger
 from app.platform.observability import configure_observability, is_production_like
 
@@ -131,6 +134,18 @@ def create_app() -> FastAPI:
     # middleware so the seam stays a single, greppable line: what authenticates
     # this process is decided in one place.
     configure_actor_resolver(authenticate)
+
+    # 🔒 Arch §3.4 / §11.1 — deferred event subscribers enqueue through this.
+    # Installed at the entry point because the kernel must not import platform
+    # (R5): `kernel.events` names the capability, this decides it is the
+    # PostgreSQL queue. Wired in the web process because that is where events
+    # are published; the worker wires it too, since a job handler may publish.
+    configure_deferred_enqueuer(enqueue_for_event)
+
+    # 🔒 Fail startup if a deferred subscriber names a job type nothing can run.
+    # Those rows would enqueue, fail on every attempt and dead-letter — found in
+    # production, at the moment the work was actually needed.
+    verify_handlers_exist(deferred_job_types())
 
     app = FastAPI(
         title="WellnessCRM V2 API",
