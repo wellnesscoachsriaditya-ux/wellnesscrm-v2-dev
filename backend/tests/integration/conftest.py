@@ -196,6 +196,18 @@ async def _table_exists(connection: AsyncConnection, table: str) -> bool:
     )
 
 
+def enqueued_id(job_id: uuid.UUID | None) -> uuid.UUID:
+    """Assert an enqueue produced a job, and narrow the type.
+
+    ``enqueue`` returns ``None`` when an idempotency key suppressed the insert.
+    A test that does not pass a key gets ``None`` only if the row was silently
+    not created — which would make every later assertion in the test vacuous
+    rather than failing. Better to stop at the cause.
+    """
+    assert job_id is not None, "enqueue returned no id: the job row was not created"
+    return job_id
+
+
 async def scope_to(connection: AsyncConnection, tenant_id: uuid.UUID | None) -> None:
     """Adopt a tenant scope for the rest of the current transaction.
 

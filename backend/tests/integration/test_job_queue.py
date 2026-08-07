@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Iterator, Mapping
 from datetime import timedelta
 from typing import Any
 
@@ -48,6 +48,7 @@ from app.platform.jobs import (
     mark_succeeded,
     recover_expired_leases,
 )
+from tests.integration.conftest import enqueued_id
 
 #: Job types registered for these tests. Handlers are never executed here — the
 #: runner's behaviour is C5's suite; this file exercises the storage layer.
@@ -60,7 +61,7 @@ async def _noop(_payload: Mapping[str, Any], _session: AsyncSession) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _handlers() -> AsyncIterator[None]:
+def _handlers() -> Iterator[None]:
     """Register the job types these tests enqueue.
 
     `enqueue` reads the class and retry ceiling from the registry rather than
@@ -117,7 +118,9 @@ async def test_claim_marks_the_job_and_takes_a_lease(
 ) -> None:
     """The happy path: pending → claimed, with a lease and an attempt recorded."""
     async with sessions() as session, session.begin():
-        job_id = await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        job_id = enqueued_id(
+            await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        )
 
     assert job_id is not None
 
@@ -155,7 +158,9 @@ async def test_concurrent_workers_never_claim_the_same_job(
     message twice, and with one worker in MVP neither would ever be noticed.
     """
     async with sessions() as session, session.begin():
-        job_id = await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        job_id = enqueued_id(
+            await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        )
 
     async def claim_as(worker: str) -> list[ClaimedJob]:
         async with sessions() as session, session.begin():
@@ -222,7 +227,9 @@ async def test_expired_lease_returns_the_job_to_the_queue(
     killed worker leaves behind: `status='claimed'` and a lease nothing renews.
     """
     async with sessions() as session, session.begin():
-        job_id = await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        job_id = enqueued_id(
+            await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        )
 
     async with sessions() as session, session.begin():
         claimed = await claim(session, worker_id="doomed", lease=timedelta(seconds=-1))
@@ -308,7 +315,9 @@ async def test_failure_schedules_a_retry_with_backoff(
 ) -> None:
     """A non-final failure returns to `pending` with `run_after` in the future."""
     async with sessions() as session, session.begin():
-        job_id = await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        job_id = enqueued_id(
+            await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        )
 
     async with sessions() as session, session.begin():
         claimed = await claim(session, worker_id="worker-a")
@@ -351,7 +360,9 @@ async def test_final_failure_dead_letters_and_keeps_its_history(
     mutable row on `jobs` cannot express.
     """
     async with sessions() as session, session.begin():
-        job_id = await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        job_id = enqueued_id(
+            await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        )
 
     status = None
     for _attempt in range(3):
@@ -390,7 +401,9 @@ async def test_success_releases_the_lease_and_records_the_run(
     sessions: async_sessionmaker[AsyncSession],
 ) -> None:
     async with sessions() as session, session.begin():
-        job_id = await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        job_id = enqueued_id(
+            await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        )
 
     async with sessions() as session, session.begin():
         claimed = await claim(session, worker_id="worker-a")
@@ -441,7 +454,9 @@ async def test_generation_enqueues_with_a_single_attempt(
 ) -> None:
     """The policy and the constraint agree — the row is accepted at 1."""
     async with sessions() as session, session.begin():
-        job_id = await enqueue(session, job_type=_GENERATION_JOB, payload={"draft_id": "abc"})
+        job_id = enqueued_id(
+            await enqueue(session, job_type=_GENERATION_JOB, payload={"draft_id": "abc"})
+        )
 
     assert job_id is not None
 
@@ -567,7 +582,13 @@ async def test_rolled_back_transaction_leaves_no_job(
 
     with pytest.raises(RuntimeError, match="deliberate"):
         async with sessions() as session, session.begin():
-            job_id = await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+            # 🔒 `enqueued_id` matters here: it proves the INSERT really returned
+            # an id *before* the rollback. Without it, an enqueue that silently
+            # did nothing would make the assertion below pass for the wrong
+            # reason — no job found, because none was ever written.
+            job_id = enqueued_id(
+                await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+            )
             raise RuntimeError("deliberate rollback")
 
     assert job_id is not None
@@ -585,7 +606,9 @@ async def test_committed_transaction_leaves_a_claimable_job(
 ) -> None:
     """The other half: a committed publisher's job is immediately claimable."""
     async with sessions() as session, session.begin():
-        job_id = await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        job_id = enqueued_id(
+            await enqueue(session, job_type=_DISPATCH_JOB, payload={"client_id": "abc"})
+        )
 
     async with sessions() as session, session.begin():
         claimed = await claim(session, worker_id="worker-a")
