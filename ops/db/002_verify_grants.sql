@@ -29,9 +29,9 @@
 DO $$
 DECLARE
     -- 🔒 The append-only set, from DB §16 (`audit_log`, `consent_records`),
-    -- DB §8.15 / §21 (`operator_actions`) and DB §14.3
-    -- (`subscription_events`). Pattern E in DB §11.2: SELECT policy plus no
-    -- UPDATE/DELETE grant.
+    -- DB §8.15 / §21 (`operator_actions`), DB §14.3 (`subscription_events`)
+    -- and DB §5.3 (`client_stage_history`). Pattern E in DB §11.2: SELECT
+    -- policy plus no UPDATE/DELETE grant.
     --
     -- ⚠️ Add a table here in the same commit that creates it. A table that is
     -- append-only in the design but missing from this list is unverified, and
@@ -47,7 +47,8 @@ DECLARE
         'audit_log',
         'consent_records',
         'operator_actions',
-        'subscription_events'
+        'subscription_events',
+        'client_stage_history'
     ];
     forbidden   CONSTANT text[] := ARRAY['UPDATE', 'DELETE'];
 

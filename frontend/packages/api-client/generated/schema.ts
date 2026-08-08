@@ -29,6 +29,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/app/clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a client
+         * @description Create a client or lead — FR-M1-004, AC-M1-001.
+         *
+         *     🔒 Not metered. FR-M1-003 keeps leads unmetered at every stage before
+         *     ``active``, and EC-M2-06 requires a tenant at their limit to keep accepting
+         *     them. The entitlement binds on the transition to ``active`` (Slice B).
+         */
+        post: operations["clientsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a client
+         * @description One client by id — API §7.1.
+         *
+         *     ⚠️ Archived clients are returned. AC-M1-007 requires archiving to remove them
+         *     from default *views* without deleting anything, and restoring one requires
+         *     being able to read it first.
+         */
+        get: operations["clientsRead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update a client
+         * @description Apply a partial edit — API §4.4.
+         *
+         *     🔒 ``If-Match`` is **required**. Two practitioners editing one client is
+         *     routine in a clinic, and without a precondition the second save silently
+         *     discards the first one's work with no error and no trace.
+         */
+        patch: operations["clientsUpdate"];
+        trace?: never;
+    };
     "/api/v1/public/auth/login": {
         parameters: {
             query?: never;
@@ -279,6 +335,127 @@ export interface components {
             message: string;
         };
         /**
+         * ClientCreateRequest
+         * @description FR-M1-004 — name plus one contact method is the whole requirement.
+         *
+         *     🔒 Everything else is optional. A practitioner capturing a lead mid-call has
+         *     a name and a number; a form demanding more is a form they abandon, and
+         *     NFR-011 budgets the whole interaction at three steps.
+         */
+        ClientCreateRequest: {
+            /** City */
+            city?: string | null;
+            /** Date Of Birth */
+            date_of_birth?: string | null;
+            dietary_class?: components["schemas"]["DietaryClass"] | null;
+            /** Email */
+            email?: string | null;
+            /** Full Name */
+            full_name: string;
+            /** Mobile */
+            mobile?: string | null;
+            /** Owner User Id */
+            owner_user_id?: string | null;
+            /**
+             * Preferred Language
+             * @default en
+             */
+            preferred_language: string;
+            sex?: components["schemas"]["SexType"] | null;
+            /** Source */
+            source?: string | null;
+            /** Source Detail */
+            source_detail?: string | null;
+            /** @default lead */
+            stage: components["schemas"]["ClientStage"];
+        };
+        /**
+         * ClientPatch
+         * @description A partial edit — API §4.4.
+         *
+         *     ⚠️ **No ``stage``** (ADR-A06). Present-and-null is a meaningful edit here
+         *     (clearing an email), so the model distinguishes "absent" from "null" via
+         *     ``model_fields_set`` rather than treating ``None`` as "unchanged".
+         */
+        ClientPatch: {
+            /** City */
+            city?: string | null;
+            /** Date Of Birth */
+            date_of_birth?: string | null;
+            dietary_class?: components["schemas"]["DietaryClass"] | null;
+            /** Email */
+            email?: string | null;
+            /** Full Name */
+            full_name?: string | null;
+            /** Mobile */
+            mobile?: string | null;
+            /** Preferred Language */
+            preferred_language?: string | null;
+            sex?: components["schemas"]["SexType"] | null;
+        };
+        /**
+         * ClientResponse
+         * @description One client, as the practitioner realm sees it — API §7.1.
+         */
+        ClientResponse: {
+            /** Activated At */
+            activated_at: string | null;
+            /** Archived At */
+            archived_at: string | null;
+            /** City */
+            city: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Date Of Birth */
+            date_of_birth: string | null;
+            dietary_class: components["schemas"]["DietaryClass"] | null;
+            /** Email */
+            email: string | null;
+            /** Full Name */
+            full_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Minor */
+            is_minor: boolean | null;
+            /** Mobile */
+            mobile: string | null;
+            /**
+             * Owner User Id
+             * Format: uuid
+             */
+            owner_user_id: string;
+            /** Preferred Language */
+            preferred_language: string;
+            sex: components["schemas"]["SexType"] | null;
+            /** Source */
+            source: string | null;
+            /** Source Detail */
+            source_detail: string | null;
+            stage: components["schemas"]["ClientStage"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ClientStage
+         * @description The lifecycle — DB §5.2, M1.4. 🟡 Values PROPOSED pending OD-01.
+         *
+         *     🔒 One entity, seven stages. A ``lead`` and an ``active`` client are the same
+         *     row; the stage is what differs. That is what makes AC-M1-003 ("converting a
+         *     lead retains the original record, its identifier, and all prior history")
+         *     true by construction rather than by careful copying.
+         * @enum {string}
+         */
+        ClientStage: "lead" | "contacted" | "consultation_scheduled" | "active" | "paused" | "churned" | "archived";
+        /**
          * DependencyStatus
          * @description State of one dependency.
          */
@@ -293,6 +470,19 @@ export interface components {
              */
             status: "ok" | "degraded" | "unavailable" | "not_configured";
         };
+        /**
+         * DietaryClass
+         * @description What the person eats — DB §8.5, FR-M4-035.
+         *
+         *     🔒 Lives on the *client*, not the plan (DB §5.1): it is a property of the
+         *     person, and it filters food search at authoring time, before a plan exists.
+         *
+         *     ``JAIN`` is not a stricter vegetarian in a way a boolean could express — it
+         *     excludes root vegetables, which is a different axis from animal products
+         *     entirely, and collapsing it would put onion in a Jain client's plan.
+         * @enum {string}
+         */
+        DietaryClass: "vegetarian" | "eggetarian" | "non_vegetarian" | "vegan" | "jain";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -429,6 +619,24 @@ export interface components {
             email_verification_required: true;
         };
         /**
+         * SexType
+         * @description Biological sex, for requirement estimation — DB §5.1.
+         *
+         *     ⚠️ 🟡 **PROPOSED — the value set is not specified in any approved document.**
+         *     DB §5.1 names the column and the type and stops there. These values are my
+         *     proposal and need confirmation.
+         *
+         *     🔒 The column exists for one purpose: BMR equations (Mifflin-St Jeor,
+         *     Harris-Benedict) take a male/female term. It is **nullable**, and ``OTHER``
+         *     is a real answer rather than a gap — but neither NULL nor ``OTHER`` yields a
+         *     defined equation, so both must fall through to the practitioner entering a
+         *     requirement directly. Silently substituting one for the other would put a
+         *     wrong number on a clinical plan, which is the failure this note exists to
+         *     prevent.
+         * @enum {string}
+         */
+        SexType: "male" | "female" | "other";
+        /**
          * TokenResponse
          * @description What a client needs to make an authenticated request and to renew.
          *
@@ -488,6 +696,107 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    clientsCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsUpdate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

@@ -21,8 +21,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.kernel.clients import configure_client_directory
 from app.kernel.events import configure_deferred_enqueuer, deferred_job_types
 from app.kernel.jobs import verify_handlers_exist
+from app.modules.clients import ClientRepositoryDirectory
 from app.platform.audit import (
     LoggingAuditSink,
     SqlAlchemyAuditSink,
@@ -45,6 +47,7 @@ from app.platform.http.pipeline import configure_actor_resolver, verify_route_au
 from app.platform.http.routers.auth import app_router as auth_app_router
 from app.platform.http.routers.auth import portal_router as auth_portal_router
 from app.platform.http.routers.auth import public_router as auth_public_router
+from app.platform.http.routers.clients import router as clients_router
 from app.platform.identity.authentication import resolve_actor as authenticate
 from app.platform.identity.credentials import raise_if_credentials_are_local
 from app.platform.jobs import enqueue_for_event
@@ -142,6 +145,12 @@ def create_app() -> FastAPI:
     # are published; the worker wires it too, since a job handler may publish.
     configure_deferred_enqueuer(enqueue_for_event)
 
+    # 🔒 DB §5 — the seam five modules read client identity and stage through.
+    # Installed here for the same reason as the enqueuer: R1 forbids the kernel
+    # importing the `clients` module that satisfies its port, so the entry point
+    # is the one place allowed to know about both.
+    configure_client_directory(ClientRepositoryDirectory())
+
     # 🔒 Fail startup if a deferred subscriber names a job type nothing can run.
     # Those rows would enqueue, fail on every attempt and dead-letter — found in
     # production, at the moment the work was actually needed.
@@ -189,6 +198,7 @@ def create_app() -> FastAPI:
     #   S5  /public/webhooks    provider callbacks
     #   S6  /portal/*           client portal
     #   S12 /admin/*            operator console
+    app.include_router(clients_router)
 
     # 🔒 ADR-05 — last, after every router is registered, so it sees the whole
     # route table. A route that declares no authorization action, declares one

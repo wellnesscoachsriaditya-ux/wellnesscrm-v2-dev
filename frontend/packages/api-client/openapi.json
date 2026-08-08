@@ -13,6 +13,430 @@
         "title": "AcceptedResponse",
         "type": "object"
       },
+      "ClientCreateRequest": {
+        "description": "FR-M1-004 — name plus one contact method is the whole requirement.\n\n🔒 Everything else is optional. A practitioner capturing a lead mid-call has\na name and a number; a form demanding more is a form they abandon, and\nNFR-011 budgets the whole interaction at three steps.",
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "date_of_birth": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Of Birth"
+          },
+          "dietary_class": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DietaryClass"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Full Name",
+            "type": "string"
+          },
+          "mobile": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile"
+          },
+          "owner_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner User Id"
+          },
+          "preferred_language": {
+            "default": "en",
+            "maxLength": 16,
+            "title": "Preferred Language",
+            "type": "string"
+          },
+          "sex": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SexType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "source_detail": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Detail"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/ClientStage",
+            "default": "lead"
+          }
+        },
+        "required": [
+          "full_name"
+        ],
+        "title": "ClientCreateRequest",
+        "type": "object"
+      },
+      "ClientPatch": {
+        "description": "A partial edit — API §4.4.\n\n⚠️ **No ``stage``** (ADR-A06). Present-and-null is a meaningful edit here\n(clearing an email), so the model distinguishes \"absent\" from \"null\" via\n``model_fields_set`` rather than treating ``None`` as \"unchanged\".",
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "date_of_birth": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Of Birth"
+          },
+          "dietary_class": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DietaryClass"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "mobile": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile"
+          },
+          "preferred_language": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Language"
+          },
+          "sex": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SexType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ClientPatch",
+        "type": "object"
+      },
+      "ClientResponse": {
+        "description": "One client, as the practitioner realm sees it — API §7.1.",
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "date_of_birth": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Of Birth"
+          },
+          "dietary_class": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DietaryClass"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_minor": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Minor"
+          },
+          "mobile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile"
+          },
+          "owner_user_id": {
+            "format": "uuid",
+            "title": "Owner User Id",
+            "type": "string"
+          },
+          "preferred_language": {
+            "title": "Preferred Language",
+            "type": "string"
+          },
+          "sex": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SexType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "source_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Detail"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/ClientStage"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "full_name",
+          "stage",
+          "mobile",
+          "email",
+          "date_of_birth",
+          "sex",
+          "city",
+          "preferred_language",
+          "source",
+          "source_detail",
+          "owner_user_id",
+          "dietary_class",
+          "is_minor",
+          "activated_at",
+          "archived_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ClientResponse",
+        "type": "object"
+      },
+      "ClientStage": {
+        "description": "The lifecycle — DB §5.2, M1.4. 🟡 Values PROPOSED pending OD-01.\n\n🔒 One entity, seven stages. A ``lead`` and an ``active`` client are the same\nrow; the stage is what differs. That is what makes AC-M1-003 (\"converting a\nlead retains the original record, its identifier, and all prior history\")\ntrue by construction rather than by careful copying.",
+        "enum": [
+          "lead",
+          "contacted",
+          "consultation_scheduled",
+          "active",
+          "paused",
+          "churned",
+          "archived"
+        ],
+        "title": "ClientStage",
+        "type": "string"
+      },
       "DependencyStatus": {
         "description": "State of one dependency.",
         "properties": {
@@ -48,6 +472,18 @@
         ],
         "title": "DependencyStatus",
         "type": "object"
+      },
+      "DietaryClass": {
+        "description": "What the person eats — DB §8.5, FR-M4-035.\n\n🔒 Lives on the *client*, not the plan (DB §5.1): it is a property of the\nperson, and it filters food search at authoring time, before a plan exists.\n\n``JAIN`` is not a stricter vegetarian in a way a boolean could express — it\nexcludes root vegetables, which is a different axis from animal products\nentirely, and collapsing it would put onion in a Jain client's plan.",
+        "enum": [
+          "vegetarian",
+          "eggetarian",
+          "non_vegetarian",
+          "vegan",
+          "jain"
+        ],
+        "title": "DietaryClass",
+        "type": "string"
       },
       "HTTPValidationError": {
         "properties": {
@@ -327,6 +763,16 @@
         "title": "RegisterResponse",
         "type": "object"
       },
+      "SexType": {
+        "description": "Biological sex, for requirement estimation — DB §5.1.\n\n⚠️ 🟡 **PROPOSED — the value set is not specified in any approved document.**\nDB §5.1 names the column and the type and stops there. These values are my\nproposal and need confirmation.\n\n🔒 The column exists for one purpose: BMR equations (Mifflin-St Jeor,\nHarris-Benedict) take a male/female term. It is **nullable**, and ``OTHER``\nis a real answer rather than a gap — but neither NULL nor ``OTHER`` yields a\ndefined equation, so both must fall through to the practitioner entering a\nrequirement directly. Silently substituting one for the other would put a\nwrong number on a clinical plan, which is the failure this note exists to\nprevent.",
+        "enum": [
+          "male",
+          "female",
+          "other"
+        ],
+        "title": "SexType",
+        "type": "string"
+      },
       "TokenResponse": {
         "description": "What a client needs to make an authenticated request and to renew.\n\n🔒 No user object. The client fetches its own profile from a dedicated\nendpoint; embedding one here would put a name and email in every token\nrefresh and in whatever logs the response passes through.",
         "properties": {
@@ -426,6 +872,160 @@
         "summary": "Sign out",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/app/clients": {
+      "post": {
+        "description": "Create a client or lead — FR-M1-004, AC-M1-001.\n\n🔒 Not metered. FR-M1-003 keeps leads unmetered at every stage before\n``active``, and EC-M2-06 requires a tenant at their limit to keep accepting\nthem. The entitlement binds on the transition to ``active`` (Slice B).",
+        "operationId": "clientsCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a client",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}": {
+      "get": {
+        "description": "One client by id — API §7.1.\n\n⚠️ Archived clients are returned. AC-M1-007 requires archiving to remove them\nfrom default *views* without deleting anything, and restoring one requires\nbeing able to read it first.",
+        "operationId": "clientsRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read a client",
+        "tags": [
+          "clients"
+        ]
+      },
+      "patch": {
+        "description": "Apply a partial edit — API §4.4.\n\n🔒 ``If-Match`` is **required**. Two practitioners editing one client is\nroutine in a clinic, and without a precondition the second save silently\ndiscards the first one's work with no error and no trace.",
+        "operationId": "clientsUpdate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update a client",
+        "tags": [
+          "clients"
         ]
       }
     },
