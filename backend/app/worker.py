@@ -11,9 +11,10 @@ Why the separation exists from day one:
 * NFR-095 requires background work to be *separable* without re-architecture —
   separating it immediately makes that true by construction.
 
-The scheduler and job dispatch loop land in S1 with the ``jobs`` table. This
-module currently establishes the process, its lifecycle and its shutdown
-semantics, so S1 adds claiming logic rather than process management.
+The scheduler and job dispatch loop are wired here; the claiming and execution
+logic itself lives in :mod:`app.platform.job_runner`, so this module stays about
+process lifecycle — start, poll, drain, stop — and the queue semantics are
+testable without spawning a process.
 
 🔒 Jobs run with worker context (:meth:`RequestContext.for_worker`), so audit and
 logging behave identically in both processes — one implementation, not two
@@ -27,9 +28,12 @@ import contextlib
 import signal
 from types import FrameType
 
-from app.kernel.context import RequestContext, context_scope
+from app.kernel.events import configure_deferred_enqueuer, deferred_job_types
+from app.kernel.jobs import verify_handlers_exist
 from app.platform.config import get_settings
 from app.platform.db import dispose_engine
+from app.platform.job_runner import JobRunner
+from app.platform.jobs import enqueue_for_event
 from app.platform.logging import configure_logging, get_logger
 from app.platform.observability import configure_observability, is_production_like
 
@@ -39,14 +43,16 @@ logger = get_logger(__name__)
 class Worker:
     """The background job runner.
 
-    Owns the process lifecycle: start, poll, drain, stop. S1 attaches the
-    Postgres-backed queue (``SKIP LOCKED``, leases, retries) to :meth:`_tick`.
+    Owns the process lifecycle: start, poll, drain, stop. The claiming and
+    execution logic lives in :class:`~app.platform.job_runner.JobRunner`; this
+    class is the loop and the signal handling around it.
     """
 
-    def __init__(self, *, poll_interval_seconds: int) -> None:
+    def __init__(self, *, poll_interval_seconds: int, runner: JobRunner | None = None) -> None:
         self._poll_interval = poll_interval_seconds
         self._shutdown = asyncio.Event()
         self._current_work: asyncio.Task[None] | None = None
+        self._runner = runner or JobRunner()
 
     def request_shutdown(self, reason: str) -> None:
         """Signal a graceful stop.
@@ -63,17 +69,28 @@ class Worker:
         """Poll for due work until shutdown."""
         logger.info(
             "Worker started",
-            extra={"poll_interval_seconds": self._poll_interval},
+            extra={
+                "poll_interval_seconds": self._poll_interval,
+                "worker_id": self._runner.worker_id,
+            },
         )
 
         while not self._shutdown.is_set():
+            found_work = False
             try:
-                await self._tick()
+                found_work = await self._tick()
             except Exception:
                 # 🔒 The loop must survive any single failure. A crashed worker
                 # stops every reminder, plan delivery and rollup in the system —
                 # a far worse outcome than one failed job.
                 logger.exception("Worker tick failed; continuing")
+
+            # 🔒 Poll again immediately when the last tick found work. Sleeping
+            # the full interval after every tick would drain a backlog at one
+            # batch per minute, so a burst of enqueues after an outage would take
+            # hours to clear while the queue sat idle between polls.
+            if found_work:
+                continue
 
             # Wake early on shutdown rather than sleeping out the interval.
             with contextlib.suppress(TimeoutError):
@@ -85,21 +102,28 @@ class Worker:
         await self._drain()
         logger.info("Worker stopped")
 
-    async def _tick(self) -> None:
-        """Claim and execute due work.
+    async def _tick(self) -> bool:
+        """Recover expired leases, then claim and execute due work.
 
-        S1 implements this against the ``jobs`` table:
-
-        1. ``SELECT ... FOR UPDATE SKIP LOCKED`` — claim with a lease.
-        2. Execute inside :func:`context_scope` for correct audit attribution.
-        3. Record the outcome in ``job_runs``; retry with backoff, or dead-letter.
-
-        🔒 ``SKIP LOCKED`` makes multiple workers safe. Correct with one worker
-        today and correct with five later — concurrency safety is built in now
-        because retrofitting it is far harder than including it.
+        Returns:
+            True when the tick did something, so the loop polls again rather
+            than sleeping.
         """
-        with context_scope(RequestContext.for_worker("poll")):
-            logger.debug("Polling for due work")
+        result = await self._runner.tick()
+
+        if result.claimed or result.recovered:
+            logger.info(
+                "Tick complete",
+                extra={
+                    "claimed": result.claimed,
+                    "succeeded": result.succeeded,
+                    "failed": result.failed,
+                    "dead": result.dead,
+                    "recovered": result.recovered,
+                },
+            )
+
+        return result.did_work
 
     async def _drain(self) -> None:
         """Wait briefly for in-flight work to finish."""
@@ -128,6 +152,14 @@ async def main() -> None:
         "Starting worker process",
         extra={"app_env": settings.app_env.value, "component": "worker"},
     )
+
+    # 🔒 The same two lines as `create_app`, and both are needed here too.
+    # A job handler may itself publish an event with a deferred subscriber, so
+    # the worker process must be able to enqueue; and it must refuse to start
+    # for the same reason the web process does — a job type nothing can run
+    # would dead-letter every row that reached it.
+    configure_deferred_enqueuer(enqueue_for_event)
+    verify_handlers_exist(deferred_job_types())
 
     worker = Worker(poll_interval_seconds=settings.worker_poll_interval_seconds)
 

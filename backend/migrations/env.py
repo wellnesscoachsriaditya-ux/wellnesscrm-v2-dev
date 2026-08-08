@@ -29,9 +29,17 @@ from sqlalchemy import engine_from_config, pool
 # `Base.metadata`, so a models module that is never imported is invisible to
 # autogenerate — which would then propose dropping every table it cannot see.
 # Each new module's `models.py` must be added here.
-import app.kernel.models  # noqa: F401
+#
+# ⚠️ Aliased and re-exported, the same idiom as `tests/conftest.py`. Two plain
+# `import app.<...>.models` statements both bind the name `app`, so the second
+# shadows the first and the unused-import warning lands on whichever line was
+# not touched. Distinct names in `__all__` are read as used by both linters.
+import app.kernel.models as _kernel_models
+import app.modules.clients.models as _clients_models
 from app.kernel import Base
 from app.platform.config import get_settings
+
+__all__ = ["_clients_models", "_kernel_models"]
 
 config = context.config
 

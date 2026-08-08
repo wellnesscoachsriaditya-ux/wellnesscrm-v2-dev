@@ -65,15 +65,23 @@ history. The full argument is in the header of `001_roles.sql`.
 
 ## Verifying tenant isolation (AC-M0-003)
 
-> ⏳ **Status: pending a live PostgreSQL environment.** The tests below are
-> written, committed and executable. They have **not been run against a real
-> server**, because no PostgreSQL instance (local or Docker) exists on the
-> development machine yet. Until an operator completes this section and records
-> the result, **AC-M0-003 is unverified** and the S1 launch gate is open.
+> ⏳ **Status: runs in CI; not yet run on the development machine.** The tests
+> below are written, committed and executable, and the `integration` job in
+> `.github/workflows/ci.yml` runs them against a real PostgreSQL 16.4 service on
+> every push — with `REQUIRE_LIVE_DATABASE=1`, so a missing database fails the
+> build instead of skipping. They have **not** been run locally: this machine has
+> neither Docker nor `psql` installed. `ops/db/docker-compose.yml` plus
+> `ops/db/provision-test-db.sh` (below) are the one-command path once it does.
 >
 > 🔒 The suite is *not* skipped silently. With no `TEST_DATABASE_URL` set,
 > `pytest` reports the tests as skipped with the reason pointing here, so the gap
 > stays visible in every test summary rather than disappearing into a green run.
+>
+> ⚠️ 🔒 **A green CI run does not close DB §2.3.** There is no PgBouncer in front
+> of the service container, so `test_scope_does_not_survive_its_transaction`
+> proves `SET LOCAL` behaves on a *direct* connection — which was never the doubt.
+> The launch gate is whether the **Supabase pooler** runs in transaction mode, and
+> only a deployed environment can confirm that. That item stays open.
 
 AC-M0-003 is the acceptance criterion the whole tenancy model rests on:
 
@@ -107,7 +115,25 @@ database with RLS entirely disabled — the false pass the suite exists to preve
 `test_ac_m0_003_is_covered_by_an_executable_test` in `tests/test_kernel_schema.py`
 fails if a future refactor "tidies" the filter back in.
 
-### Steps
+### Steps — automated
+
+`ops/db/provision-test-db.sh` does the whole sequence below. Prefer it: the
+ordering is load-bearing and easy to get wrong, because `alembic upgrade head`
+connects as `app_migrator` and revision 0003 `REVOKE`s from `app_user`, so both
+roles must exist *before* the migrations run.
+
+```bash
+docker compose -f ops/db/docker-compose.yml up -d   # PostgreSQL 16.4 on :5433
+ops/db/provision-test-db.sh                         # roles → passwords → migrate → verify
+eval "$(ops/db/provision-test-db.sh --export)"      # export the two URLs
+cd backend && pytest tests/integration -q
+docker compose -f ops/db/docker-compose.yml down -v # `-v` matters: drop the volume
+```
+
+Requires `docker` and `psql` on `PATH`. Neither is present on this machine today,
+which is why the section above still reports the local run as not done.
+
+### Steps — by hand
 
 Steps 1–2 are the ones already above; they are repeated here so this section
 stands alone. ⚠️ Use a **throwaway database**. `seeded_tenants` deletes the rows
@@ -160,9 +186,15 @@ produce a false pass. Each check names its own fix:
 
 ### Recording the result
 
-When the run passes, replace the status block at the top of this section with the
-date, the PostgreSQL version, and the nine test results. AC-M0-003 stays open
-until that happens.
+The `integration` job in CI is the standing record: it runs the nine tests
+against PostgreSQL 16.4 on every push, and `REQUIRE_LIVE_DATABASE=1` means it
+cannot pass by skipping. **A green run of that job is what closes AC-M0-003 as an
+enforcement claim** — the first one is the date to cite.
+
+Two things a green job does *not* close, both tracked above:
+
+* **DB §2.3** — the pooler's transaction mode. No PgBouncer in CI.
+* The local run, if you want the sequence verified on a workstation.
 
 ## ⏳ Not here yet
 

@@ -32,6 +32,10 @@ from app.kernel import Base
 from app.kernel.models import (
     AccessStatus,
     AuthRealm,
+    IdempotencyState,
+    JobClass,
+    JobOutcome,
+    JobStatus,
     LinkPurpose,
     Operator,
     Session,
@@ -43,13 +47,14 @@ from app.kernel.models import (
 )
 
 _BACKEND = Path(__file__).resolve().parents[1]
-_MIGRATION = _BACKEND / "migrations" / "versions" / "20260805_0002_platform_kernel.py"
+_VERSIONS = _BACKEND / "migrations" / "versions"
+_MIGRATION = _VERSIONS / "20260805_0002_platform_kernel.py"
 
 #: Tables carrying `tenant_id` and therefore requiring Pattern A RLS.
 _TENANT_SCOPED = ("users", "client_access_grants", "magic_links")
 
 #: Platform tables (DB §2.2 Pattern D) — deliberately without RLS.
-_PLATFORM_TABLES = ("tenants", "operators", "sessions")
+_PLATFORM_TABLES = ("tenants", "operators", "sessions", "audit_log")
 
 
 @pytest.fixture(scope="module")
@@ -57,6 +62,21 @@ def migration_source() -> str:
     if not _MIGRATION.is_file():
         pytest.fail(f"platform kernel migration is missing: {_MIGRATION}")
     return _MIGRATION.read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def all_migrations_source() -> str:
+    """Every revision, concatenated.
+
+    Model/migration drift is a property of the whole chain, not of one file: a
+    table introduced in a later revision is still a table the models must agree
+    with. Reading only the revision that happens to be under discussion is how
+    a drift check silently stops covering new work.
+    """
+    sources = sorted(p for p in _VERSIONS.glob("*.py") if p.name != "__init__.py")
+    if not sources:
+        pytest.fail(f"no migrations found in {_VERSIONS}")
+    return "\n".join(p.read_text(encoding="utf-8") for p in sources)
 
 
 def _ddl(table_name: str) -> str:
@@ -297,6 +317,10 @@ def test_every_timestamp_is_timezone_aware(table: str) -> None:
         (LinkPurpose, "link_purpose"),
         (TransportType, "transport_type"),
         (AuthRealm, "auth_realm"),
+        (JobClass, "job_class"),
+        (JobStatus, "job_status"),
+        (JobOutcome, "job_outcome"),
+        (IdempotencyState, "idempotency_state"),
     ],
 )
 def test_enum_types_are_named_per_convention(python_enum: type, type_name: str) -> None:
@@ -346,7 +370,7 @@ def test_operator_two_factor_defaults_to_enabled() -> None:
 
 
 @pytest.mark.parametrize("table", sorted(Base.metadata.tables))
-def test_migration_creates_every_model_table(migration_source: str, table: str) -> None:
+def test_migration_creates_every_model_table(all_migrations_source: str, table: str) -> None:
     """The hand-written migration and the ORM models must not drift.
 
     ⚠️ This is the cost of hand-writing the migration instead of autogenerating
@@ -354,16 +378,16 @@ def test_migration_creates_every_model_table(migration_source: str, table: str) 
     because it cannot see RLS, FORCE, or grant revocations — all load-bearing.
     """
     assert (
-        f'op.create_table(\n        "{table}"' in migration_source
-    ), f"model declares table `{table}` but the migration does not create it"
+        f'op.create_table(\n        "{table}"' in all_migrations_source
+    ), f"model declares table `{table}` but no migration creates it"
 
 
-def test_migration_columns_match_models(migration_source: str) -> None:
+def test_migration_columns_match_models(all_migrations_source: str) -> None:
     """Every model column appears in the migration, and vice versa.
 
     Compares names only — types are checked by the compiled-DDL tests above.
     """
-    tree = ast.parse(migration_source)
+    tree = ast.parse(all_migrations_source)
     in_migration: dict[str, set[str]] = {}
 
     for node in ast.walk(tree):

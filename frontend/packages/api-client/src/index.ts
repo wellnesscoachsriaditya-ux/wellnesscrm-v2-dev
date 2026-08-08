@@ -163,6 +163,17 @@ export interface ApiClientOptions {
 }
 
 export interface RequestOptions {
+  /**
+   * Path parameters, by the name inside the braces in the path key.
+   *
+   * 🔒 Required for any path containing `{...}`. The generated keys are
+   * templates — `/api/v1/app/clients/{client_id}` — and `request` refuses to
+   * send one with a placeholder still in it. Without that check the browser
+   * would request a URL containing a literal `{client_id}`, the API would answer
+   * 404, and the symptom would read as "the client does not exist" rather than
+   * "the call site forgot an argument".
+   */
+  path?: Record<string, string | number>
   /** Query parameters. `undefined` values are dropped rather than sent as "undefined". */
   query?: Record<string, string | number | boolean | undefined>
   /** JSON request body. Serialised here so callers never set Content-Type. */
@@ -195,21 +206,36 @@ function resolveBaseUrl(explicit?: string): string {
  */
 export function createApiClient(options: ApiClientOptions = {}) {
   const baseUrl = resolveBaseUrl(options.baseUrl)
-  const doFetch = options.fetch ?? globalThis.fetch
+
+  /**
+   * The transport, resolved **per request** rather than captured at
+   * construction.
+   *
+   * ⚠️ `const doFetch = options.fetch ?? globalThis.fetch` looks equivalent and
+   * is not. A module-scope `createApiClient()` — which is how a feature's api.ts
+   * is written — runs at import time, so it would snapshot whatever `fetch` was
+   * bound then. Anything installing a wrapper afterwards is silently bypassed:
+   * a test's stub, and equally a production tracing or offline-queue wrapper
+   * added at app start. Reading it at call time costs one property lookup.
+   */
+  const transport = () => options.fetch ?? globalThis.fetch
 
   async function request<P extends ApiPath, M extends MethodsOf<P>>(
     method: M,
     path: P,
     init: RequestOptions = {},
   ): Promise<ResponseOf<P, M>> {
-    const url = new URL(joinPath(baseUrl, path as string), currentOrigin())
+    const url = new URL(
+      joinPath(baseUrl, expandPath(path as string, init.path)),
+      currentOrigin(),
+    )
 
     for (const [key, value] of Object.entries(init.query ?? {})) {
       if (value !== undefined) url.searchParams.set(key, String(value))
     }
 
     const hasBody = init.body !== undefined
-    const response = await doFetch(url.toString(), {
+    const response = await transport()(url.toString(), {
       method: (method as string).toUpperCase(),
       headers: {
         Accept: 'application/json',
@@ -242,6 +268,29 @@ export type PathsWith<M extends HttpMethod> = {
 export type ApiClient = ReturnType<typeof createApiClient>
 
 // ─── Internals ───────────────────────────────────────────────────────────
+
+/**
+ * Substitute `{name}` placeholders in a generated path key.
+ *
+ * 🔒 Throws rather than sending an unresolved template. Every value is
+ * `encodeURIComponent`'d: an id is normally a UUID, but a path segment built by
+ * concatenation is the classic way a `/` or `?` in a value silently changes
+ * which endpoint gets called.
+ */
+function expandPath(template: string, params: Record<string, string | number> | undefined): string {
+  const expanded = template.replace(/\{([^}]+)\}/g, (_match, name: string) => {
+    const value = params?.[name]
+    if (value === undefined) {
+      throw new TypeError(
+        `Missing path parameter '${name}' for '${template}'. Pass it as ` +
+          `{ path: { ${name}: … } } — sending the template unresolved would request a ` +
+          `URL containing a literal '{${name}}' and read back as a 404.`,
+      )
+    }
+    return encodeURIComponent(String(value))
+  })
+  return expanded
+}
 
 function joinPath(baseUrl: string, path: string): string {
   // The generated key carries the full `/api/v1/...`. If the base URL already

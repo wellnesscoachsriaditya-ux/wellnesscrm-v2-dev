@@ -1,6 +1,451 @@
 {
   "components": {
     "schemas": {
+      "AcceptedResponse": {
+        "description": "🔒 The deliberately uninformative acknowledgement.\n\nReturned by password reset whether or not the address is registered. The\nmessage is phrased conditionally — \"if an account exists\" — so it is honest\nin both cases rather than implying an account was found.",
+        "properties": {
+          "message": {
+            "default": "If an account exists for that address, a reset link is on its way.",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "AcceptedResponse",
+        "type": "object"
+      },
+      "ClientCreateRequest": {
+        "description": "FR-M1-004 — name plus one contact method is the whole requirement.\n\n🔒 Everything else is optional. A practitioner capturing a lead mid-call has\na name and a number; a form demanding more is a form they abandon, and\nNFR-011 budgets the whole interaction at three steps.",
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "date_of_birth": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Of Birth"
+          },
+          "dietary_class": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DietaryClass"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Full Name",
+            "type": "string"
+          },
+          "mobile": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile"
+          },
+          "owner_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner User Id"
+          },
+          "preferred_language": {
+            "default": "en",
+            "maxLength": 16,
+            "title": "Preferred Language",
+            "type": "string"
+          },
+          "sex": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SexType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "source_detail": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Detail"
+          },
+          "stage": {
+            "default": "lead",
+            "enum": [
+              "lead",
+              "contacted",
+              "consultation_scheduled",
+              "active",
+              "paused",
+              "churned"
+            ],
+            "title": "Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "full_name"
+        ],
+        "title": "ClientCreateRequest",
+        "type": "object"
+      },
+      "ClientPatch": {
+        "description": "A partial edit — API §4.4.\n\n⚠️ **No ``stage``** (ADR-A06). Present-and-null is a meaningful edit here\n(clearing an email), so the model distinguishes \"absent\" from \"null\" via\n``model_fields_set`` rather than treating ``None`` as \"unchanged\".",
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "date_of_birth": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Of Birth"
+          },
+          "dietary_class": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DietaryClass"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "mobile": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile"
+          },
+          "preferred_language": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Language"
+          },
+          "sex": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SexType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ClientPatch",
+        "type": "object"
+      },
+      "ClientResponse": {
+        "description": "One client, as the practitioner realm sees it — API §7.1.",
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "date_of_birth": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Of Birth"
+          },
+          "dietary_class": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DietaryClass"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_minor": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Minor"
+          },
+          "mobile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile"
+          },
+          "owner_user_id": {
+            "format": "uuid",
+            "title": "Owner User Id",
+            "type": "string"
+          },
+          "preferred_language": {
+            "title": "Preferred Language",
+            "type": "string"
+          },
+          "sex": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SexType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "source_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Detail"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/ClientStage"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "full_name",
+          "stage",
+          "mobile",
+          "email",
+          "date_of_birth",
+          "sex",
+          "city",
+          "preferred_language",
+          "source",
+          "source_detail",
+          "owner_user_id",
+          "dietary_class",
+          "is_minor",
+          "activated_at",
+          "archived_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ClientResponse",
+        "type": "object"
+      },
+      "ClientStage": {
+        "description": "The lifecycle — DB §5.2, M1.4. 🟡 Values PROPOSED pending OD-01.\n\n🔒 One entity, seven stages. A ``lead`` and an ``active`` client are the same\nrow; the stage is what differs. That is what makes AC-M1-003 (\"converting a\nlead retains the original record, its identifier, and all prior history\")\ntrue by construction rather than by careful copying.",
+        "enum": [
+          "lead",
+          "contacted",
+          "consultation_scheduled",
+          "active",
+          "paused",
+          "churned",
+          "archived"
+        ],
+        "title": "ClientStage",
+        "type": "string"
+      },
       "DependencyStatus": {
         "description": "State of one dependency.",
         "properties": {
@@ -37,6 +482,31 @@
         "title": "DependencyStatus",
         "type": "object"
       },
+      "DietaryClass": {
+        "description": "What the person eats — DB §8.5, FR-M4-035.\n\n🔒 Lives on the *client*, not the plan (DB §5.1): it is a property of the\nperson, and it filters food search at authoring time, before a plan exists.\n\n``JAIN`` is not a stricter vegetarian in a way a boolean could express — it\nexcludes root vegetables, which is a different axis from animal products\nentirely, and collapsing it would put onion in a Jain client's plan.",
+        "enum": [
+          "vegetarian",
+          "eggetarian",
+          "non_vegetarian",
+          "vegan",
+          "jain"
+        ],
+        "title": "DietaryClass",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
       "LivenessResponse": {
         "description": "Process is alive.",
         "properties": {
@@ -48,6 +518,153 @@
           }
         },
         "title": "LivenessResponse",
+        "type": "object"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "maxLength": 254,
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "type": "object"
+      },
+      "PasswordResetConfirm": {
+        "properties": {
+          "password": {
+            "maxLength": 256,
+            "minLength": 10,
+            "title": "Password",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 512,
+            "minLength": 16,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ],
+        "title": "PasswordResetConfirm",
+        "type": "object"
+      },
+      "PasswordResetRequest": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "maxLength": 254,
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "PasswordResetRequest",
+        "type": "object"
+      },
+      "PortalAccessRequest": {
+        "properties": {
+          "mobile_or_email": {
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Mobile Or Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mobile_or_email"
+        ],
+        "title": "PortalAccessRequest",
+        "type": "object"
+      },
+      "PortalRedeemRequest": {
+        "properties": {
+          "token": {
+            "maxLength": 512,
+            "minLength": 16,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "PortalRedeemRequest",
+        "type": "object"
+      },
+      "PortalSessionResponse": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "refresh_token": {
+            "title": "Refresh Token",
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/PortalTarget"
+          },
+          "token_type": {
+            "const": "Bearer",
+            "default": "Bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "refresh_token",
+          "expires_in",
+          "target"
+        ],
+        "title": "PortalSessionResponse",
+        "type": "object"
+      },
+      "PortalTarget": {
+        "description": "🔒 FR-M7-013 — redemption and navigation in one hop.",
+        "properties": {
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "PortalTarget",
         "type": "object"
       },
       "ReadinessResponse": {
@@ -70,6 +687,212 @@
         ],
         "title": "ReadinessResponse",
         "type": "object"
+      },
+      "RefreshRequest": {
+        "properties": {
+          "refresh_token": {
+            "maxLength": 512,
+            "minLength": 16,
+            "title": "Refresh Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshRequest",
+        "type": "object"
+      },
+      "RegisterRequest": {
+        "description": "API §2.2. 🔒 Password rules are length plus a denylist, not composition.",
+        "properties": {
+          "accepted_terms_version": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Accepted Terms Version",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "maxLength": 254,
+            "title": "Email",
+            "type": "string"
+          },
+          "full_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Full Name",
+            "type": "string"
+          },
+          "mobile": {
+            "anyOf": [
+              {
+                "pattern": "^\\+[1-9][0-9]{1,14}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile"
+          },
+          "password": {
+            "maxLength": 256,
+            "minLength": 10,
+            "title": "Password",
+            "type": "string"
+          },
+          "practice_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Practice Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "full_name",
+          "practice_name",
+          "accepted_terms_version"
+        ],
+        "title": "RegisterRequest",
+        "type": "object"
+      },
+      "RegisterResponse": {
+        "description": "🔒 Carries no tokens and no identifiers.\n\nVerification precedes access (FR-M0-002), and the body is byte-identical\nwhether or not the address was already registered (NFR-043) — returning a\n`tenant_id` on the success path alone would restore the oracle the flat\nresponse exists to remove.",
+        "properties": {
+          "email_verification_required": {
+            "const": true,
+            "default": true,
+            "title": "Email Verification Required",
+            "type": "boolean"
+          }
+        },
+        "title": "RegisterResponse",
+        "type": "object"
+      },
+      "SexType": {
+        "description": "Biological sex, for requirement estimation — DB §5.1.\n\n⚠️ 🟡 **PROPOSED — the value set is not specified in any approved document.**\nDB §5.1 names the column and the type and stops there. These values are my\nproposal and need confirmation.\n\n🔒 The column exists for one purpose: BMR equations (Mifflin-St Jeor,\nHarris-Benedict) take a male/female term. It is **nullable**, and ``OTHER``\nis a real answer rather than a gap — but neither NULL nor ``OTHER`` yields a\ndefined equation, so both must fall through to the practitioner entering a\nrequirement directly. Silently substituting one for the other would put a\nwrong number on a clinical plan, which is the failure this note exists to\nprevent.",
+        "enum": [
+          "male",
+          "female",
+          "other"
+        ],
+        "title": "SexType",
+        "type": "string"
+      },
+      "StageChangeRequest": {
+        "description": "`POST /app/clients/{id}/stage` — API §7.1.",
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "to_stage": {
+            "enum": [
+              "lead",
+              "contacted",
+              "consultation_scheduled",
+              "active",
+              "paused",
+              "churned"
+            ],
+            "title": "To Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to_stage"
+        ],
+        "title": "StageChangeRequest",
+        "type": "object"
+      },
+      "TokenResponse": {
+        "description": "What a client needs to make an authenticated request and to renew.\n\n🔒 No user object. The client fetches its own profile from a dedicated\nendpoint; embedding one here would put a name and email in every token\nrefresh and in whatever logs the response passes through.",
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "refresh_token": {
+            "title": "Refresh Token",
+            "type": "string"
+          },
+          "token_type": {
+            "const": "Bearer",
+            "default": "Bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "refresh_token",
+          "expires_in"
+        ],
+        "title": "TokenResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VerifyEmailRequest": {
+        "properties": {
+          "token": {
+            "maxLength": 512,
+            "minLength": 16,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "VerifyEmailRequest",
+        "type": "object"
       }
     }
   },
@@ -80,6 +903,562 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/app/auth/logout": {
+      "post": {
+        "description": "Revoke the current session (NFR-042).\n\n🔒 Authorized, unlike the other authentication routes: this acts on an\nexisting session, so it needs to know whose. The session id comes from the\nverified token, never from the request body — accepting one would let any\nauthenticated caller log out any other.",
+        "operationId": "authLogout",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Sign out",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/app/clients": {
+      "post": {
+        "description": "Create a client or lead — FR-M1-004, AC-M1-001.\n\n🔒 Not metered. FR-M1-003 keeps leads unmetered at every stage before\n``active``, and EC-M2-06 requires a tenant at their limit to keep accepting\nthem. The entitlement binds on the transition to ``active`` (Slice B).",
+        "operationId": "clientsCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a client",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}": {
+      "get": {
+        "description": "One client by id — API §7.1.\n\n⚠️ Archived clients are returned. AC-M1-007 requires archiving to remove them\nfrom default *views* without deleting anything, and restoring one requires\nbeing able to read it first.",
+        "operationId": "clientsRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read a client",
+        "tags": [
+          "clients"
+        ]
+      },
+      "patch": {
+        "description": "Apply a partial edit — API §4.4.\n\n🔒 ``If-Match`` is **required**. Two practitioners editing one client is\nroutine in a clinic, and without a precondition the second save silently\ndiscards the first one's work with no error and no trace.",
+        "operationId": "clientsUpdate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update a client",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/archive": {
+      "post": {
+        "description": "Soft-delete a client — FR-M1-010, AC-M1-007.\n\n🔒 Removes them from default views without deleting anything, and frees the\nentitlement slot immediately if they were ``active``. The stage is preserved,\nwhich is what lets :func:`restore_client` put them back where they were.\n\n⚠️ Takes no body. A reason has nowhere safe to go in this slice — see\n``transitions.archive``.",
+        "operationId": "clientsArchive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Archive a client",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/restore": {
+      "post": {
+        "description": "Bring an archived client back — EC-M1-02, AC-M1-007.\n\n🔒 Returns them to the stage they were archived at. A returning client is\nreactivated in place; there is never a second record.\n\n🔒 Returns **402** when the restored stage is ``active`` and the plan is at\nits ceiling (EC-M1-06) — archiving frees a slot, so restoring takes one back.",
+        "operationId": "clientsRestore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore an archived client",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/stage": {
+      "post": {
+        "description": "Move a client between stages — ADR-A06, FR-M1-015.\n\n🔒 Returns **402** with the limit, the usage, the plan and the upgrade path\nwhen the move enters ``active`` at the plan's ceiling (FR-M1-002). The error\nenvelope carries everything the UI needs to explain the refusal, so there is\nno second request to make.\n\n🔒 AC-M1-003 — converting a lead keeps the record, its identifier and all its\nprior history, because this changes a column rather than moving a row.",
+        "operationId": "clientsChangeStage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StageChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change a client's lifecycle stage",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/public/auth/login": {
+      "post": {
+        "description": "🔒 One error for every failure mode (NFR-043).",
+        "operationId": "authLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sign in",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/public/auth/password-reset/confirm": {
+      "post": {
+        "description": "🔒 Revokes every session for the account (NFR-042).",
+        "operationId": "authPasswordResetConfirm",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetConfirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set a new password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/public/auth/password-reset/request": {
+      "post": {
+        "description": "🔒 202 with an identical body whether or not the address is known.",
+        "operationId": "authPasswordResetRequest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request a password reset",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/public/auth/refresh": {
+      "post": {
+        "description": "🔒 DDR-05 — rotate, and revoke the family on reuse.\n\nPublic because a caller with an expired access token must still be able to\nrenew; the refresh token is the credential being presented.",
+        "operationId": "authRefresh",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rotate the session",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/public/auth/register": {
+      "post": {
+        "description": "Create a tenant and its owner (FR-M0-001).\n\n🔒 201 with the same body whether the address was free or already taken. The\ndifference is which email the address receives — confirmation, or a \"someone\ntried to register with your address\" notice (API §2.2).",
+        "operationId": "authRegister",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register a practice",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/public/auth/verify-email": {
+      "post": {
+        "description": "Redeem a verification token and sign the user in (FR-M0-002).",
+        "operationId": "authVerifyEmail",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm an email address",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/public/health": {
       "get": {
         "description": "Return 200 if the process is running.\n\n🔒 Deliberately does nothing else. A liveness probe that touches the\ndatabase will fail during a transient database blip and cause the platform\nto restart a perfectly healthy process — turning a brief outage into a\nlonger one.",
@@ -121,6 +1500,90 @@
         "summary": "Readiness probe",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/v1/public/portal/access/redeem": {
+      "post": {
+        "description": "Exchange a magic link for a client session (FR-M0-005).\n\n🔒 Single use and expiry are enforced by the redeeming UPDATE (DDR-04), so\ntwo taps on the same link cannot both open a session.",
+        "operationId": "portalAccessRedeem",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortalRedeemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortalSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Redeem a portal link",
+        "tags": [
+          "portal-auth"
+        ]
+      }
+    },
+    "/api/v1/public/portal/access/request": {
+      "post": {
+        "description": "🔒 Self-service link re-request (EC-M7-01).\n\n⚠️ **On the critical path, not an error path.** With a 15–30 minute expiry, a\nclient opening a WhatsApp message an hour later *will* need a new link, and\nthis must never require the practitioner.\n\n🔒 Always 202 with an identical body. Anything else makes this a\nclient-enumeration oracle against a practitioner's client list.\n\n⚠️ Issuing requires resolving an identifier to a client, which is the\n`clients` module's data (S2). Until that module exists this endpoint\ncorrectly acknowledges and sends nothing — the privacy-preserving response is\nidentical to the one it will give for an unknown identifier afterwards.",
+        "operationId": "portalAccessRequest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortalAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request a portal link",
+        "tags": [
+          "portal-auth"
         ]
       }
     }

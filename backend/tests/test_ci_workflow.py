@@ -337,3 +337,91 @@ def test_npm_scripts_invoked_by_ci_are_declared(workflow: dict[str, Any]) -> Non
 def test_ci_uses_npm_ci_when_a_lockfile_exists(workflow: dict[str, Any]) -> None:
     """🔒 NFR-040 — reproducible installs. `npm install` may resolve differently."""
     assert "npm ci" in run_commands(workflow, "frontend")
+
+
+# ─── The isolation gate ──────────────────────────────────────────────────
+#
+# 🔒 AC-M0-003 is the S1 sprint gate, and it spent all of S0 and most of S1
+# skipping. These tests assert the configuration that makes it actually run —
+# and, more importantly, the configuration that stops it from silently going
+# back to skipping.
+
+
+def test_isolation_gate_has_a_postgres_service(workflow: dict[str, Any]) -> None:
+    """The suites need a live database; without a service they skip."""
+    services = workflow["jobs"]["integration"].get("services", {})
+    assert "postgres" in services, "the isolation gate has no PostgreSQL service"
+    assert "postgres:" in services["postgres"]["image"]
+
+
+def test_isolation_gate_pins_the_postgres_major_version(workflow: dict[str, Any]) -> None:
+    """🔒 RLS semantics are what this job asserts, so the version must not drift.
+
+    `postgres:latest` would move under us, and a major-version change to row
+    security is exactly the kind of thing worth catching deliberately rather
+    than in a confusing red build months later.
+    """
+    image = workflow["jobs"]["integration"]["services"]["postgres"]["image"]
+    tag = image.split(":", 1)[1]
+    assert tag != "latest", "the PostgreSQL image is unpinned"
+    assert tag[0].isdigit(), f"expected a version tag, got {tag!r}"
+
+
+def test_isolation_gate_forbids_skipping(workflow: dict[str, Any]) -> None:
+    """🔒 The single most important assertion in this file.
+
+    A skipped test is green. If the service block broke, the env vars were
+    renamed, or the database became unreachable, the suites would report
+    "skipped" and CI would pass — leaving the guarantee the whole tenancy model
+    rests on unverified, with no signal anywhere. `REQUIRE_LIVE_DATABASE` is
+    what turns that skip into a failure (see tests/integration/conftest.py).
+    """
+    env = workflow["jobs"]["integration"].get("env", {})
+    assert str(env.get("REQUIRE_LIVE_DATABASE", "")) == "1", (
+        "REQUIRE_LIVE_DATABASE is not set on the isolation job — a database "
+        "failure would silently skip the gate instead of failing the build"
+    )
+
+
+def test_isolation_gate_runs_both_suites(workflow: dict[str, Any]) -> None:
+    """Tenant isolation (AC-M0-003) *and* audit immutability (DDR-15)."""
+    commands = run_commands(workflow, "integration")
+    assert "pytest tests/integration" in commands
+
+
+def test_isolation_gate_provisions_roles_before_migrating(workflow: dict[str, Any]) -> None:
+    """🔒 Ordering is load-bearing, so it is asserted rather than trusted.
+
+    `alembic upgrade head` connects as `app_migrator`, and revision 0003 issues
+    `REVOKE ... FROM app_user`. Both roles must therefore exist before the
+    migrations run — a reordering here fails with a confusing "role does not
+    exist" mid-migration.
+    """
+    commands = run_commands(workflow, "integration")
+    assert "provision-test-db.sh" in commands, "the isolation job never provisions the database"
+
+    provision = commands.index("ops/db/provision-test-db.sh")
+    pytest_run = commands.index("pytest tests/integration")
+    assert provision < pytest_run, "the gate runs before the database is provisioned"
+
+
+def test_grant_check_is_proven_to_fail(workflow: dict[str, Any]) -> None:
+    """🔒 A check never seen to fail is indistinguishable from one that cannot.
+
+    The same argument the boundary job's negative tests make. DDR-15 immutability
+    is enforced by the *absence* of an UPDATE grant, and nothing fails loudly
+    when one is added back — so CI grants it back on purpose and asserts that
+    002_verify_grants.sql aborts.
+    """
+    commands = run_commands(workflow, "integration")
+    assert (
+        "GRANT UPDATE ON TABLE audit_log TO app_user" in commands
+    ), "CI never proves 002_verify_grants.sql can fail; the DDR-15 check may be inert"
+    assert "002_verify_grants.sql" in commands
+
+
+def test_migrations_are_proven_reversible(workflow: dict[str, Any]) -> None:
+    """A migration that cannot be rolled back is a deploy that cannot be undone."""
+    commands = run_commands(workflow, "integration")
+    assert "alembic downgrade base" in commands
+    assert "alembic upgrade head" in commands
