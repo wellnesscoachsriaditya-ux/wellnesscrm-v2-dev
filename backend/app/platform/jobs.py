@@ -448,10 +448,22 @@ def _truncate(message: str) -> str:
 #: worker died during it. Resetting would make a job that reliably kills its
 #: worker retry forever, which is the failure mode this whole mechanism exists
 #: to bound.
+#:
+#: ⚠️ 🔒 ``::job_status`` is load-bearing, not decoration. A plain literal in a
+#: ``SET`` clause is coerced to the column's enum type, but the result of a
+#: ``CASE`` is resolved on its own — all branches are ``unknown`` literals, so
+#: PostgreSQL types the whole expression as ``text`` and refuses to assign it to
+#: the enum column. Without the cast this statement fails with
+#: ``DatatypeMismatch`` the first time a lease actually expires, which is
+#: exactly when it must work. (The ``WHERE status IN ('claimed', 'running')``
+#: literals need no cast: there they are compared against the column, so the
+#: comparison coerces them.)
 _RECOVER_SQL = text(
     """
     UPDATE jobs
-    SET status = CASE WHEN attempt_count >= max_attempts THEN 'dead' ELSE 'pending' END,
+    SET status = (
+            CASE WHEN attempt_count >= max_attempts THEN 'dead' ELSE 'pending' END
+        )::job_status,
         claimed_at = NULL,
         claimed_by = NULL,
         lease_expires_at = NULL,
