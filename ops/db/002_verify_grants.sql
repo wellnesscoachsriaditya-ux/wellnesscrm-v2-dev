@@ -28,17 +28,26 @@
 
 DO $$
 DECLARE
-    -- 🔒 The append-only set, from DB §16 (`audit_log`, `consent_records`) and
-    -- DB §8.15 / §21 (`operator_actions`). Pattern E in DB §11.2: SELECT policy
-    -- plus no UPDATE/DELETE grant.
+    -- 🔒 The append-only set, from DB §16 (`audit_log`, `consent_records`),
+    -- DB §8.15 / §21 (`operator_actions`) and DB §14.3
+    -- (`subscription_events`). Pattern E in DB §11.2: SELECT policy plus no
+    -- UPDATE/DELETE grant.
     --
     -- ⚠️ Add a table here in the same commit that creates it. A table that is
     -- append-only in the design but missing from this list is unverified, and
     -- "we assumed it was covered" is the failure mode this file exists to stop.
+    --
+    -- ⚠️ 🔒 `usage_events` is append-only in design but deliberately **absent**
+    -- from this list, and that is not an oversight. It retains UPDATE so a
+    -- reconciliation pass can set `is_reconciled`; every other column is frozen
+    -- by `trg_usage_events__immutable` (migration 0007), because a grant cannot
+    -- express "every column but one". Listing it here would fail on the UPDATE
+    -- it is designed to hold. The trigger is the check for that table.
     append_only CONSTANT text[] := ARRAY[
         'audit_log',
         'consent_records',
-        'operator_actions'
+        'operator_actions',
+        'subscription_events'
     ];
     forbidden   CONSTANT text[] := ARRAY['UPDATE', 'DELETE'];
 

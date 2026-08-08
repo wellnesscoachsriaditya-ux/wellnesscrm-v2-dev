@@ -20,11 +20,23 @@ that never runs, so each model states which one it is and why.
 from __future__ import annotations
 
 import enum
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, String, Text, text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    Date,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -194,6 +206,47 @@ class IdempotencyState(str, enum.Enum):
 
     IN_FLIGHT = "in_flight"
     COMPLETED = "completed"
+
+
+class SubscriptionStatus(str, enum.Enum):
+    """DB §14.2 — the commercial position of one tenant.
+
+    🔒 Five states, not three. ``past_due`` is distinct from ``suspended``
+    because a failed payment must not itself stop a practitioner serving their
+    clients — suspension is a deliberate act (FR-M10-008). ``cancelled`` is
+    distinct from ``suspended`` because EC-M10-05 (payment arriving after
+    suspension) has to be recoverable, and a collapsed state could not say what
+    to restore.
+
+    ⚠️ Which of these permit a *new* metered action is decided in
+    ``kernel.entitlements``, not here. A status is a fact; what it permits is a
+    policy, and putting the policy on the enum would put it out of reach of the
+    tests that cover the fail-safe.
+    """
+
+    TRIALING = "trialing"
+    ACTIVE = "active"
+    PAST_DUE = "past_due"
+    SUSPENDED = "suspended"
+    CANCELLED = "cancelled"
+
+
+class SubscriptionEventType(str, enum.Enum):
+    """DB §14.3 — what happened to a subscription, append-only."""
+
+    CREATED = "created"
+    ACTIVATED = "activated"
+    PLAN_CHANGED = "plan_changed"
+    SUSPENDED = "suspended"
+    REACTIVATED = "reactivated"
+    CANCELLED = "cancelled"
+
+
+class BillingPeriod(str, enum.Enum):
+    """DB §14.1. Annual is billed at ten months' price (PRD M10.4)."""
+
+    MONTHLY = "monthly"
+    ANNUAL = "annual"
 
 
 class Tenant(Base):
@@ -1120,4 +1173,306 @@ class DataRequest(Base):
             " AND (status <> 'completed' OR completed_at IS NOT NULL)",
             name="ck_data_requests__terminal_state_evidenced",
         ),
+    )
+
+
+# ─── Entitlements (DB §14) ───────────────────────────────────────────────
+#
+# 🔒 Enforcement is structural in S1; collection is deferred to M10.3. None of
+# these models charges anyone — they decide whether a metered action is
+# permitted and record what was consumed.
+#
+# ⚠️ RLS dispositions differ, deliberately. `plan_definitions` is Pattern D
+# (platform-wide catalogue, no `tenant_id` to key a policy on). The other four
+# are Pattern A: unlike `consent_records`, every one of them *is* read on a
+# tenant-facing path with a tenant in scope, because the enforcement check runs
+# inside a request. So AC-M0-003 covers these four and does not cover the
+# catalogue.
+
+
+class PlanDefinition(Base):
+    """A plan, as configuration — DB §14.1, FR-M10-001.
+
+    🔒 **Versioned, never mutated.** `effective_from`/`effective_to` mean a
+    tenant on last year's pricing keeps it. Editing a plan row in place would
+    silently reprice every existing customer on it, which is why the unique
+    constraint is on `(code, effective_from)` rather than on `code`.
+
+    🔒 **`limits` is `jsonb`** — the one place DB §14.1 permits it for
+    configuration, because FR-M10-001 requires that adding a metered resource
+    not require a migration. The keys are read through
+    `kernel.entitlements.ResourceCode.limit_key`, which is where a typo is
+    caught; a `CHECK` that the value is an object is the most the database can
+    usefully assert.
+
+    **Pattern D, platform-wide.** No `tenant_id`: plans are ours. A tenant
+    editing its own limits is the entitlement system defeating itself, so
+    migration 0007 revokes tenant writes outright.
+    """
+
+    __tablename__ = "plan_definitions"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    # 🔒 Text, not an enum — FR-M10-001. A new tier must not need a migration.
+    code: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="free | starter | growth | clinic (FR-M10-001)"
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    # 🔒 numeric(10,2), never float — this feeds GST invoices (FR-M10-011).
+    price_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    currency_code: Mapped[str] = mapped_column(
+        String(3), nullable=False, server_default="INR", comment="NFR-098"
+    )
+    billing_period: Mapped[BillingPeriod] = mapped_column(
+        pg_enum(BillingPeriod, "billing_period"), nullable=False
+    )
+    limits: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, comment="🔒 Keyed by ResourceCode.limit_key (DB §14.1)"
+    )
+    features: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    is_public: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
+    sort_order: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
+    effective_from: Mapped[datetime] = mapped_column(nullable=False)
+    effective_to: Mapped[datetime | None] = mapped_column(
+        comment="NULL = currently in force (DB §14.1)"
+    )
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        UniqueConstraint("code", "effective_from", name="uq_plan_definitions__code_effective"),
+        Index("ix_plan_definitions__code_effective", "code", "effective_from"),
+        CheckConstraint("price_amount >= 0", name="ck_plan_definitions__price_non_negative"),
+        CheckConstraint(
+            "effective_to IS NULL OR effective_to > effective_from",
+            name="ck_plan_definitions__effective_window_ordered",
+        ),
+        # 🔒 A plan whose limits are not an object cannot be read by the
+        # enforcement path, and the failure would surface as a fail-safe denial
+        # for every tenant on that plan rather than as a bad row.
+        CheckConstraint(
+            "jsonb_typeof(limits) = 'object'", name="ck_plan_definitions__limits_is_object"
+        ),
+    )
+
+
+class Subscription(Base):
+    """One tenant's current plan — DB §14.2.
+
+    🔒 **Exactly one row per tenant** (unique on `tenant_id`). History lives in
+    `SubscriptionEvent`; a second row here would make "which plan is this tenant
+    on" a question with two answers, on the hot path.
+
+    🔒 **Read-only to the application** (migration 0007). FR-M10-008 makes
+    activation a manual operator action at MVP, so `app_user` holds SELECT and
+    nothing else — a tenant that could write this row could upgrade itself.
+    """
+
+    __tablename__ = "subscriptions"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id"),
+        nullable=False,
+        comment="🔒 RLS discriminator",
+    )
+    plan_definition_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("plan_definitions.id"), nullable=False
+    )
+    status: Mapped[SubscriptionStatus] = mapped_column(
+        pg_enum(SubscriptionStatus, "subscription_status"),
+        nullable=False,
+        server_default="trialing",
+    )
+    trial_ends_on: Mapped[date | None] = mapped_column(Date)
+    current_period_start: Mapped[datetime | None]
+    current_period_end: Mapped[datetime | None]
+    cancel_at_period_end: Mapped[bool] = mapped_column(nullable=False, server_default=text("false"))
+    activated_by_operator_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("operators.id"),
+        comment="🔒 FR-M10-008 — manual activation at MVP",
+    )
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", name="uq_subscriptions__tenant"),
+        CheckConstraint(
+            "current_period_end IS NULL"
+            " OR current_period_start IS NULL"
+            " OR current_period_end > current_period_start",
+            name="ck_subscriptions__period_ordered",
+        ),
+    )
+
+
+class SubscriptionEvent(Base):
+    """🔒 Append-only history of a subscription — DB §14.3.
+
+    EC-M10-01 (downgrade while over limit) and EC-M10-05 (payment after
+    suspension) both turn on *when* state changed, not on what it is now.
+    `app_user` holds INSERT and SELECT only (migration 0007), and the table is
+    registered in `ops/db/002_verify_grants.sql`.
+
+    ⚠️ `tenant_id` is redundant against `subscriptions.tenant_id` and carried
+    anyway, purely so a Pattern A policy can be keyed on it. A policy joining to
+    `subscriptions` to reach the tenant would put a subquery in front of every
+    insert on the activation path.
+    """
+
+    __tablename__ = "subscription_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    subscription_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("subscriptions.id"), nullable=False
+    )
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id"),
+        nullable=False,
+        comment="🔒 RLS discriminator — denormalised deliberately",
+    )
+    event_type: Mapped[SubscriptionEventType] = mapped_column(
+        pg_enum(SubscriptionEventType, "subscription_event"), nullable=False
+    )
+    from_plan_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True))
+    to_plan_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True))
+    actor_type: Mapped[ActorType] = mapped_column(pg_enum(ActorType, "actor_type"), nullable=False)
+    actor_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True))
+    reason: Mapped[str | None] = mapped_column(Text)
+    occurred_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        Index("ix_subscription_events__subscription", "subscription_id", "occurred_at"),
+        Index("ix_subscription_events__tenant_id", "tenant_id"),
+        # 🔒 A plan change with no destination is not a plan change. Narrow on
+        # purpose: a suspension does not move anyone.
+        CheckConstraint(
+            "event_type NOT IN ('plan_changed', 'activated') OR to_plan_id IS NOT NULL",
+            name="ck_subscription_events__plan_move_has_destination",
+        ),
+    )
+
+
+class UsageCounter(Base):
+    """O(1) enforcement state for one resource in one period — DB §14.4.
+
+    📌 **DDR-14.** Counting live from source tables is cheap for active clients
+    and expensive for AI generations and messages, and cross-module counting
+    violates Arch R6. This row answers the enforcement question in one indexed
+    read; `UsageEvent` is what makes it reconcilable when it drifts.
+
+    🔒 **`limit_amount` is snapshotted from the plan**, not read through the FK.
+    A mid-period plan change would otherwise retroactively change what the tenant
+    was allowed to do earlier in the same period, and an 80% warning already sent
+    would refer to a limit that no longer exists.
+
+    ⚠️ **No counter row exists for `active_clients`** — DB §14.4 counts that one
+    live from `clients WHERE stage='active'` (M1.5). It is the product's most
+    visible limit, where a drifting counter would produce a bill the practitioner
+    can disprove by eye.
+    """
+
+    __tablename__ = "usage_counters"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id"),
+        nullable=False,
+        comment="🔒 RLS discriminator",
+    )
+    # 🔒 Text, not an enum — FR-M10-001. Valid values are ResourceCode.
+    resource_code: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="kernel.entitlements.ResourceCode"
+    )
+    period_start: Mapped[datetime] = mapped_column(nullable=False)
+    period_end: Mapped[datetime] = mapped_column(nullable=False)
+    # 🔒 numeric, not integer: storage is metered in fractional MB.
+    used_amount: Mapped[Decimal] = mapped_column(Numeric, nullable=False, server_default=text("0"))
+    limit_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric, comment="🔒 Snapshotted from the plan; NULL = unlimited"
+    )
+    warned_at_80pct: Mapped[datetime | None] = mapped_column(
+        comment="🔒 FR-M10-005 — stamped so the warning is sent once"
+    )
+    updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        # 🔒 What makes the increment an upsert rather than a read-modify-write
+        # race between two concurrent metered actions.
+        UniqueConstraint(
+            "tenant_id",
+            "resource_code",
+            "period_start",
+            name="uq_usage_counters__tenant_resource_period",
+        ),
+        Index("ix_usage_counters__tenant_resource", "tenant_id", "resource_code", "period_start"),
+        CheckConstraint("period_end > period_start", name="ck_usage_counters__period_ordered"),
+        # ⚠️ Not `> 0`. A compensating negative event can legitimately bring a
+        # counter back to zero, and clamping would hide a double refund.
+        CheckConstraint("used_amount >= 0", name="ck_usage_counters__used_non_negative"),
+        CheckConstraint(
+            "limit_amount IS NULL OR limit_amount >= 0",
+            name="ck_usage_counters__limit_non_negative",
+        ),
+    )
+
+
+class UsageEvent(Base):
+    """One metered consumption — DB §14.5.
+
+    🔒 **EC-M10-04 — `amount` is signed.** An action that consumed quota and then
+    failed is corrected by a *compensating negative event*, never by editing the
+    event that consumed it and never by decrementing the counter alone. The log
+    is the thing a drifted counter is recovered from, so it has to stay true.
+
+    ⚠️ **Append-only with one exception.** `is_reconciled` is bookkeeping a
+    reconciliation pass must be able to set, so this table keeps UPDATE and loses
+    DELETE, and `trg_usage_events__immutable` (migration 0007) rejects edits to
+    every other column. That is the `ConsentNotice` pattern, chosen for the same
+    reason: a grant cannot express "every column but one". It is therefore
+    deliberately **absent** from `ops/db/002_verify_grants.sql`, which asserts
+    neither UPDATE nor DELETE.
+    """
+
+    __tablename__ = "usage_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id"),
+        nullable=False,
+        comment="🔒 RLS discriminator",
+    )
+    resource_code: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="kernel.entitlements.ResourceCode"
+    )
+    amount: Mapped[Decimal] = mapped_column(
+        Numeric, nullable=False, comment="🔒 Signed — negative compensates (EC-M10-04)"
+    )
+    # 🔒 Arch R6 — the emitting module by name, not a FK to its tables.
+    source_module: Mapped[str] = mapped_column(Text, nullable=False)
+    source_record_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True))
+    occurred_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+    is_reconciled: Mapped[bool] = mapped_column(
+        nullable=False,
+        server_default=text("false"),
+        comment="🔒 The only mutable column — see trg_usage_events__immutable",
+    )
+
+    __table_args__ = (
+        Index("ix_usage_events__tenant_resource_time", "tenant_id", "resource_code", "occurred_at"),
+        # A zero-amount event records nothing and would only dilute the log.
+        CheckConstraint("amount <> 0", name="ck_usage_events__amount_non_zero"),
     )

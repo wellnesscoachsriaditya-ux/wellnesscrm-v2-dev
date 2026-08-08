@@ -429,10 +429,38 @@ def test_readonly_role_is_not_created(roles_sql: str) -> None:
 def test_every_append_only_table_is_verified(verify_sql: str) -> None:
     """🔒 DDR-15 — audit and consent immutability is enforced by the *absence* of
     an UPDATE/DELETE grant, and nothing fails loudly when an absence is
-    accidentally filled in. This script is what notices."""
+    accidentally filled in. This script is what notices.
+
+    ⚠️ `usage_events` is append-only in design but deliberately absent, and must
+    stay absent: it retains UPDATE so a reconciliation pass can set
+    `is_reconciled`, and every other column is frozen by a trigger instead
+    (migration 0007). Listing it here would fail on the grant it is designed to
+    hold. `test_usage_events_is_protected_by_trigger_not_by_grant` covers it.
+    """
     executable = _executable(verify_sql)
-    for table in ("audit_log", "consent_records", "operator_actions"):
+    for table in ("audit_log", "consent_records", "operator_actions", "subscription_events"):
         assert f"'{table}'" in executable, f"{table} is append-only but is not verified"
+
+
+@pytest.mark.isolation
+def test_usage_events_is_protected_by_trigger_not_by_grant() -> None:
+    """🔒 The one append-only table a grant cannot fully protect — DB §14.5.
+
+    A grant cannot express "every column but one", so `usage_events` keeps UPDATE
+    for `is_reconciled` and a trigger rejects edits to everything else. This test
+    exists because the protection lives somewhere unusual: a reader checking
+    `002_verify_grants.sql` would find the table missing and reasonably conclude
+    it was forgotten.
+    """
+    migration = (_MIGRATIONS / "versions" / "20260808_0007_entitlements.py").read_text(
+        encoding="utf-8"
+    )
+    assert "usage_events__reject_material_edit" in migration
+    assert "trg_usage_events__immutable" in migration
+    # DELETE is still revoked — only UPDATE is retained.
+    assert re.search(r"REVOKE\s+DELETE\s+ON\s+TABLE\s+usage_events\s+FROM\s+app_user", migration)
+    # And the compensating-event rule is what makes the retained UPDATE safe.
+    assert "EC-M10-04" in migration
 
 
 def test_verification_checks_both_forbidden_privileges(verify_sql: str) -> None:
