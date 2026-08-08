@@ -249,6 +249,39 @@ class BillingPeriod(str, enum.Enum):
     ANNUAL = "annual"
 
 
+class FileClass(str, enum.Enum):
+    """DB §19.1, Arch §13.2 — what a file is, which decides how it is treated.
+
+    ⚠️ The class is not cosmetic: it determines retention and whether erasure
+    must traverse the object (Arch §13.2). Adding a member without deciding both
+    is how a clinical document ends up outliving the client it belongs to.
+    """
+
+    CLIENT_DOCUMENT = "client_document"
+    PLAN_PDF = "plan_pdf"
+    INVOICE_PDF = "invoice_pdf"
+    BRANDING = "branding"
+    EXPORT = "export"
+
+
+class FileStatus(str, enum.Enum):
+    """DB §19.1 — the upload lifecycle (ADR-12).
+
+    🔒 `pending` is the window between "the client says it uploaded" and "we
+    checked". `confirmed` means the stored object was verified to exist and to
+    match the size and content type that were authorized.
+
+    ⚠️ `quarantined` is not a synonym for `deleted`. A file whose bytes do not
+    match what was authorized is a security event, and destroying the evidence
+    is the wrong first response.
+    """
+
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    QUARANTINED = "quarantined"
+    DELETED = "deleted"
+
+
 class Tenant(Base):
     """DB §4.1 — the isolation and billing boundary.
 
@@ -1475,4 +1508,90 @@ class UsageEvent(Base):
         Index("ix_usage_events__tenant_resource_time", "tenant_id", "resource_code", "occurred_at"),
         # A zero-amount event records nothing and would only dilute the log.
         CheckConstraint("amount <> 0", name="ck_usage_events__amount_non_zero"),
+    )
+
+
+# ─── Storage (DB §19) ────────────────────────────────────────────────────
+
+
+class File(Base):
+    """Metadata for one object in storage — DB §19.1, Arch §13.
+
+    🔒 The bytes are never here and never pass through FastAPI (ADR-12). This row
+    is two things: the authorization record consulted on every retrieval
+    (NFR-035), and the index DPDP erasure traverses to find objects that must be
+    destroyed alongside the database rows (FR-M0-027, Arch §13.2).
+
+    📌 **ADR-12 — created on confirmation, not on request.** An abandoned upload
+    leaves an orphan object for the reaper, not a phantom row nothing completes.
+
+    **Pattern A RLS.** Read on a tenant-facing path — every download authorizes
+    first — so the policy is the isolation boundary and AC-M0-003 covers it.
+
+    🔒 **Soft delete only.** Migration 0008 revokes DELETE: the record is what
+    proves an object existed, and erasure has to be able to show that the object
+    a row pointed at was actually destroyed.
+    """
+
+    __tablename__ = "files"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id"),
+        nullable=False,
+        comment="🔒 RLS discriminator",
+    )
+    # 🔒 Opaque, tenant-scoped, non-enumerable (Arch §13.1). Globally unique: the
+    # key already contains the tenant, so a global constraint makes reuse across
+    # tenants impossible rather than merely unlikely.
+    storage_key: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="🔒 Opaque and non-enumerable — never derived from the name"
+    )
+    bucket: Mapped[str] = mapped_column(Text, nullable=False)
+    # ⚠️ Display only. Never used to build a storage path — deriving a path from
+    # a user-supplied name is how a traversal gets in.
+    original_filename: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="🔒 Allowlisted in kernel.storage (NFR-036)"
+    )
+    size_bytes: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, comment="Quota input (FR-M0-040)"
+    )
+    checksum: Mapped[str | None] = mapped_column(Text)
+    file_class: Mapped[FileClass] = mapped_column(pg_enum(FileClass, "file_class"), nullable=False)
+    contains_clinical_data: Mapped[bool] = mapped_column(
+        nullable=False, comment="🔒 The erasure index (Arch §13.2)"
+    )
+    uploaded_by_actor_type: Mapped[ActorType] = mapped_column(
+        pg_enum(ActorType, "actor_type"), nullable=False
+    )
+    uploaded_by_actor_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True))
+    status: Mapped[FileStatus] = mapped_column(
+        pg_enum(FileStatus, "file_status"), nullable=False, server_default="pending"
+    )
+    confirmed_at: Mapped[datetime | None]
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        comment="Soft delete; a purge job removes the bytes afterwards"
+    )
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        UniqueConstraint("storage_key", name="uq_files__storage_key"),
+        Index("ix_files__tenant_id", "tenant_id"),
+        Index("ix_files__tenant_clinical", "tenant_id", "contains_clinical_data"),
+        Index("ix_files__status_created", "status", "created_at"),
+        # 🔒 A zero-byte file is a failed upload reporting success.
+        CheckConstraint("size_bytes > 0", name="ck_files__size_positive"),
+        # 🔒 A confirmed file has a confirmation time; a deleted file has a
+        # deletion time. Without this a soft delete that forgot its timestamp
+        # would leave the purge job unable to tell what is due.
+        CheckConstraint(
+            "(status <> 'confirmed' OR confirmed_at IS NOT NULL)"
+            " AND (status <> 'deleted' OR deleted_at IS NOT NULL)",
+            name="ck_files__lifecycle_timestamped",
+        ),
     )

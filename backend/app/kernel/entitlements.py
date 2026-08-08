@@ -88,9 +88,30 @@ class ResourceCode(str, enum.Enum):
     def is_counted_live(self) -> bool:
         """Whether this resource is counted from source rather than a counter.
 
-        🔒 DB §14.4 — active clients only. See the module warning.
+        🔒 The two **cumulative** resources, and the reason is the same for both:
+        a monthly counter is the wrong instrument for a total that does not reset.
+
+        * ``active_clients`` — DB §14.4. A cheap indexed count, and the product's
+          most visible limit.
+        * ``storage_mb`` — 🔒 the count of bytes a tenant is *currently* holding.
+          Metering it through a monthly counter would zero the total every 1st of
+          the month, so a tenant could exceed a 500 MB plan without limit by
+          uploading 400 MB a month forever. Deletions have to reduce it too, and
+          an append-only usage log cannot express that without a compensating
+          entry per deleted file.
+
+        ⚠️ These resources have no ``usage_counters`` row. A caller must supply
+        ``live_used``; omitting it yields an indeterminate allowance and a
+        fail-safe denial rather than a silent zero.
         """
-        return self is ResourceCode.ACTIVE_CLIENTS
+        return self in _COUNTED_LIVE
+
+
+#: 🔒 Counted from source, never from a `usage_counters` row. See
+#: :meth:`ResourceCode.is_counted_live` for why these two and not the others.
+_COUNTED_LIVE: frozenset[ResourceCode] = frozenset(
+    {ResourceCode.ACTIVE_CLIENTS, ResourceCode.STORAGE_MB}
+)
 
 
 _LIMIT_KEYS: dict[ResourceCode, str] = {

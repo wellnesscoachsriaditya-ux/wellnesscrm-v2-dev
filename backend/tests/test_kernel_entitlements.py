@@ -327,10 +327,28 @@ def test_monthly_resources_carry_the_period_in_their_limit_key() -> None:
     assert ResourceCode.WHATSAPP_MESSAGES.limit_key == "whatsapp_messages_per_month"
 
 
-def test_only_active_clients_is_counted_live() -> None:
-    """🔒 DB §14.4 / M1.5 — exactly one exception, and it is this one."""
-    live = [resource for resource in ResourceCode if resource.is_counted_live]
-    assert live == [ResourceCode.ACTIVE_CLIENTS]
+def test_only_cumulative_resources_are_counted_live() -> None:
+    """🔒 The two totals that do not reset, and nothing else.
+
+    ⚠️ The distinction is *cumulative vs per-period*, not "expensive vs cheap".
+    A monthly counter zeroes on the 1st, which is correct for AI drafts and
+    WhatsApp messages — both are per-month allowances — and wrong for a total a
+    tenant is currently holding. Metering storage through a monthly counter would
+    let a tenant on a 500 MB plan hold unlimited data by uploading 400 MB a month
+    forever, and would have no way to give bytes back when a file is deleted.
+
+    Adding a resource here without that property means it stops being enforced
+    correctly across a month boundary, so the set is asserted exactly.
+    """
+    live = {resource for resource in ResourceCode if resource.is_counted_live}
+    assert live == {ResourceCode.ACTIVE_CLIENTS, ResourceCode.STORAGE_MB}
+
+
+def test_per_period_resources_are_not_counted_live() -> None:
+    """The other side of the same rule — these do reset monthly, by design."""
+    for resource in (ResourceCode.AI_GENERATIONS, ResourceCode.WHATSAPP_MESSAGES):
+        assert not resource.is_counted_live
+        assert resource.limit_key.endswith("_per_month")
 
 
 def test_limit_keys_are_unique() -> None:
