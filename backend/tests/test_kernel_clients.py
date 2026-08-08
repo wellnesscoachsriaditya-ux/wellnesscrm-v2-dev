@@ -20,17 +20,23 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from typing import get_args
 
 import pytest
 
 from app.kernel.clients import (
+    SELECTABLE_STAGES,
     ClientDirectory,
     ClientIdentity,
     ClientStage,
     ContactDetails,
     DietaryClass,
+    SelectableStage,
     age_in_years,
+    assert_not_archived,
+    assert_transition_allowed,
     configure_client_directory,
+    consumes_entitlement_on_entry,
     counts_towards_limit,
     get_client_directory,
     is_lead,
@@ -38,6 +44,7 @@ from app.kernel.clients import (
     looks_like_e164,
     normalise_mobile,
     receives_engagement,
+    restore_consumes_entitlement,
     validate_full_name,
 )
 from app.kernel.consent import MINOR_AGE_THRESHOLD
@@ -117,6 +124,134 @@ def test_consultation_scheduled_is_still_a_lead() -> None:
     assert is_lead(ClientStage.LEAD)
     assert is_lead(ClientStage.CONTACTED)
     assert not is_lead(ClientStage.ACTIVE)
+
+
+# ─── Transitions (ADR-A06, FR-M1-002, FR-M1-015) ─────────────────────────
+
+
+def test_selectable_stages_is_every_stage_but_archived() -> None:
+    """🔒 Archiving is a soft delete with its own action, not a stage.
+
+    ``archived_at`` is the archive flag (FR-M1-010), and DB §5.2's entitlement
+    predicate reads *both* it and ``stage`` — which only makes sense if a row can
+    be archived while its stage still says ``active``. Two encodings of one fact
+    is one too many; migration 0010 refuses the stage at the table.
+    """
+    assert set(SELECTABLE_STAGES) == set(ClientStage) - {ClientStage.ARCHIVED}
+
+
+def test_selectable_stage_type_matches_the_tuple() -> None:
+    """🔒 The two spellings of "selectable" cannot drift apart.
+
+    ``SelectableStage`` is a ``Literal`` because a type must be static — mypy and
+    the OpenAPI generator both read it at rest — while ``SELECTABLE_STAGES`` is
+    derived. That is a deliberate duplication, and this is the check that makes
+    it safe: adding a stage to the enum without adding it to the ``Literal``
+    would silently make it unreachable through the API.
+    """
+    assert set(get_args(SelectableStage)) == set(SELECTABLE_STAGES)
+
+
+@pytest.mark.parametrize(
+    ("from_stage", "to_stage"),
+    [
+        (ClientStage.LEAD, ClientStage.ACTIVE),
+        (ClientStage.LEAD, ClientStage.CONTACTED),
+        (ClientStage.CHURNED, ClientStage.ACTIVE),
+        (ClientStage.ACTIVE, ClientStage.PAUSED),
+        (ClientStage.PAUSED, ClientStage.ACTIVE),
+        (ClientStage.CONSULTATION_SCHEDULED, ClientStage.CHURNED),
+    ],
+)
+def test_any_stage_may_reach_any_other(from_stage: ClientStage, to_stage: ClientStage) -> None:
+    """🔒 Deliberately permissive — the PRD constrains no ordering.
+
+    ``lead → active`` is AC-M1-003's conversion and ``churned → active`` is
+    EC-M1-02's reactivation, but the backwards and sideways moves matter just as
+    much: a practitioner must be able to record what actually happened, and
+    FR-M1-017 puts *rule-driven* transitions in Phase 3 — which only makes sense
+    if MVP transitions are practitioner-driven.
+    """
+    assert_transition_allowed(from_stage, to_stage)
+
+
+def test_a_transition_to_the_same_stage_is_refused() -> None:
+    """A no-op cannot be recorded, so it must not be accepted.
+
+    ``ck_client_stage_history__actual_transition`` rejects a row whose
+    ``from_stage`` equals its ``to_stage``, and an unrecorded transition breaks
+    FR-M1-015. Refusing here names the field instead of surfacing an integrity
+    error three frames up.
+    """
+    with pytest.raises(ValidationError) as excinfo:
+        assert_transition_allowed(ClientStage.ACTIVE, ClientStage.ACTIVE)
+
+    assert excinfo.value.details["current_stage"] == "active"
+
+
+def test_archived_is_not_a_selectable_target() -> None:
+    """🔒 The refusal that keeps the archive encoding single-valued."""
+    with pytest.raises(ValidationError) as excinfo:
+        assert_transition_allowed(ClientStage.ACTIVE, ClientStage.ARCHIVED)
+
+    assert "archived" not in excinfo.value.details["allowed_stages"]
+
+
+def test_an_archived_client_cannot_change_stage() -> None:
+    """FR-M1-010 — a soft-deleted client is not a lifecycle participant.
+
+    Moving one would edit a record the practitioner has removed from their lists,
+    and any entitlement it consumed would be spent on a client nobody can see.
+    """
+    assert_not_archived(archived_at_is_set=False)
+    with pytest.raises(ValidationError):
+        assert_not_archived(archived_at_is_set=True)
+
+
+@pytest.mark.parametrize(
+    ("from_stage", "to_stage", "consumes"),
+    [
+        # 🔒 FR-M1-002 — the only transition that takes a slot.
+        (ClientStage.LEAD, ClientStage.ACTIVE, True),
+        (ClientStage.CHURNED, ClientStage.ACTIVE, True),
+        (ClientStage.PAUSED, ClientStage.ACTIVE, True),
+        # 🔒 FR-M1-003 — no stage below `active` is metered, so moving between
+        # them is free. A tenant at their limit still works their funnel.
+        (ClientStage.LEAD, ClientStage.CONTACTED, False),
+        (ClientStage.CONTACTED, ClientStage.CONSULTATION_SCHEDULED, False),
+        # Leaving `active` releases a slot; it never takes one.
+        (ClientStage.ACTIVE, ClientStage.PAUSED, False),
+        (ClientStage.ACTIVE, ClientStage.CHURNED, False),
+    ],
+)
+def test_only_entry_to_active_consumes_an_entitlement(
+    from_stage: ClientStage, to_stage: ClientStage, consumes: bool
+) -> None:
+    """🔒 M1.5 — asks about the *transition*, not the destination.
+
+    ⚠️ A check keyed on ``to_stage is ACTIVE`` alone would also fire on
+    transitions that leave the count unchanged, refusing a practitioner an action
+    that costs them nothing.
+    """
+    assert consumes_entitlement_on_entry(from_stage, to_stage) is consumes
+
+
+@pytest.mark.parametrize(
+    ("stage", "consumes"),
+    [
+        (ClientStage.ACTIVE, True),
+        (ClientStage.PAUSED, False),
+        (ClientStage.LEAD, False),
+        (ClientStage.CHURNED, False),
+    ],
+)
+def test_restore_is_metered_only_for_an_active_client(stage: ClientStage, consumes: bool) -> None:
+    """🔒 EC-M1-06 — archiving frees a slot, so restoring takes one back.
+
+    Without this a practitioner could archive their way under a limit and undo it
+    for free, which makes the limit advisory.
+    """
+    assert restore_consumes_entitlement(stage) is consumes
 
 
 # ─── Mobile normalisation (NFR-100, FR-M1-006) ───────────────────────────

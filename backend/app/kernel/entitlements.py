@@ -40,8 +40,12 @@ the split is what lets every rule below be tested without a database.
 from __future__ import annotations
 
 import enum
+import uuid
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Protocol
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.kernel.errors import EntitlementError
 
@@ -394,3 +398,103 @@ def crosses_warning_threshold(allowance: Allowance, *, amount: Decimal | int = 1
     before = allowance.used / allowance.limit
     after = (allowance.used + Decimal(amount)) / allowance.limit
     return before < WARNING_THRESHOLD <= after
+
+
+# ─── The enforcement port (Arch §3.1 R5) ─────────────────────────────────
+
+
+class EntitlementGuard(Protocol):
+    """Enforce a plan limit from inside a module — the seam for FR-M0-045.
+
+    🔒 **Why a port exists at all.** :func:`check` needs an :class:`Allowance`,
+    and assembling one means reading ``usage_counters``, ``subscriptions`` and
+    ``plan_definitions`` — persistence, which lives in ``platform.entitlements``.
+    Arch R5 forbids a module importing ``platform``, so a module that must refuse
+    an action at its limit has three options: take the check as an argument, let
+    the router do it, or come through a kernel port. This is the third, and it is
+    the same shape as :class:`~app.kernel.clients.ClientDirectory`,
+    ``CredentialStore`` and ``StorageBackend``.
+
+    🔒 **Why not the router.** The router *could* load the allowance and call
+    :func:`check` before delegating — but then the rule "entering ``active``
+    is metered" would live outside the module that owns stage transitions, and
+    the next caller of that transition (Slice F converts a lead; a future bulk
+    reassignment) would silently skip it. The whole point of ADR-A06 making a
+    transition a named action is that its consequences travel with it.
+
+    ⚠️ **Raises rather than returns.** A boolean would let a caller ignore the
+    answer, and an ignored entitlement check is indistinguishable from no check.
+    Implementations raise :class:`~app.kernel.errors.EntitlementError`, which
+    already carries the limit, the usage and the upgrade path (FR-M0-045).
+
+    ⚠️ **Never call this on a read path** — see the module docstring. FR-M0-046's
+    "existing data remains readable" is enforced by absence, and neither this
+    protocol nor :func:`check` can tell a read from a write.
+    """
+
+    async def require(
+        self,
+        session: AsyncSession,
+        /,
+        *,
+        tenant_id: uuid.UUID,
+        resource: ResourceCode,
+        amount: Decimal | int = 1,
+        live_used: Decimal | int | None = None,
+    ) -> None:
+        """Permit this consumption, or raise.
+
+        Args:
+            session: 🔒 The caller's transaction. The read must see the caller's
+                uncommitted writes and run under its tenant scope — an
+                implementation opening its own connection would decide against a
+                different view of the data than the one being changed.
+            tenant_id: Whose plan is being consulted.
+            resource: What is being consumed.
+            amount: How much. Fractional for storage.
+            live_used: 🔒 Required for resources where
+                :attr:`ResourceCode.is_counted_live` is true, because the kernel
+                cannot count them — ``active_clients`` is counted from the
+                ``clients`` table, which belongs to a module (DB §14.4, R6).
+                Omitting it yields an indeterminate allowance and a fail-safe
+                denial rather than a silent zero.
+
+        Raises:
+            EntitlementError: The plan does not permit this consumption, the
+                subscription is not in a state that permits new metered actions,
+                or the allowance could not be determined (FR-M0-046).
+        """
+        ...
+
+
+#: The installed guard. 🔒 Same seam as ``ClientDirectory``: the kernel names the
+#: capability, ``platform`` implements it, and the entry point wires the two —
+#: because R5 forbids the kernel importing the layer that satisfies it.
+_guard: EntitlementGuard | None = None
+
+
+def configure_entitlement_guard(guard: EntitlementGuard) -> None:
+    """Install the guard. Called once, at startup, by an entry point."""
+    global _guard
+    _guard = guard
+
+
+def get_entitlement_guard() -> EntitlementGuard:
+    """The installed guard.
+
+    Raises:
+        RuntimeError: If nothing is installed. 🔒 Loud rather than permissive: a
+            module that silently skipped its entitlement check would hand out
+            quota nobody granted, and FR-M0-046's fail-safe direction says an
+            unknown entitlement state blocks rather than allows. A null-object
+            default here would invert that at the one point it matters.
+    """
+    if _guard is None:
+        raise RuntimeError(
+            "No EntitlementGuard is installed. `platform.entitlements` registers "
+            "one at startup via `configure_entitlement_guard()`. A module enforcing "
+            "a plan limit before that wiring runs would either crash mid-request or "
+            "— worse, if this returned a permissive default — grant quota nobody "
+            "paid for."
+        )
+    return _guard

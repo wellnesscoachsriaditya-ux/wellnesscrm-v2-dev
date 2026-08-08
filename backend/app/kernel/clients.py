@@ -37,13 +37,14 @@ import enum
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import date
-from typing import Protocol
+from datetime import date, datetime
+from typing import Literal, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.kernel.consent import MINOR_AGE_THRESHOLD
 from app.kernel.errors import ValidationError
+from app.kernel.events import DomainEvent, register_event
 
 
 class ClientStage(str, enum.Enum):
@@ -151,6 +152,142 @@ def is_lead(stage: ClientStage) -> bool:
         ClientStage.CONTACTED,
         ClientStage.CONSULTATION_SCHEDULED,
     )
+
+
+# ─── Transitions (ADR-A06, FR-M1-015) ────────────────────────────────────
+
+#: 🔒 Stages a practitioner may move a client *to*. Every value except
+#: :attr:`ClientStage.ARCHIVED` — see :func:`assert_transition_allowed` for why
+#: archiving is a separate action rather than a stage anyone can select.
+SELECTABLE_STAGES: tuple[ClientStage, ...] = tuple(
+    stage for stage in ClientStage if stage is not ClientStage.ARCHIVED
+)
+
+#: The same set as a type, for request models.
+#:
+#: 🔒 Spelled out rather than derived from :data:`SELECTABLE_STAGES`, because
+#: ``Literal`` needs its members at type-check time and a dynamically built enum
+#: is invisible to both mypy and the OpenAPI generator. The consequence is a
+#: second list that could drift from the first, so
+#: ``test_kernel_clients.test_selectable_stage_type_matches_the_tuple`` asserts
+#: they agree — the duplication is checked rather than trusted.
+#:
+#: ⚠️ Typing the API field as plain :class:`ClientStage` and rejecting
+#: ``archived`` in a validator would be simpler and would lie: the published
+#: schema would still advertise a value every request carrying it is refused,
+#: and the generated TypeScript client would offer it in a dropdown.
+SelectableStage = Literal[
+    ClientStage.LEAD,
+    ClientStage.CONTACTED,
+    ClientStage.CONSULTATION_SCHEDULED,
+    ClientStage.ACTIVE,
+    ClientStage.PAUSED,
+    ClientStage.CHURNED,
+]
+
+
+def assert_transition_allowed(from_stage: ClientStage, to_stage: ClientStage) -> None:
+    """Check that a practitioner may move a client between these two stages.
+
+    🔒 **Deliberately permissive.** Any stage may reach any other, and that is a
+    decision rather than an omission. The PRD constrains no ordering; M1.4 lists
+    the stages without a graph, and FR-M1-017 puts *rule-driven* transitions in
+    Phase 3 — which only makes sense if MVP transitions are practitioner-driven.
+    A graph invented here would be wrong the first time somebody's real funnel
+    disagreed with it, and the failure mode is a practitioner unable to record
+    what actually happened.
+
+    Two refusals, and both are about coherence rather than workflow:
+
+    * **A no-op.** ``ck_client_stage_history__actual_transition`` rejects a
+      history row whose ``from_stage`` equals its ``to_stage``, so a transition
+      to the current stage cannot be recorded — and an unrecorded transition
+      breaks FR-M1-015. Refused here so the caller gets a named field rather
+      than an integrity error three frames up.
+
+    * **``archived``.** 🔒 Archiving is a soft delete with its own action
+      (FR-M1-010, API §7.1 ``POST /archive``), and it is expressed by
+      ``archived_at``. DB §5.2 counts the entitlement as ``stage = 'active' AND
+      archived_at IS NULL``; that second clause only earns its place if a row can
+      be archived while its stage still says ``active``, which is exactly what
+      lets :func:`restore` put a client back where they were without
+      reconstructing it from history. Permitting ``archived`` as a *stage* too
+      would give the same fact two encodings that could disagree — a client at
+      stage ``archived`` with ``archived_at`` NULL is in no coherent state at
+      all. Migration 0010 enforces the same rule in the database.
+
+    ⚠️ 🟡 The stage values are PROPOSED pending OD-01. If that decision makes
+    ``archived`` a real stage, this function and the CHECK constraint in
+    migration 0010 are the two places to change.
+
+    Raises:
+        ValidationError: On a no-op or on ``archived`` as a target.
+    """
+    if to_stage is ClientStage.ARCHIVED:
+        raise ValidationError(
+            "A client is archived rather than moved to an archived stage.",
+            action="Use archive to remove them from your lists.",
+            details={"allowed_stages": [stage.value for stage in SELECTABLE_STAGES]},
+        )
+
+    if from_stage is to_stage:
+        raise ValidationError(
+            f"This client is already {to_stage.value.replace('_', ' ')}.",
+            action="Choose a different stage.",
+            details={"current_stage": from_stage.value},
+        )
+
+
+def consumes_entitlement_on_entry(from_stage: ClientStage, to_stage: ClientStage) -> bool:
+    """Whether moving between these stages newly consumes an ``active_clients`` slot.
+
+    🔒 FR-M1-002 / FR-M1-003. True only on *entry* to a metered stage from an
+    unmetered one, which is the moment the count actually rises. Every other
+    transition is free: a lead moving to ``contacted`` was never metered, and an
+    ``active`` client moving to ``paused`` releases a slot rather than taking one.
+
+    ⚠️ Asks about the transition, not the destination. A check keyed on
+    ``to_stage is ACTIVE`` alone would also fire on transitions that leave the
+    count unchanged, and the practitioner would be refused an action that costs
+    them nothing.
+
+    ⚠️ Archived state is not a parameter, deliberately. An archived client cannot
+    change stage at all (:func:`assert_not_archived`), so the only way archiving
+    interacts with metering is restore — which is
+    :func:`restore_consumes_entitlement`.
+    """
+    return counts_towards_limit(to_stage, archived_at_is_set=False) and not counts_towards_limit(
+        from_stage, archived_at_is_set=False
+    )
+
+
+def restore_consumes_entitlement(stage: ClientStage) -> bool:
+    """Whether un-archiving a client at this stage puts them back on the meter.
+
+    🔒 EC-M1-06. Archiving an ``active`` client frees a slot, so restoring them
+    takes one back — and a practitioner who archived their way under a limit
+    must not cross it again by restoring. The check belongs on restore for the
+    same reason it belongs on ``→ active``: that is the moment the count rises.
+    """
+    return counts_towards_limit(stage, archived_at_is_set=False)
+
+
+def assert_not_archived(*, archived_at_is_set: bool) -> None:
+    """Refuse a lifecycle change to a client who is archived.
+
+    🔒 An archived client is soft-deleted (FR-M1-010). Moving one between stages
+    would edit a record the practitioner has removed from their lists — the
+    change would be invisible until a restore surfaced it, and any entitlement it
+    consumed would be spent on a client nobody can see.
+
+    Raises:
+        ValidationError: If the client is archived.
+    """
+    if archived_at_is_set:
+        raise ValidationError(
+            "That client is archived.",
+            action="Restore them first, then change their stage.",
+        )
 
 
 # ─── Contact details (FR-M1-004, FR-M1-006, NFR-100) ─────────────────────
@@ -306,6 +443,65 @@ def validate_full_name(full_name: str) -> str:
             details={"max_length": 120},
         )
     return trimmed
+
+
+# ─── Events (DDR-06 — what the timeline is materialised from) ────────────
+#
+# 🔒 Declared in the kernel rather than in the module, for the same reason the
+# port is: Slice D's timeline subscriber lives in another module and R3 forbids
+# it importing `clients`. The event class is the shared vocabulary, so it belongs
+# to the layer both sides may depend on.
+#
+# ⚠️ Identifiers and enums only (NFR-033). `reason` is deliberately absent —
+# it is practitioner free text, and `kernel.events` refuses prose in a payload
+# that becomes a job argument and a log line. A subscriber that needs it reads
+# `client_stage_history` under its own tenant scope.
+
+
+@register_event("client.stage_changed")
+@dataclass(frozen=True, slots=True)
+class ClientStageChanged(DomainEvent):
+    """A client moved between lifecycle stages — FR-M1-015.
+
+    🔒 The timeline's first real event (DDR-06), which is why Slice B precedes
+    Slice D: a subscriber built before this existed could only be tested against
+    a fabricated event.
+    """
+
+    client_id: uuid.UUID
+    tenant_id: uuid.UUID
+    from_stage: ClientStage
+    to_stage: ClientStage
+    changed_by_user_id: uuid.UUID | None
+    changed_at: datetime
+
+
+@register_event("client.archived")
+@dataclass(frozen=True, slots=True)
+class ClientArchived(DomainEvent):
+    """A client was soft-deleted — FR-M1-010.
+
+    ``stage`` is the stage they were archived *at*, which is the stage a restore
+    returns them to. Carried so a subscriber need not join back to the row.
+    """
+
+    client_id: uuid.UUID
+    tenant_id: uuid.UUID
+    stage: ClientStage
+    archived_by_user_id: uuid.UUID | None
+    archived_at: datetime
+
+
+@register_event("client.restored")
+@dataclass(frozen=True, slots=True)
+class ClientRestored(DomainEvent):
+    """An archived client was brought back — EC-M1-02, AC-M1-007."""
+
+    client_id: uuid.UUID
+    tenant_id: uuid.UUID
+    stage: ClientStage
+    restored_by_user_id: uuid.UUID | None
+    restored_at: datetime
 
 
 # ─── The port (DB §5 — "Readers: via kernel ports") ──────────────────────

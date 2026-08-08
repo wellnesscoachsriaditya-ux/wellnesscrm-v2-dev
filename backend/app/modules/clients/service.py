@@ -37,6 +37,7 @@ from app.kernel.clients import (
     validate_full_name,
 )
 from app.kernel.errors import ConflictError, NotFoundError
+from app.modules.clients.metering import require_active_client_headroom
 from app.modules.clients.models import Client, ClientStageHistory
 
 
@@ -124,15 +125,30 @@ async def create_client(
     lifecycle that appears to start from nothing, and the conversion metrics in
     FR-M9-006 would silently undercount.
 
+    🔒 **Metered only when the client is born ``active``** (API §7.1, FR-M1-002).
+    Capture is never refused: FR-M1-003 and EC-M2-06 require that a tenant at
+    their limit still accepts leads, so a creation at any other stage skips the
+    check entirely rather than checking and passing.
+
     ⚠️ The mobile is normalised before it is stored (NFR-100). The database
     CHECK asserts E.164 *shape*; this is what turns ``98765 43210`` into that
     shape, and refusing here names the field rather than surfacing an integrity
     error three frames up.
+
+    Raises:
+        ValidationError: No contact method, or a malformed name or mobile.
+        EntitlementError: 402 — ``stage`` is ``active`` and the plan's
+            ``active_clients`` limit is already reached.
     """
     contact = ContactDetails(
         mobile=normalise_mobile(payload.mobile) if payload.mobile else None,
         email=payload.email.strip() if payload.email else None,
     )
+
+    if payload.stage is ClientStage.ACTIVE:
+        # 🔒 Before the INSERT, so a refused creation leaves nothing behind — and
+        # before the flush, so the count it reads cannot include this row.
+        await require_active_client_headroom(session, tenant_id=tenant_id)
 
     moment = now()
     client = Client(

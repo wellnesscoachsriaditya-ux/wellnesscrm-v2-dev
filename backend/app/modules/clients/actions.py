@@ -45,3 +45,45 @@ CLIENT_UPDATE = register_action(
     roles=_PRACTITIONER,
     data_scope=DataScope.TENANT_PII,
 )
+
+# ─── Lifecycle (ADR-A06) ─────────────────────────────────────────────────
+#
+# 🔒 Three actions rather than one, and separate from `client.update`. ADR-A06's
+# claim is that a transition is "explicit, separately authorizable and separately
+# auditable" — which is only true if it has its own action name. Folding these
+# into `client.update` would make "who may archive a client" unanswerable
+# independently of "who may correct a typo in their name", and a clinic owner
+# will eventually want exactly that distinction (EC-M1-04).
+
+CLIENT_CHANGE_STAGE = register_action(
+    "client.change_stage",
+    roles=_PRACTITIONER,
+    data_scope=DataScope.TENANT_PII,
+    # 🔒 The metered one (FR-M1-002). `meters` names the resource this action can
+    # consume so the declaration is inspectable — the enforcement itself happens
+    # in `transitions.change_stage`, which is the only place that knows whether
+    # *this particular* transition enters `active` (FR-M1-003).
+    meters="active_clients",
+    # Both stages, so the audit log answers "what changed" without joining to
+    # `client_stage_history`. Enum values, not prose — NFR-033.
+    audit_metadata_keys={"from_stage", "to_stage"},
+)
+
+CLIENT_ARCHIVE = register_action(
+    "client.archive",
+    roles=_PRACTITIONER,
+    data_scope=DataScope.TENANT_PII,
+    # ⚠️ Not metered. Archiving *frees* a slot; it never consumes one.
+    audit_metadata_keys={"stage"},
+)
+
+CLIENT_RESTORE = register_action(
+    "client.restore",
+    roles=_PRACTITIONER,
+    data_scope=DataScope.TENANT_PII,
+    # 🔒 Metered, for the reason EC-M1-06 gives: restoring a client archived at
+    # stage `active` puts them back on the meter, so a practitioner cannot
+    # archive their way under a limit and then undo it.
+    meters="active_clients",
+    audit_metadata_keys={"stage"},
+)

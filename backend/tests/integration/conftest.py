@@ -30,7 +30,11 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
+from app.kernel.clients import configure_client_directory
+from app.kernel.entitlements import configure_entitlement_guard
+from app.modules.clients import ClientRepositoryDirectory
 from app.platform.db import TENANT_SETTING
+from app.platform.entitlements import DatabaseEntitlementGuard
 
 #: Set by the operator running the suite. Absent on a machine without PostgreSQL,
 #: which is the normal case for this project today (see ops/db/README.md).
@@ -124,6 +128,26 @@ async def migrator_engine() -> AsyncIterator[AsyncEngine]:
         yield engine
     finally:
         await engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def installed_ports() -> None:
+    """🔒 Wire the kernel ports these tests exercise services through.
+
+    ``create_app()`` normally does this, and the integration suite deliberately
+    does not build an app — it calls module services directly against a real
+    connection. Without this the registries hold whatever the *last test to build
+    an app* left behind, so a metered write would pass or raise
+    ``RuntimeError`` depending on collection order, and running one test alone
+    would behave differently from running the file.
+
+    ⚠️ Installing the real adapters rather than fakes is the point. The whole
+    reason this suite exists is that grants, RLS and constraints are only true
+    against PostgreSQL; a stub guard here would assert the fail-safe path and
+    call it enforcement.
+    """
+    configure_entitlement_guard(DatabaseEntitlementGuard())
+    configure_client_directory(ClientRepositoryDirectory())
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -293,4 +317,73 @@ async def seeded_tenants(migrator_engine: AsyncEngine) -> AsyncIterator[tuple[uu
                 )
                 await connection.execute(
                     text("DELETE FROM tenants WHERE id = :id"), {"id": tenant_id}
+                )
+
+
+#: The tier seeded by migration 0007 that metered-action tests subscribe tenants
+#: to. 30 active clients, roomy enough that an individual activation test need
+#: not reason about the ceiling — the tests that *are* about the ceiling rewrite
+#: the plan's limits themselves.
+PLAN_CODE_STARTER = "starter"
+
+
+@pytest_asyncio.fixture
+async def subscribed_tenants(
+    migrator_engine: AsyncEngine,
+    seeded_tenants: tuple[uuid.UUID, ...],
+) -> AsyncIterator[tuple[uuid.UUID, ...]]:
+    """Give both seeded tenants an active subscription on the Starter plan.
+
+    🔒 Lives here rather than in one test module because two slices need it:
+    S1-E's metering tests, and S2-B's, where entering ``active`` is refused
+    unless a subscription says what the limit is. A tenant with no subscription
+    row is *indeterminate*, not free-tier (FR-M0-046), so any test exercising a
+    metered action needs this fixture or it is testing the fail-safe path by
+    accident.
+
+    Seeded as ``app_migrator`` because ``app_user`` cannot: migration 0007
+    revokes INSERT on ``subscriptions`` precisely so a tenant cannot provision
+    its own plan (FR-M10-008), and that restriction is itself asserted in
+    ``test_entitlements.py``.
+
+    🔒 Each insert runs under its own tenant's scope. ``subscriptions`` is
+    Pattern A with FORCE, so even the owner is subject to the policy — an
+    unscoped insert is rejected by ``WITH CHECK`` rather than succeeding.
+    """
+    tenant_a, tenant_b = seeded_tenants
+
+    async with migrator_engine.begin() as connection:
+        plan_id = (
+            await connection.execute(
+                text("SELECT id FROM plan_definitions WHERE code = :code"),
+                {"code": PLAN_CODE_STARTER},
+            )
+        ).scalar_one()
+
+        for tenant_id in (tenant_a, tenant_b):
+            await scope_to(connection, tenant_id)
+            await connection.execute(
+                text(
+                    "INSERT INTO subscriptions (tenant_id, plan_definition_id, status) "
+                    "VALUES (:tenant, :plan, 'active')"
+                ),
+                {"tenant": tenant_id, "plan": plan_id},
+            )
+
+    try:
+        yield (tenant_a, tenant_b)
+    finally:
+        # 🔒 Children before parents, and each statement under its tenant's own
+        # scope — an unscoped DELETE removes zero rows and returns quietly,
+        # leaving rows that collide with the next run's unique constraint on
+        # `tenant_id`.
+        async with migrator_engine.begin() as connection:
+            for tenant_id in (tenant_a, tenant_b):
+                await scope_to(connection, tenant_id)
+                for table in ("usage_events", "usage_counters", "subscription_events"):
+                    await connection.execute(
+                        text(f"DELETE FROM {table} WHERE tenant_id = :id"), {"id": tenant_id}
+                    )
+                await connection.execute(
+                    text("DELETE FROM subscriptions WHERE tenant_id = :id"), {"id": tenant_id}
                 )

@@ -17,9 +17,17 @@ without the framework, and the framework replaceable without the domain.
 
 from __future__ import annotations
 
-from app.modules.clients.actions import CLIENT_CREATE, CLIENT_READ, CLIENT_UPDATE
+from app.modules.clients.actions import (
+    CLIENT_ARCHIVE,
+    CLIENT_CHANGE_STAGE,
+    CLIENT_CREATE,
+    CLIENT_READ,
+    CLIENT_RESTORE,
+    CLIENT_UPDATE,
+)
 from app.modules.clients.directory import ClientRepositoryDirectory
 from app.modules.clients.models import Client, ClientStageHistory
+from app.modules.clients.queries import count_active_clients
 from app.modules.clients.service import (
     UNSET,
     ClientCreate,
@@ -29,11 +37,21 @@ from app.modules.clients.service import (
     get_client,
     update_client,
 )
+from app.modules.clients.transitions import (
+    MAX_REASON_LENGTH,
+    archive,
+    change_stage,
+    restore,
+)
 
 __all__ = [
+    "CLIENT_ARCHIVE",
+    "CLIENT_CHANGE_STAGE",
     "CLIENT_CREATE",
     "CLIENT_READ",
+    "CLIENT_RESTORE",
     "CLIENT_UPDATE",
+    "MAX_REASON_LENGTH",
     "UNSET",
     "Client",
     "ClientCreate",
@@ -41,7 +59,11 @@ __all__ = [
     "ClientStageHistory",
     "ClientUpdate",
     "Unset",
+    "archive",
+    "change_stage",
+    "count_active_clients",
     "create_client",
     "get_client",
+    "restore",
     "update_client",
 ]

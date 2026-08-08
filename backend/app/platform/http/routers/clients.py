@@ -11,10 +11,11 @@ filtering, sorting and cursor pagination over tags and owners (API §7.1), which
 depend on tables Slice C creates. It lands in Slice E, with the query tuning that
 NFR-005 requires measured rather than assumed.
 
-⚠️ **Stage changes are not here either.** ADR-A06 makes each transition a named
-POST action with entitlement checks and history — ``POST /app/clients/{id}/stage``
-is Slice B. :class:`ClientPatch` deliberately has no ``stage`` field, so the
-absence is enforced by the schema rather than by reviewer vigilance.
+🔒 **Stage changes are named POST actions** (ADR-A06), not a field on
+:class:`ClientPatch` — which deliberately has no ``stage`` field, so the absence
+is enforced by the schema rather than by reviewer vigilance. A ``PATCH
+{stage: "active"}`` would hide an entitlement check, an activation anchor, a
+history row and an event behind a field assignment.
 """
 
 from __future__ import annotations
@@ -26,19 +27,31 @@ from typing import Annotated
 from fastapi import Header, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
 
-from app.kernel.clients import ClientStage, DietaryClass, SexType
+from app.kernel.clients import (
+    ClientStage,
+    DietaryClass,
+    SelectableStage,
+    SexType,
+)
 from app.kernel.context import get_context
 from app.kernel.errors import PreconditionRequiredError
 from app.modules.clients import (
+    CLIENT_ARCHIVE,
+    CLIENT_CHANGE_STAGE,
     CLIENT_CREATE,
     CLIENT_READ,
+    CLIENT_RESTORE,
     CLIENT_UPDATE,
+    MAX_REASON_LENGTH,
     UNSET,
     ClientCreate,
     ClientUpdate,
     Unset,
+    archive,
+    change_stage,
     create_client,
     get_client,
+    restore,
     update_client,
 )
 from app.platform.http.authz import requires
@@ -61,7 +74,11 @@ class ClientCreateRequest(BaseModel):
     full_name: str = Field(min_length=1, max_length=120)
     mobile: str | None = Field(default=None, max_length=32)
     email: EmailStr | None = None
-    stage: ClientStage = ClientStage.LEAD
+    #: 🔒 Not ``ClientStage``. ``archived`` is not a stage a client is created
+    #: into — archiving is a soft delete of an existing record (FR-M1-010), and
+    #: migration 0010 refuses the value at the table. Typing the field to the
+    #: selectable set keeps the published schema honest.
+    stage: SelectableStage = ClientStage.LEAD
     date_of_birth: date | None = None
     sex: SexType | None = None
     city: str | None = Field(default=None, max_length=120)
@@ -273,3 +290,149 @@ async def update(
     record_audit(request, resource_id=updated.id, changed_fields=sorted(supplied))
     response.headers["ETag"] = _etag(updated.updated_at)
     return _response(updated)
+
+
+# ─── Lifecycle (ADR-A06, API §7.1) ───────────────────────────────────────
+#
+# 📌 Named POST actions, not `PATCH {stage: ...}`. A field assignment would hide
+# an entitlement check, an activation anchor, a history row and a domain event —
+# and it could not return a transition-specific 402.
+#
+# ⚠️ **No `If-Match` on any of these, and that is a considered difference from
+# PATCH.** A precondition protects against a *lost update*: two people editing
+# the same field, where the second save silently discards the first. A concurrent
+# stage change loses nothing — both transitions are recorded in
+# `client_stage_history` with their actors and timestamps, and the final stage is
+# one of the two a practitioner actually asked for. Requiring a token here would
+# add a failed request and a reload to the two-interaction budget NFR-012 sets,
+# to protect against a loss that does not occur. The race that *does* matter —
+# two activations both passing one entitlement check — is handled where it lives,
+# by the row lock and the tenant mutex in the transitions service.
+
+
+class StageChangeRequest(BaseModel):
+    """`POST /app/clients/{id}/stage` — API §7.1."""
+
+    #: 🔒 Excludes `archived`. Archiving is a soft delete with its own endpoint
+    #: (FR-M1-010); migration 0010 refuses the value at the table, and typing it
+    #: out of the request keeps the published contract honest rather than
+    #: advertising a value every request carrying it is refused.
+    to_stage: SelectableStage
+    #: Optional, and recorded on the history row (DB §5.3). Short by design —
+    #: `MAX_REASON_LENGTH` is enforced again in the service, because this model is
+    #: not the only caller.
+    reason: str | None = Field(default=None, max_length=MAX_REASON_LENGTH)
+
+
+@router.post(
+    "/{client_id}/stage",
+    summary="Change a client's lifecycle stage",
+    operation_id="clientsChangeStage",
+)
+@requires(CLIENT_CHANGE_STAGE)
+async def change_client_stage(
+    request: Request, client_id: uuid.UUID, body: StageChangeRequest, response: Response
+) -> ClientResponse:
+    """Move a client between stages — ADR-A06, FR-M1-015.
+
+    🔒 Returns **402** with the limit, the usage, the plan and the upgrade path
+    when the move enters ``active`` at the plan's ceiling (FR-M1-002). The error
+    envelope carries everything the UI needs to explain the refusal, so there is
+    no second request to make.
+
+    🔒 AC-M1-003 — converting a lead keeps the record, its identifier and all its
+    prior history, because this changes a column rather than moving a row.
+    """
+    actor = get_context().actor
+    updated = await change_stage(
+        get_session(request),
+        tenant_id=actor.require_tenant(),
+        client_id=client_id,
+        to_stage=body.to_stage,
+        actor_user_id=actor.require_subject(),
+        reason=body.reason,
+    )
+
+    record_audit(
+        request,
+        resource_id=updated.id,
+        changed_fields=["stage"],
+        # ⚠️ The reason is deliberately absent from the audit metadata: it is
+        # practitioner free text and the audit log is retained long and read by
+        # operators (NFR-033). It lives on the history row, under the tenant's
+        # own retention.
+        metadata={"to_stage": updated.stage.value},
+    )
+    response.headers["ETag"] = _etag(updated.updated_at)
+    return _response(updated)
+
+
+@router.post(
+    "/{client_id}/archive",
+    summary="Archive a client",
+    operation_id="clientsArchive",
+)
+@requires(CLIENT_ARCHIVE)
+async def archive_client(
+    request: Request, client_id: uuid.UUID, response: Response
+) -> ClientResponse:
+    """Soft-delete a client — FR-M1-010, AC-M1-007.
+
+    🔒 Removes them from default views without deleting anything, and frees the
+    entitlement slot immediately if they were ``active``. The stage is preserved,
+    which is what lets :func:`restore_client` put them back where they were.
+
+    ⚠️ Takes no body. A reason has nowhere safe to go in this slice — see
+    ``transitions.archive``.
+    """
+    actor = get_context().actor
+    archived = await archive(
+        get_session(request),
+        tenant_id=actor.require_tenant(),
+        client_id=client_id,
+        actor_user_id=actor.require_subject(),
+    )
+
+    record_audit(
+        request,
+        resource_id=archived.id,
+        changed_fields=["archived_at"],
+        metadata={"stage": archived.stage.value},
+    )
+    response.headers["ETag"] = _etag(archived.updated_at)
+    return _response(archived)
+
+
+@router.post(
+    "/{client_id}/restore",
+    summary="Restore an archived client",
+    operation_id="clientsRestore",
+)
+@requires(CLIENT_RESTORE)
+async def restore_client(
+    request: Request, client_id: uuid.UUID, response: Response
+) -> ClientResponse:
+    """Bring an archived client back — EC-M1-02, AC-M1-007.
+
+    🔒 Returns them to the stage they were archived at. A returning client is
+    reactivated in place; there is never a second record.
+
+    🔒 Returns **402** when the restored stage is ``active`` and the plan is at
+    its ceiling (EC-M1-06) — archiving frees a slot, so restoring takes one back.
+    """
+    actor = get_context().actor
+    restored = await restore(
+        get_session(request),
+        tenant_id=actor.require_tenant(),
+        client_id=client_id,
+        actor_user_id=actor.require_subject(),
+    )
+
+    record_audit(
+        request,
+        resource_id=restored.id,
+        changed_fields=["archived_at"],
+        metadata={"stage": restored.stage.value},
+    )
+    response.headers["ETag"] = _etag(restored.updated_at)
+    return _response(restored)

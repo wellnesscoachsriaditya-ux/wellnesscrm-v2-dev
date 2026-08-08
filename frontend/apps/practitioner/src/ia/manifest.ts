@@ -1,4 +1,6 @@
 import { defineIa } from '@wellnesscrm/ia'
+import { ClientCreate } from '../screens/ClientCreate'
+import { ClientDetail } from '../screens/ClientDetail'
 import { placeholder } from '../screens/Placeholder'
 import {
   appointmentsIcon,
@@ -45,14 +47,23 @@ export const ia = defineIa({
       label: 'Clients',
       permission: 'clients.read',
       nav: { order: 2, icon: clientsIcon },
+      // ⏳ S2 Slice E builds the list: filtering, sorting and cursor pagination
+      // over tags and owners, which need tables Slice C creates.
       view: placeholder('S2', 'Every client and lead in one list, filtered by lifecycle stage.'),
+    },
+    {
+      id: 'client-new',
+      path: '/clients/new',
+      label: 'New client',
+      parent: 'clients',
+      view: ClientCreate,
     },
     {
       id: 'client-detail',
       path: '/clients/:clientId',
       label: 'Client',
       parent: 'clients',
-      view: placeholder('S2', 'One client: profile, timeline, measurements, plans and messages.'),
+      view: ClientDetail,
     },
 
     // ─── M2 Lead Capture & Conversion ─────────────────────────────────────

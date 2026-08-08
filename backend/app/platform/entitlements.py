@@ -40,11 +40,11 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Final, cast
 
-from sqlalchemy import Table, func, insert, select, update
+from sqlalchemy import Table, func, insert, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.kernel.entitlements import Allowance, ResourceCode
+from app.kernel.entitlements import Allowance, ResourceCode, check
 from app.kernel.models import (
     PlanDefinition,
     Subscription,
@@ -142,6 +142,14 @@ async def load_subscription(
     ⚠️ Reads under RLS. ``subscriptions`` is Pattern A, so this returns nothing
     at all unless a tenant scope is set on the transaction — which is the correct
     failure, not a silent cross-tenant read.
+
+    ⚠️ 🔒 **No ``FOR UPDATE`` variant, and it is not an oversight.** Serialising
+    metered actions by locking this row is the obvious design and PostgreSQL
+    refuses it: row-level locking requires UPDATE privilege, and migration 0007
+    revokes INSERT and UPDATE on ``subscriptions`` from ``app_user`` precisely so
+    a tenant cannot provision or upgrade its own plan. ``SELECT ... FOR UPDATE``
+    as ``app_user`` fails with "permission denied for table subscriptions".
+    :class:`DatabaseEntitlementGuard` uses an advisory lock instead.
     """
     result = await session.execute(
         select(
@@ -531,3 +539,110 @@ async def record_subscription_event(
             occurred_at=at or now(),
         )
     )
+
+
+#: 🔒 Derives a 64-bit advisory-lock key from a text label, using only documented
+#: SQL. ``md5`` → first 16 hex digits → ``bit(64)`` → ``bigint`` is the standard
+#: idiom; ``hashtextextended`` would be shorter but it is an internal function
+#: whose stability across major versions is not promised.
+#:
+#: ⚠️ The label is bound as a parameter, never interpolated. It is built from a
+#: UUID and an enum member so it cannot contain anything hostile, but a lock key
+#: assembled by string concatenation is one refactor away from being able to.
+_ADVISORY_KEY_SQL: Final[str] = (
+    "SELECT pg_advisory_xact_lock((('x' || substr(md5(:label), 1, 16))::bit(64))::bigint)"
+)
+
+
+async def serialise_tenant(
+    session: AsyncSession, *, tenant_id: uuid.UUID, resource: ResourceCode
+) -> None:
+    """Hold a per-tenant, per-resource mutex until the transaction ends.
+
+    🔒 The missing mutex for live-counted resources. See
+    :class:`DatabaseEntitlementGuard` for why counting from source needs one and a
+    row lock cannot supply it.
+
+    ⚠️ **An advisory lock rather than ``SELECT ... FOR UPDATE`` on the subscription
+    row**, and not by preference. PostgreSQL requires UPDATE privilege to take a
+    row lock, and migration 0007 revokes UPDATE on ``subscriptions`` from
+    ``app_user`` so a tenant cannot upgrade its own plan. The obvious design is
+    refused by the grant model; this needs no table privileges at all.
+
+    ⚠️ ``pg_advisory_xact_lock`` — the transaction-scoped variant. The session
+    variant would leak the lock back into the connection pool, where the next
+    request to borrow that connection would inherit a lock it never took and
+    nothing would release it.
+
+    ⚠️ Keyed per ``(resource, tenant)`` rather than per tenant. A tenant uploading
+    a file and a tenant activating a client are unrelated decisions, and one
+    key for both would serialise them against each other for no reason.
+    """
+    await session.execute(
+        text(_ADVISORY_KEY_SQL),
+        {"label": f"entitlement:{resource.value}:{tenant_id}"},
+    )
+
+
+# ─── The guard (kernel.entitlements.EntitlementGuard) ────────────────────
+
+
+class DatabaseEntitlementGuard:
+    """Satisfies ``kernel.entitlements.EntitlementGuard`` against the real tables.
+
+    🔒 The seam that lets a *module* enforce a plan limit. Arch R5 forbids
+    ``app.modules.*`` importing ``app.platform.*``, so the kernel declares the
+    protocol, this satisfies it, and ``main`` wires the two — the same shape as
+    ``ClientDirectory`` and ``StorageBackend``.
+
+    🔒 **Live-counted resources are serialised per tenant, and they have to be.**
+    ``active_clients`` is counted from ``clients`` rather than from a counter
+    (DB §14.4), so two concurrent activations of *different* clients touch
+    different rows and conflict on nothing: both count 29 against a limit of 30,
+    both pass, both commit, and the tenant ends on 31. A row lock on the client
+    being changed cannot prevent that — the two transactions never contend for a
+    common row. :func:`serialise_tenant` supplies the missing mutex.
+
+    ⚠️ Counter-backed resources are **not** serialised. Their counter upsert is
+    already atomic (``ON CONFLICT DO UPDATE`` in :func:`record_usage`), so a lock
+    would add contention without preventing anything. It would also serialise
+    every AI draft in a clinic behind one lock, which is the busy path.
+    """
+
+    async def require(
+        self,
+        session: AsyncSession,
+        /,
+        *,
+        tenant_id: uuid.UUID,
+        resource: ResourceCode,
+        amount: Decimal | int = 1,
+        live_used: Decimal | int | None = None,
+    ) -> None:
+        """Permit this consumption, or raise — FR-M0-045.
+
+        ⚠️ The lock is taken **before** the count is read, not after. A lock
+        acquired after reading would serialise the writes while still letting both
+        transactions decide on the same stale count — the lock would be present,
+        the overshoot unchanged, and the test that caught it hard to write.
+
+        Raises:
+            EntitlementError: The plan does not permit it, the subscription is not
+                in a state that permits new metered actions, or the allowance
+                could not be determined (FR-M0-046).
+        """
+        if resource.is_counted_live:
+            await serialise_tenant(session, tenant_id=tenant_id, resource=resource)
+
+        subscription = await load_subscription(session, tenant_id=tenant_id)
+        allowance = await load_allowance(
+            session,
+            tenant_id=tenant_id,
+            resource=resource,
+            subscription=subscription,
+            live_used=live_used,
+        )
+        # 🔒 `status=None` when there is no subscription row at all. `check` treats
+        # that as indeterminate and refuses, which is the fail-safe direction —
+        # passing "active" here would invent a commercial state nobody granted.
+        check(allowance, amount=amount, status=subscription.status if subscription else None)

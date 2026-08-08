@@ -31,11 +31,9 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import AsyncIterator
 from decimal import Decimal
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
@@ -50,68 +48,17 @@ from app.platform.entitlements import (
     record_usage,
     release_usage,
 )
-from tests.integration.conftest import scope_to
+from tests.integration.conftest import PLAN_CODE_STARTER, scope_to
 
 pytestmark = pytest.mark.asyncio
 
-#: The tier seeded by migration 0007 that these tests subscribe tenants to.
-_PLAN_CODE = "starter"
+#: The tier ``subscribed_tenants`` puts both tenants on. Re-exported under the
+#: module's own name because the assertions below quote it.
+_PLAN_CODE = PLAN_CODE_STARTER
 
 #: A metered resource with a counter — deliberately not ``active_clients``,
 #: which DB §14.4 counts live and which therefore has no counter row.
 _RESOURCE = ResourceCode.AI_GENERATIONS
-
-
-@pytest_asyncio.fixture
-async def subscribed_tenants(
-    migrator_engine: AsyncEngine,
-    seeded_tenants: tuple[uuid.UUID, ...],
-) -> AsyncIterator[tuple[uuid.UUID, ...]]:
-    """Give both seeded tenants an active subscription on the Starter plan.
-
-    Seeded as ``app_migrator`` because ``app_user`` cannot: migration 0007
-    revokes INSERT on ``subscriptions`` precisely so a tenant cannot provision
-    its own plan (FR-M10-008), and that restriction is itself asserted below.
-
-    🔒 Each insert runs under its own tenant's scope. ``subscriptions`` is
-    Pattern A with FORCE, so even the owner is subject to the policy — an
-    unscoped insert is rejected by ``WITH CHECK`` rather than succeeding.
-    """
-    tenant_a, tenant_b = seeded_tenants
-
-    async with migrator_engine.begin() as connection:
-        plan_id = (
-            await connection.execute(
-                text("SELECT id FROM plan_definitions WHERE code = :code"), {"code": _PLAN_CODE}
-            )
-        ).scalar_one()
-
-        for tenant_id in (tenant_a, tenant_b):
-            await scope_to(connection, tenant_id)
-            await connection.execute(
-                text(
-                    "INSERT INTO subscriptions (tenant_id, plan_definition_id, status) "
-                    "VALUES (:tenant, :plan, 'active')"
-                ),
-                {"tenant": tenant_id, "plan": plan_id},
-            )
-
-    try:
-        yield (tenant_a, tenant_b)
-    finally:
-        # 🔒 In FK order and under each tenant's own scope — an unscoped DELETE
-        # here removes zero rows and returns quietly, leaving rows that collide
-        # with the next run's unique constraint on `tenant_id`.
-        async with migrator_engine.begin() as connection:
-            for tenant_id in (tenant_a, tenant_b):
-                await scope_to(connection, tenant_id)
-                for table in ("usage_events", "usage_counters", "subscription_events"):
-                    await connection.execute(
-                        text(f"DELETE FROM {table} WHERE tenant_id = :id"), {"id": tenant_id}
-                    )
-                await connection.execute(
-                    text("DELETE FROM subscriptions WHERE tenant_id = :id"), {"id": tenant_id}
-                )
 
 
 # ─── Seed data ───────────────────────────────────────────────────────────

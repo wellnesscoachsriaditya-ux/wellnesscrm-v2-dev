@@ -31,6 +31,7 @@ import pytest
 
 _BACKEND = Path(__file__).resolve().parents[1]
 _MIGRATION = _BACKEND / "migrations" / "versions" / "20260808_0009_clients.py"
+_LIFECYCLE_MIGRATION = _BACKEND / "migrations" / "versions" / "20260808_0010_client_lifecycle.py"
 _VERIFY_GRANTS = _BACKEND.parent / "ops" / "db" / "002_verify_grants.sql"
 
 #: 🔒 FR-M1-015 — the transition log, and the reason it is separate from `audit_log`.
@@ -312,6 +313,58 @@ def test_owner_fk_does_not_cascade(migration_source: str) -> None:
         "fk_clients__owner cascades. Deleting a practitioner would delete their "
         "clients; EC-M1-04 requires reassignment."
     )
+
+
+# ─── Lifecycle, migration 0010 (FR-M1-010, DB §5.2) ──────────────────────
+
+
+@pytest.fixture(scope="module")
+def lifecycle_migration_source() -> str:
+    if not _LIFECYCLE_MIGRATION.is_file():
+        pytest.fail(f"client lifecycle migration is missing: {_LIFECYCLE_MIGRATION}")
+    return _LIFECYCLE_MIGRATION.read_text(encoding="utf-8")
+
+
+def test_stage_cannot_be_archived(lifecycle_migration_source: str) -> None:
+    """🔒 One encoding of "archived", not two.
+
+    ``archived_at`` is the archive flag (FR-M1-010) and ``stage`` records
+    lifecycle position independently of it — which is what lets a restore return
+    a client to what they were (EC-M1-02) instead of guessing. A row at
+    ``stage='archived'`` with ``archived_at`` NULL would be excluded from the
+    entitlement count while still appearing in every default view, and no
+    reviewer reading either half alone would see it.
+
+    ⚠️ Asserts the pieces separately because the migration interpolates the
+    constraint name from a constant — deliberately, so ``upgrade`` and
+    ``downgrade`` cannot drift onto different names.
+    """
+    assert '_CONSTRAINT = "ck_clients__stage_not_archived"' in lifecycle_migration_source
+    assert "ADD CONSTRAINT {_CONSTRAINT}" in lifecycle_migration_source
+    assert "stage <> 'archived'" in lifecycle_migration_source
+
+
+def test_the_lifecycle_migration_is_reversible(lifecycle_migration_source: str) -> None:
+    """Forward-only chain, reversible steps — the S0 migration policy.
+
+    A CHECK is one of the few things that always reverses cleanly: dropping it
+    cannot fail on existing data and loses no information.
+    """
+    assert "def downgrade()" in lifecycle_migration_source
+    assert "DROP CONSTRAINT" in lifecycle_migration_source
+
+
+def test_the_archived_enum_value_survives(lifecycle_migration_source: str) -> None:
+    """⚠️ The constraint must not be implemented by rewriting the enum.
+
+    🟡 OD-01 has not settled the stage vocabulary, and a practitioner-facing
+    "archived" stage is still a legitimate outcome of it. Dropping a value from a
+    PostgreSQL enum means rewriting the type and every column that uses it;
+    keeping an unusable value costs nothing, and reinstating one costs a
+    migration that takes an ACCESS EXCLUSIVE lock on the client base.
+    """
+    assert "DROP TYPE" not in lifecycle_migration_source.upper()
+    assert "ALTER TYPE" not in lifecycle_migration_source.upper()
 
 
 # ─── The live gate cannot be dropped ─────────────────────────────────────

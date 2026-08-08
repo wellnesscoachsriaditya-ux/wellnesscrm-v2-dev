@@ -85,6 +85,87 @@ export interface paths {
         patch: operations["clientsUpdate"];
         trace?: never;
     };
+    "/api/v1/app/clients/{client_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a client
+         * @description Soft-delete a client — FR-M1-010, AC-M1-007.
+         *
+         *     🔒 Removes them from default views without deleting anything, and frees the
+         *     entitlement slot immediately if they were ``active``. The stage is preserved,
+         *     which is what lets :func:`restore_client` put them back where they were.
+         *
+         *     ⚠️ Takes no body. A reason has nowhere safe to go in this slice — see
+         *     ``transitions.archive``.
+         */
+        post: operations["clientsArchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore an archived client
+         * @description Bring an archived client back — EC-M1-02, AC-M1-007.
+         *
+         *     🔒 Returns them to the stage they were archived at. A returning client is
+         *     reactivated in place; there is never a second record.
+         *
+         *     🔒 Returns **402** when the restored stage is ``active`` and the plan is at
+         *     its ceiling (EC-M1-06) — archiving frees a slot, so restoring takes one back.
+         */
+        post: operations["clientsRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change a client's lifecycle stage
+         * @description Move a client between stages — ADR-A06, FR-M1-015.
+         *
+         *     🔒 Returns **402** with the limit, the usage, the plan and the upgrade path
+         *     when the move enters ``active`` at the plan's ceiling (FR-M1-002). The error
+         *     envelope carries everything the UI needs to explain the refusal, so there is
+         *     no second request to make.
+         *
+         *     🔒 AC-M1-003 — converting a lead keeps the record, its identifier and all its
+         *     prior history, because this changes a column rather than moving a row.
+         */
+        post: operations["clientsChangeStage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/auth/login": {
         parameters: {
             query?: never;
@@ -366,8 +447,12 @@ export interface components {
             source?: string | null;
             /** Source Detail */
             source_detail?: string | null;
-            /** @default lead */
-            stage: components["schemas"]["ClientStage"];
+            /**
+             * Stage
+             * @default lead
+             * @enum {string}
+             */
+            stage: "lead" | "contacted" | "consultation_scheduled" | "active" | "paused" | "churned";
         };
         /**
          * ClientPatch
@@ -637,6 +722,19 @@ export interface components {
          */
         SexType: "male" | "female" | "other";
         /**
+         * StageChangeRequest
+         * @description `POST /app/clients/{id}/stage` — API §7.1.
+         */
+        StageChangeRequest: {
+            /** Reason */
+            reason?: string | null;
+            /**
+             * To Stage
+             * @enum {string}
+             */
+            to_stage: "lead" | "contacted" | "consultation_scheduled" | "active" | "paused" | "churned";
+        };
+        /**
          * TokenResponse
          * @description What a client needs to make an authenticated request and to renew.
          *
@@ -777,6 +875,103 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ClientPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsChangeStage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StageChangeRequest"];
             };
         };
         responses: {

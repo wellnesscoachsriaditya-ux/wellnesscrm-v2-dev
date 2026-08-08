@@ -14,11 +14,12 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.kernel.clients import ClientIdentity, ClientStage
+from app.kernel.clients import ClientIdentity
 from app.modules.clients.models import Client
+from app.modules.clients.queries import count_active_clients
 
 
 def _identity(row: Client) -> ClientIdentity:
@@ -91,21 +92,10 @@ class ClientRepositoryDirectory:
     async def count_active(self, session: AsyncSession, /, *, tenant_id: uuid.UUID) -> int:
         """Clients consuming the entitlement — M1.5.
 
-        🔒 ``stage = 'active' AND archived_at IS NULL``, which is the whole of
-        DB §5.2's predicate. Counted live rather than from a counter: it is the
-        product's most visible limit, and a drifting counter produces a bill the
-        practitioner can disprove by eye (DB §14.4).
-
-        Served by ``ix_clients__tenant_stage``, whose own predicate already
-        excludes archived rows, so this is an index-only scan.
+        🔒 Delegates to ``queries.count_active_clients`` rather than restating
+        DB §5.2's predicate. The transition path enforces the same limit
+        (FR-M1-002), and two copies of a billing predicate is two things that can
+        drift — the drift being a practitioner billed for a client their list does
+        not show.
         """
-        total = await session.scalar(
-            select(func.count())
-            .select_from(Client)
-            .where(
-                Client.tenant_id == tenant_id,
-                Client.stage == ClientStage.ACTIVE,
-                Client.archived_at.is_(None),
-            )
-        )
-        return int(total or 0)
+        return await count_active_clients(session, tenant_id=tenant_id)

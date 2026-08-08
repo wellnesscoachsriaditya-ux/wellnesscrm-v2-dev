@@ -52,7 +52,7 @@ class ClientStage(StrEnum):
     ACTIVE = "active"
 
 
-@register_event("client.stage_changed")
+@register_event("example.stage_changed")
 @dataclass(frozen=True, slots=True)
 class StageChanged(DomainEvent):
     """A client's stage was updated — the canonical event for timeline tests."""
@@ -64,7 +64,7 @@ class StageChanged(DomainEvent):
     occurred_at: datetime
 
 
-@register_event("client.created")
+@register_event("example.created")
 @dataclass(frozen=True, slots=True)
 class ClientCreated(DomainEvent):
     client_id: uuid.UUID
@@ -151,8 +151,8 @@ def test_forgotten_dataclass_decorator_is_caught() -> None:
 def test_registered_events_visible_for_startup_checks() -> None:
     """🔒 The entry point asserts every deferred job type has a handler."""
     events = registered_events()
-    assert "client.stage_changed" in events
-    assert events["client.stage_changed"] is StageChanged
+    assert "example.stage_changed" in events
+    assert events["example.stage_changed"] is StageChanged
 
 
 # ─── Subscription ─────────────────────────────────────────────────────────
@@ -244,7 +244,7 @@ def test_to_payload_encodes_identifiers_and_enums() -> None:
         )
         payload = to_payload(event)
 
-    assert payload["_event"] == "client.stage_changed"
+    assert payload["_event"] == "example.stage_changed"
     assert "_request_id" in payload
     assert uuid.UUID(payload["client_id"]) == event.client_id
     assert payload["from_stage"] == "enquiry"
@@ -372,8 +372,8 @@ async def test_deferred_handlers_enqueue_via_configured_seam(session: object) ->
     assert len(enqueued) == 1
     job_type, event_name, payload = enqueued[0]
     assert job_type == "notify_stage_change"
-    assert event_name == "client.stage_changed"
-    assert payload["_event"] == "client.stage_changed"
+    assert event_name == "example.stage_changed"
+    assert payload["_event"] == "example.stage_changed"
     assert uuid.UUID(payload["client_id"]) == event.client_id
 
 

@@ -22,6 +22,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.kernel.clients import configure_client_directory
+from app.kernel.entitlements import configure_entitlement_guard
 from app.kernel.events import configure_deferred_enqueuer, deferred_job_types
 from app.kernel.jobs import verify_handlers_exist
 from app.modules.clients import ClientRepositoryDirectory
@@ -37,6 +38,7 @@ from app.platform.db import (
     verify_no_rls_bypass,
     verify_pooler_isolation,
 )
+from app.platform.entitlements import DatabaseEntitlementGuard
 from app.platform.http.errors import register_error_handlers
 from app.platform.http.health import router as health_router
 from app.platform.http.middleware import (
@@ -150,6 +152,12 @@ def create_app() -> FastAPI:
     # importing the `clients` module that satisfies its port, so the entry point
     # is the one place allowed to know about both.
     configure_client_directory(ClientRepositoryDirectory())
+
+    # 🔒 FR-M0-045 — the seam a module enforces a plan limit through. Same reason
+    # as the two above: R5 forbids `app.modules.*` importing `app.platform.*`, so
+    # the kernel declares the protocol and the entry point supplies the
+    # implementation that knows about `subscriptions` and `usage_counters`.
+    configure_entitlement_guard(DatabaseEntitlementGuard())
 
     # 🔒 Fail startup if a deferred subscriber names a job type nothing can run.
     # Those rows would enqueue, fail on every attempt and dead-letter — found in

@@ -33,14 +33,38 @@ Everything before this was `kernel` and `platform`.
 
 | # | Slice | Delivers | Depends on |
 |---|---|---|---|
-| A | **Client spine** | `clients` + `client_stage_history`, enums, search index, kernel client port, contact/stage rules, create/read/update | S1 (all) |
-| B | **Lifecycle** | Stage transitions as named actions (ADR-A06), entitlement on `→ active` (FR-M1-002), archive/restore | A, S1-E |
+| A | **Client spine** ✅ | `clients` + `client_stage_history`, enums, search index, kernel client port, contact/stage rules, create/read/update | S1 (all) |
+| B | **Lifecycle** ✅ | Stage transitions as named actions (ADR-A06), entitlement on `→ active` (FR-M1-002), archive/restore, first Practitioner screens | A, S1-E |
 | C | **Collaboration** | Notes, tags, assignments, practitioner scoping (AC-M1-006) | A |
 | D | **Timeline** | `timeline_events`, DDR-06 subscriber, timeline read (NFR-006) | A, B, C |
 | E | **Discovery** | List + search endpoints, filters, sort, cursor pagination (NFR-005) | A, C |
 | F | **Lead capture** | `enquiry_forms`/`enquiry_submissions`, public endpoints, captcha, rate limit, silent duplicate matching, consent, needs-response view, acknowledgement (logged only) | A, D, S1-D, S1-F |
-| G | **Practitioner UI** | Client list, detail, timeline, notes, tags; click budgets NFR-011/012 | A–F |
+| G | **Practitioner UI** | Client list, timeline, notes, tags; click budgets NFR-011/012 | A–F |
 | H | **Public form UI** | Standalone mobile-first enquiry form with consent capture | F |
+
+### Decisions taken in Slice B
+
+- 🔒 **Archiving does not change `stage`.** `archived_at` is the archive flag and
+  `stage` records lifecycle position independently, which is what DB §5.2's
+  two-clause counting predicate assumes and what lets a restore return a client
+  to what they were (EC-M1-02). The consequence is that `ClientStage.ARCHIVED`
+  is unreachable: refused by `assert_transition_allowed`, absent from the API's
+  `to_stage` union, and rejected at the table by migration 0010. The enum value
+  stays — OD-01 has not settled the vocabulary and dropping a PostgreSQL enum
+  value means rewriting the type.
+- 🔒 **The transition graph is permissive** — any stage to any other, except a
+  no-op and except `archived`. The PRD constrains no ordering and FR-M1-017 puts
+  rule-driven transitions in Phase 3, so a graph invented now would be wrong the
+  first time a real funnel disagreed with it.
+- 🔒 **No `If-Match` on the lifecycle actions**, unlike PATCH. A precondition
+  prevents a lost update; a concurrent stage change loses nothing, since both
+  transitions are recorded and the final stage is one somebody asked for. The
+  race that does matter — two activations passing one entitlement check — is
+  handled by a row lock plus a per-tenant advisory lock.
+- ⚠️ **`POST /clients` at `stage=active` is now metered**, closing a gap Slice A
+  left open: the limit could be walked past by creating clients already active
+  rather than converting them.
+
 
 ### Why this order
 

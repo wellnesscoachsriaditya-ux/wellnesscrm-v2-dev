@@ -522,10 +522,19 @@ async def test_create_writes_the_client_and_its_opening_history(
 
 
 async def test_create_at_active_sets_the_activation_anchor(
-    app_engine: AsyncEngine, seeded_tenants: tuple[uuid.UUID, ...], migrator_engine: AsyncEngine
+    app_engine: AsyncEngine,
+    subscribed_tenants: tuple[uuid.UUID, ...],
+    migrator_engine: AsyncEngine,
 ) -> None:
-    """FR-M8-023 — an active client has a day the check-in schedule counts from."""
-    tenant_a = seeded_tenants[0]
+    """FR-M8-023 — an active client has a day the check-in schedule counts from.
+
+    ⚠️ Uses ``subscribed_tenants`` rather than ``seeded_tenants``. Creating a
+    client directly at ``active`` is metered (API §7.1), and a tenant with no
+    subscription is *indeterminate* rather than free-tier (FR-M0-046) — so
+    without a plan this would fail on the entitlement check and never reach the
+    anchor it is asserting about.
+    """
+    tenant_a = subscribed_tenants[0]
     async with migrator_engine.connect() as connection:
         await scope_to(connection, tenant_a)
         owner = await _owner_of(connection, tenant_a)

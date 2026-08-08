@@ -133,8 +133,17 @@
             "title": "Source Detail"
           },
           "stage": {
-            "$ref": "#/components/schemas/ClientStage",
-            "default": "lead"
+            "default": "lead",
+            "enum": [
+              "lead",
+              "contacted",
+              "consultation_scheduled",
+              "active",
+              "paused",
+              "churned"
+            ],
+            "title": "Stage",
+            "type": "string"
           }
         },
         "required": [
@@ -773,6 +782,40 @@
         "title": "SexType",
         "type": "string"
       },
+      "StageChangeRequest": {
+        "description": "`POST /app/clients/{id}/stage` — API §7.1.",
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "to_stage": {
+            "enum": [
+              "lead",
+              "contacted",
+              "consultation_scheduled",
+              "active",
+              "paused",
+              "churned"
+            ],
+            "title": "To Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to_stage"
+        ],
+        "title": "StageChangeRequest",
+        "type": "object"
+      },
       "TokenResponse": {
         "description": "What a client needs to make an authenticated request and to renew.\n\n🔒 No user object. The client fetches its own profile from a dedicated\nendpoint; embedding one here would put a name and email in every token\nrefresh and in whatever logs the response passes through.",
         "properties": {
@@ -1024,6 +1067,148 @@
           }
         },
         "summary": "Update a client",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/archive": {
+      "post": {
+        "description": "Soft-delete a client — FR-M1-010, AC-M1-007.\n\n🔒 Removes them from default views without deleting anything, and frees the\nentitlement slot immediately if they were ``active``. The stage is preserved,\nwhich is what lets :func:`restore_client` put them back where they were.\n\n⚠️ Takes no body. A reason has nowhere safe to go in this slice — see\n``transitions.archive``.",
+        "operationId": "clientsArchive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Archive a client",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/restore": {
+      "post": {
+        "description": "Bring an archived client back — EC-M1-02, AC-M1-007.\n\n🔒 Returns them to the stage they were archived at. A returning client is\nreactivated in place; there is never a second record.\n\n🔒 Returns **402** when the restored stage is ``active`` and the plan is at\nits ceiling (EC-M1-06) — archiving frees a slot, so restoring takes one back.",
+        "operationId": "clientsRestore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore an archived client",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/stage": {
+      "post": {
+        "description": "Move a client between stages — ADR-A06, FR-M1-015.\n\n🔒 Returns **402** with the limit, the usage, the plan and the upgrade path\nwhen the move enters ``active`` at the plan's ceiling (FR-M1-002). The error\nenvelope carries everything the UI needs to explain the refusal, so there is\nno second request to make.\n\n🔒 AC-M1-003 — converting a lead keeps the record, its identifier and all its\nprior history, because this changes a column rather than moving a row.",
+        "operationId": "clientsChangeStage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StageChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change a client's lifecycle stage",
         "tags": [
           "clients"
         ]
