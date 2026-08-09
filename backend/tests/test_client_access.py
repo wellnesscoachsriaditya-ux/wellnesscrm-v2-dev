@@ -98,6 +98,29 @@ def test_the_helper_still_authorizes() -> None:
     assert "await authorize(" in body, "the helper no longer applies the decision"
 
 
+#: 🔒 Client actions that legitimately carry no ``owner_or_assigned`` policy,
+#: each with the reason it cannot.
+#:
+#: ⚠️ **Adding a name here removes a security guarantee**, so each entry states
+#: what protects the action *instead*. An action whose replacement protection is
+#: "the role gate" alone does not belong in this list — that is precisely the
+#: hole FR-M0-017 is about.
+_POLICY_EXEMPT: dict[str, str] = {
+    # Ownership is established *by* this write (`owner_user_id` defaults to the
+    # caller), not checked before it. There is no resource to scope by yet.
+    "client.create": "no resource exists until the write completes",
+    # A list has no single resource either, and the policy takes one. Scoping a
+    # *collection* is a different operation — a WHERE clause — and it lives in
+    # `discovery._visible_to`. Asserted separately below, because "the policy is
+    # absent" and "the query is scoped" are different claims.
+    "client.list": "scoped inside the query by discovery._visible_to",
+    # Names many clients, and the policy takes one. Owner-only at the role gate,
+    # and every id is loaded and checked inside `bulk_reassign_owner` before
+    # anything is written.
+    "client.bulk_reassign": "owner-only, and every id is verified in the module",
+}
+
+
 def test_the_scoping_policy_is_declared_on_client_actions() -> None:
     """🔒 The other half: a policy nobody attached decides nothing.
 
@@ -112,13 +135,50 @@ def test_the_scoping_policy_is_declared_on_client_actions() -> None:
     assert scoped, "no client actions found — has the file moved?"
 
     unscoped = [
-        name
-        for name, block in scoped
-        # `client.create` has no resource to scope by: ownership is established
-        # *by* the write, not checked before it.
-        if name != "client.create" and "_SCOPED" not in block
+        name for name, block in scoped if name not in _POLICY_EXEMPT and "_SCOPED" not in block
     ]
     assert not unscoped, (
         "these client actions carry no ownership policy, so the coarse role gate "
         f"is all that protects them (FR-M0-017): {', '.join(sorted(unscoped))}"
     )
+
+
+def test_every_exemption_still_names_a_real_action() -> None:
+    """⚠️ An exemption for an action that no longer exists is a hole waiting.
+
+    If ``client.list`` were renamed, its exemption would silently apply to
+    nothing — and the *new* name would need one, which is the moment somebody
+    adds it without thinking. This fails instead.
+    """
+    actions = (
+        Path(__file__).resolve().parents[1] / "app" / "modules" / "clients" / "actions.py"
+    ).read_text(encoding="utf-8")
+    declared = set(re.findall(r'register_action\(\s*"(client\.[\w_]+)"', actions))
+
+    stale = sorted(set(_POLICY_EXEMPT) - declared)
+    assert not stale, f"these actions are exempt from scoping but no longer exist: {stale}"
+
+
+def test_the_list_query_scopes_by_the_actor() -> None:
+    """🔒 The replacement protection for ``client.list``, asserted rather than trusted.
+
+    The exemption above is only defensible because the query does the scoping.
+    This checks the mechanism is still there: a `_visible_to` that stopped
+    filtering would hand a practitioner the whole tenant, and the action's
+    missing policy would then be a real hole rather than a deliberate one.
+
+    ⚠️ Structural, not behavioural — the row-level proof is in
+    ``tests/integration/test_discovery.py``, which needs a database. This is the
+    cheap guard that fails on a refactor.
+    """
+    source = (
+        Path(__file__).resolve().parents[1] / "app" / "modules" / "clients" / "discovery.py"
+    ).read_text(encoding="utf-8")
+
+    assert "def _visible_to(" in source, "the list's scoping predicate has gone"
+    assert "UserRole.OWNER" in source, "the owner's tenant-wide exemption has gone"
+    assert "ClientAssignment.revoked_at.is_(None)" in source, (
+        "the grant predicate no longer excludes revoked assignments, so a "
+        "withdrawn colleague would keep seeing the client in their list"
+    )
+    assert "_visible_to(statement" in source, "list_clients no longer applies the predicate"

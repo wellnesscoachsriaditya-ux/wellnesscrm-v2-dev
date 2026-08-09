@@ -100,6 +100,18 @@ class Client(Base):
     created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
 
+    # ⚠️ 🔒 **`search_vector` is deliberately NOT mapped here.** Migration 0009
+    # adds it with a raw `ALTER TABLE ... ADD COLUMN ... GENERATED ALWAYS AS`,
+    # because SQLAlchemy cannot express a generated tsvector in a column
+    # definition. Mapping it anyway would break the model↔migration parity that
+    # `tests/test_kernel_schema.py` enforces — that test reads `op.create_table`
+    # and cannot see an ALTER, so a mapped column would look like drift.
+    #
+    # Weakening the test to accommodate one column is the wrong trade: it is the
+    # only thing keeping a hand-written migration in step with the models. The
+    # search predicate therefore names the column explicitly — see
+    # `discovery._SEARCH_VECTOR`.
+
     @property
     def is_minor(self) -> bool | None:
         """🔒 FR-M0-028 — derived, never stored.

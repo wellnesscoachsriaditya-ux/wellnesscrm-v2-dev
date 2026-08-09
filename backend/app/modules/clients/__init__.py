@@ -21,8 +21,10 @@ from __future__ import annotations
 from app.modules.clients.access import ClientAccessView, load_for_access, load_grants
 from app.modules.clients.actions import (
     CLIENT_ARCHIVE,
+    CLIENT_BULK_REASSIGN,
     CLIENT_CHANGE_STAGE,
     CLIENT_CREATE,
+    CLIENT_LIST,
     CLIENT_MANAGE_ACCESS,
     CLIENT_MANAGE_TAGS,
     CLIENT_READ,
@@ -37,12 +39,23 @@ from app.modules.clients.actions import (
 )
 from app.modules.clients.assignments import (
     GrantRecord,
+    bulk_reassign_owner,
     grant_access,
     list_grants,
     reassign_owner,
     revoke_access,
 )
 from app.modules.clients.directory import ClientRepositoryDirectory
+from app.modules.clients.discovery import (
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    ClientCursor,
+    ClientFilters,
+    ClientListItem,
+    ClientPage,
+    build_filters,
+    list_clients,
+)
 from app.modules.clients.models import (
     Client,
     ClientAssignment,
@@ -97,8 +110,10 @@ from app.modules.clients.transitions import (
 
 __all__ = [
     "CLIENT_ARCHIVE",
+    "CLIENT_BULK_REASSIGN",
     "CLIENT_CHANGE_STAGE",
     "CLIENT_CREATE",
+    "CLIENT_LIST",
     "CLIENT_MANAGE_ACCESS",
     "CLIENT_MANAGE_TAGS",
     "CLIENT_READ",
@@ -109,7 +124,9 @@ __all__ = [
     "CLIENT_UPDATE",
     "CLIENT_WRITE_NOTE",
     "DEFAULT_LIMIT",
+    "DEFAULT_PAGE_SIZE",
     "MAX_LIMIT",
+    "MAX_PAGE_SIZE",
     "MAX_REASON_LENGTH",
     "TAG_MANAGE",
     "TAG_READ",
@@ -118,7 +135,11 @@ __all__ = [
     "ClientAccessView",
     "ClientAssignment",
     "ClientCreate",
+    "ClientCursor",
+    "ClientFilters",
+    "ClientListItem",
     "ClientNote",
+    "ClientPage",
     "ClientRepositoryDirectory",
     "ClientStageHistory",
     "ClientTag",
@@ -135,6 +156,8 @@ __all__ = [
     "archive_note",
     "archive_tag",
     "attach_tag",
+    "build_filters",
+    "bulk_reassign_owner",
     "change_stage",
     "count_active_clients",
     "create_client",
@@ -146,6 +169,7 @@ __all__ = [
     "get_tag",
     "grant_access",
     "list_client_tags",
+    "list_clients",
     "list_grants",
     "list_notes",
     "list_tags",

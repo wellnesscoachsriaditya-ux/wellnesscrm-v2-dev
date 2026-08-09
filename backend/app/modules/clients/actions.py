@@ -211,3 +211,39 @@ CLIENT_READ_TIMELINE = register_action(
     policies=_SCOPED,
     is_read=True,
 )
+
+
+# ─── Discovery (FR-M1-021/022) ───────────────────────────────────────────
+
+#: 🔒 **No `owner_or_assigned`, and this is the one place that absence is
+#: correct rather than an omission.** The policy answers "may I see *this*
+#: client", which needs a resource; a list has none until it has run. Scoping a
+#: list is a different operation — a WHERE clause — and it lives in
+#: `discovery._visible_to`, which the route is obliged to use.
+#:
+#: ⚠️ That obligation is the risk this declaration carries. A future list route
+#: reaching `list_clients` without passing the actor's role would return the
+#: whole tenant to a practitioner. `tests/test_client_access.py` asserts the
+#: route list; the integration suite asserts the rows.
+CLIENT_LIST = register_action(
+    "client.list",
+    roles=_PRACTITIONER,
+    data_scope=DataScope.TENANT_PII,
+    is_read=True,
+)
+
+#: 🔒 Owner-only, exactly like `client.manage_access`: reassigning changes who is
+#: accountable for a client, and doing it to fifty at once does not make it a
+#: lesser act. EC-M1-04's motivating case — a practitioner leaving — is the
+#: owner's decision by definition.
+#:
+#: ⚠️ Deliberately **not** `_SCOPED`. The policy takes one resource and this
+#: action names many, so a per-client check happens inside `bulk_reassign_owner`
+#: where every id is known. Declaring a policy that silently could not run on
+#: the list is worse than declaring none and checking explicitly.
+CLIENT_BULK_REASSIGN = register_action(
+    "client.bulk_reassign",
+    roles=_OWNER_ONLY,
+    data_scope=DataScope.TENANT_PII,
+    audit_metadata_keys={"client_count", "to_user_id"},
+)

@@ -19,6 +19,7 @@ router that forgot the declaration would otherwise widen access silently.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -28,10 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.kernel.collaboration import assert_grant_is_meaningful, may_manage_access
 from app.kernel.context import UserRole
+from app.kernel.discovery import MAX_BULK_REASSIGN
 from app.kernel.errors import AuthorizationError, NotFoundError, ValidationError
 from app.kernel.events import publish
 from app.kernel.timeline import ClientAccessChanged, ClientOwnershipChanged
-from app.modules.clients.models import ClientAssignment
+from app.modules.clients.models import Client, ClientAssignment
 from app.modules.clients.service import get_client, now
 
 
@@ -260,12 +262,6 @@ async def reassign_owner(
     🔒 Owner-only, for the same reason as granting: it changes who is accountable
     for a client, and FR-M0-017 makes that the owner's decision.
 
-    ⚠️ **Single client, not bulk.** EC-M1-04 describes reassigning a departing
-    practitioner's caseload *in bulk*; that needs a selection UI and a
-    partial-failure story — what happens when 40 of 50 succeed — and neither
-    exists yet. One at a time is correct and useful now; bulk is a Slice E
-    concern, alongside the list that would drive the selection.
-
     ⚠️ Any live grant to the *new* owner becomes redundant but is deliberately
     left in place: revoking it here would erase a record of a decision somebody
     made (EC-M1-04), and it grants nothing the ownership does not already.
@@ -283,6 +279,30 @@ async def reassign_owner(
             action="Choose a different practitioner.",
         )
 
+    await _reassign_one(
+        session,
+        client=client,
+        tenant_id=tenant_id,
+        new_owner_user_id=new_owner_user_id,
+        actor_user_id=actor_user_id,
+    )
+
+
+async def _reassign_one(
+    session: AsyncSession,
+    *,
+    client: Client,
+    tenant_id: uuid.UUID,
+    new_owner_user_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+) -> uuid.UUID:
+    """Move one already-loaded client, and announce it. Returns the old owner.
+
+    🔒 Extracted so :func:`reassign_owner` and :func:`bulk_reassign_owner` cannot
+    drift. A bulk path that wrote the column without publishing would be a
+    caseload handover invisible to every client's timeline — and the divergence
+    would only surface as "the timeline missed something", long after.
+    """
     # Captured before the write — the event carries where the client came *from*,
     # and reading it after the assignment would report the destination twice.
     previous_owner_user_id = client.owner_user_id
@@ -296,7 +316,7 @@ async def reassign_owner(
     # a practitioner looks for it first.
     await publish(
         ClientOwnershipChanged(
-            client_id=client_id,
+            client_id=client.id,
             tenant_id=tenant_id,
             from_user_id=previous_owner_user_id,
             to_user_id=new_owner_user_id,
@@ -305,3 +325,84 @@ async def reassign_owner(
         ),
         session,
     )
+    return previous_owner_user_id
+
+
+async def bulk_reassign_owner(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    client_ids: Sequence[uuid.UUID],
+    new_owner_user_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+    actor_role: UserRole | None,
+) -> int:
+    """Hand a departing practitioner's caseload to somebody else — EC-M1-04.
+
+    Returns the number of clients actually moved.
+
+    🔒 **All or nothing.** One transaction, so a failure on client 40 of 50 rolls
+    back the first 39. The alternative — a partial success reporting which ids
+    failed — sounds friendlier and is worse: a half-completed handover leaves the
+    caseload split between two practitioners with no record of the intent, and the
+    practitioner cannot tell whether re-running it is safe.
+
+    🔒 Every id is authorized and confirmed to exist *before* anything is written.
+    A missing id is a 404 for the whole request rather than a silent skip: the
+    practitioner selected from a list, so an id that is not there means their view
+    disagrees with the database, and quietly moving 49 of 50 hides that.
+
+    ⚠️ Clients already owned by the target are skipped rather than refused. In a
+    bulk selection that is not a mistake — it is an overlapping selection, and
+    refusing the batch over it would make the operation unusable on exactly the
+    "everything this person owns" case it exists for. The single-client path still
+    raises, because there the same condition *is* the whole request.
+
+    Raises:
+        AuthorizationError: The actor is not the tenant owner.
+        ValidationError: Nothing was selected, or more than `MAX_BULK_REASSIGN`.
+        NotFoundError: An id names a client this tenant does not have.
+    """
+    _assert_may_manage(actor_role)
+
+    # 🔒 Deduplicated before counting, so a UI that submits an id twice is not
+    # refused for exceeding a limit it has not reached.
+    unique_ids = list(dict.fromkeys(client_ids))
+    if not unique_ids:
+        raise ValidationError(
+            "Select at least one client to reassign.",
+            action="Choose clients from the list, then reassign.",
+        )
+    if len(unique_ids) > MAX_BULK_REASSIGN:
+        raise ValidationError(
+            f"Reassign at most {MAX_BULK_REASSIGN} clients at once.",
+            action="Narrow the selection and repeat for the rest.",
+        )
+
+    # One query for the whole batch. `get_client` per id would be N round trips
+    # to prove a precondition, on a path already holding a write transaction.
+    clients = list(
+        await session.scalars(
+            select(Client).where(Client.tenant_id == tenant_id, Client.id.in_(unique_ids))
+        )
+    )
+    if len(clients) != len(unique_ids):
+        raise NotFoundError(
+            "One of those clients could not be found.",
+            action="Reload the list — someone may have archived or removed them.",
+        )
+
+    moved = 0
+    for client in clients:
+        if client.owner_user_id == new_owner_user_id:
+            continue
+        await _reassign_one(
+            session,
+            client=client,
+            tenant_id=tenant_id,
+            new_owner_user_id=new_owner_user_id,
+            actor_user_id=actor_user_id,
+        )
+        moved += 1
+
+    return moved

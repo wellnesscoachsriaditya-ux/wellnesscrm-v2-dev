@@ -13,6 +13,61 @@
         "title": "AcceptedResponse",
         "type": "object"
       },
+      "ArchivedFilter": {
+        "description": "Whether archived clients appear — FR-M1-014.\n\n🔒 DB §22.2: \"Archived clients — excluded from lists, search, entitlement\ncount, all messaging.\" So ``EXCLUDE`` is the default and the partial indexes\ncarry the predicate.\n\n⚠️ ``ONLY`` exists because a practitioner who archived somebody by mistake\nneeds to find them to restore them (EC-M1-02), and a client who cannot be\nfound cannot be restored. Without it the archive is a one-way door.",
+        "enum": [
+          "exclude",
+          "only",
+          "include"
+        ],
+        "title": "ArchivedFilter",
+        "type": "string"
+      },
+      "BulkReassignRequest": {
+        "description": "Hand several clients to one practitioner — EC-M1-04.",
+        "properties": {
+          "client_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Client Ids",
+            "type": "array"
+          },
+          "owner_user_id": {
+            "format": "uuid",
+            "title": "Owner User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_ids",
+          "owner_user_id"
+        ],
+        "title": "BulkReassignRequest",
+        "type": "object"
+      },
+      "BulkReassignResponse": {
+        "description": "What actually moved.\n\n⚠️ ``moved`` can be lower than the number of ids submitted, and that is not\na partial failure: clients already owned by the target are skipped, which in\nan overlapping bulk selection is the correct outcome rather than an error.",
+        "properties": {
+          "moved": {
+            "title": "Moved",
+            "type": "integer"
+          },
+          "requested": {
+            "title": "Requested",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "moved",
+          "requested"
+        ],
+        "title": "BulkReassignResponse",
+        "type": "object"
+      },
       "ClientCreateRequest": {
         "description": "FR-M1-004 — name plus one contact method is the whole requirement.\n\n🔒 Everything else is optional. A practitioner capturing a lead mid-call has\na name and a number; a form demanding more is a form they abandon, and\nNFR-011 budgets the whole interaction at three steps.",
         "properties": {
@@ -150,6 +205,185 @@
           "full_name"
         ],
         "title": "ClientCreateRequest",
+        "type": "object"
+      },
+      "ClientListItemResponse": {
+        "description": "One row of the client list — API §7.1.\n\n🔒 ``owner_name`` is denormalised into the response to avoid an N+1 (API\n§7.1) and because Principle 3 makes it the server's job to supply what the\nclient renders rather than something the UI resolves per row.\n\n⏳ ``is_at_risk``, ``last_activity_at`` and ``active_plan_version_id`` are\nabsent. API §7.1 lists them and DDR-13 requires at-risk state to be\n*precomputed* into ``client_daily_metrics`` — a table S7 creates. Computing\nthem live is the read-time aggregation DDR-13 exists to reject, and shipping\na field that is permanently ``false`` would be worse than its absence.",
+        "properties": {
+          "archived_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dietary_class": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DietaryClass"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "mobile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "owner_user_id": {
+            "format": "uuid",
+            "title": "Owner User Id",
+            "type": "string"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/ClientStage"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/ClientTagSummary"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "full_name",
+          "stage",
+          "mobile",
+          "email",
+          "city",
+          "dietary_class",
+          "owner_user_id",
+          "owner_name",
+          "tags",
+          "archived_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ClientListItemResponse",
+        "type": "object"
+      },
+      "ClientListResponse": {
+        "description": "API §5.1's collection envelope.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClientListItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/ClientPageInfo"
+          }
+        },
+        "required": [
+          "items",
+          "page"
+        ],
+        "title": "ClientListResponse",
+        "type": "object"
+      },
+      "ClientPageInfo": {
+        "description": "Where the next page resumes — API §6.1.",
+        "properties": {
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "has_more"
+        ],
+        "title": "ClientPageInfo",
         "type": "object"
       },
       "ClientPatch": {
@@ -432,6 +666,34 @@
         "title": "ClientResponse",
         "type": "object"
       },
+      "ClientSort": {
+        "description": "How the list may be ordered — FR-M1-022.\n\n🔒 **A closed enum, because every value must be indexed.** API §6.3\nallowlists sort columns per endpoint precisely so an unindexed sort cannot\nreach production. Free-text `?sort=` would be a full scan on whichever\ncolumn somebody guessed.\n\n⚠️ FR-M1-022 asks for \"name, recent activity and creation date\". *Recent\nactivity* maps to ``updated_at`` in this slice, and that is an approximation\nworth stating: a true activity clock spans appointments, messages and plan\nevents, which DDR-13 precomputes into ``client_daily_metrics`` — a table S7\ncreates. ``updated_at`` moves on every write to the client record, which is\nthe closest honest signal available now, and the enum value is named for the\nintent so the column beneath it can change without breaking callers.",
+        "enum": [
+          "name",
+          "recent_activity",
+          "created"
+        ],
+        "title": "ClientSort",
+        "type": "string"
+      },
+      "ClientSortOption": {
+        "description": "One ordering the list offers — API §6.3.\n\n🔒 A declared model rather than a bare ``dict[str, str]``, and the reason is\nNFR-079: the generated client is the contract. A dict serialises to\n``{[key: string]: string}``, which types the *shape* of a map and tells the\nfrontend nothing about ``value`` or ``label`` — so a renamed field would\nreach a dropdown as ``undefined`` instead of failing the build.",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/ClientSort"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "ClientSortOption",
+        "type": "object"
+      },
       "ClientStage": {
         "description": "The lifecycle — DB §5.2, M1.4. 🟡 Values PROPOSED pending OD-01.\n\n🔒 One entity, seven stages. A ``lead`` and an ``active`` client are the same\nrow; the stage is what differs. That is what makes AC-M1-003 (\"converting a\nlead retains the original record, its identifier, and all prior history\")\ntrue by construction rather than by careful copying.",
         "enum": [
@@ -445,6 +707,31 @@
         ],
         "title": "ClientStage",
         "type": "string"
+      },
+      "ClientTagSummary": {
+        "description": "A tag as the list renders it — API §7.1's `{id, name, color}`.\n\n⚠️ Spelled ``colour`` here, matching ``TagColour`` and the rest of the\ncodebase. API §7.1 writes `color`; the inconsistency is the spec's, and\nmatching the code the frontend already generates types from is worth more\nthan matching the prose.",
+        "properties": {
+          "colour": {
+            "title": "Colour",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "colour"
+        ],
+        "title": "ClientTagSummary",
+        "type": "object"
       },
       "CurrentSessionResponse": {
         "description": "Who the caller is — identifiers and role, nothing else.\n\n🔒 **No name, email or phone** (NFR-033). ``TokenResponse`` says the client\n\"fetches its own profile from a dedicated endpoint\"; this is that endpoint,\nand it deliberately answers the *authorization* question rather than the\ndisplay one. The UI needs ``user_id`` to know which notes it may edit\n(FR-M3-020) and ``role`` to know whether to offer access management\n(FR-M0-017) — neither needs a name.",
@@ -1327,6 +1614,189 @@
       }
     },
     "/api/v1/app/clients": {
+      "get": {
+        "description": "The client list — FR-M1-021/022, NFR-005 (≤300 ms).\n\n🔒 **A practitioner sees only their own and their assigned clients**\n(AC-M1-006); an owner sees the tenant (FR-M0-017). Applied as a predicate\ninside the query, because a list filtered after the fact would page short and\nleak totals.\n\n⚠️ **Stages are OR, tags are AND.** Ticking two stages means \"either\" — the\nnatural reading of a status filter. Ticking two tags means \"both\", because\ntags are how a caseload is *narrowed*: \"PCOS or post-natal\" would return a\nlonger list than the practitioner started with, which is the opposite of what\nchoosing a second filter is for.\n\n⚠️ Archived clients are excluded by default (FR-M1-014, DB §22.2).\n``archived=only`` exists so a client archived by mistake can be found and\nrestored — without it the archive is a one-way door.",
+        "operationId": "clientsList",
+        "parameters": [
+          {
+            "description": "Search name, email or the last digits of a mobile (FR-M1-021).",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search name, email or the last digits of a mobile (FR-M1-021).",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Repeat for OR within the field — API §6.2.",
+            "in": "query",
+            "name": "stage",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/ClientStage"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Repeat for OR within the field — API §6.2.",
+              "title": "Stage"
+            }
+          },
+          {
+            "description": "Repeat to require ALL named tags — see below.",
+            "in": "query",
+            "name": "tag_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Repeat to require ALL named tags — see below.",
+              "title": "Tag Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "owner_user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Owner User Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "archived",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ArchivedFilter",
+              "default": "exclude"
+            }
+          },
+          {
+            "description": "`name`, `recent_activity` or `created`; `-` prefix for descending.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`name`, `recent_activity` or `created`; `-` prefix for descending.",
+              "title": "Sort"
+            }
+          },
+          {
+            "description": "Opaque, from a previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque, from a previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Adds a COUNT — API §6.1.",
+            "in": "query",
+            "name": "include_total",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Adds a COUNT — API §6.1.",
+              "title": "Include Total",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List, search and filter clients",
+        "tags": [
+          "clients"
+        ]
+      },
       "post": {
         "description": "Create a client or lead — FR-M1-004, AC-M1-001.\n\n🔒 Not metered. FR-M1-003 keeps leads unmetered at every stage before\n``active``, and EC-M2-06 requires a tenant at their limit to keep accepting\nthem. The entitlement binds on the transition to ``active`` (Slice B).",
         "operationId": "clientsCreate",
@@ -1363,6 +1833,74 @@
           }
         },
         "summary": "Create a client",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/app/clients/reassign": {
+      "post": {
+        "description": "Hand a departing practitioner's caseload over — EC-M1-04.\n\n🔒 Owner-only, and **all or nothing**: one transaction, so a failure partway\nrolls the whole batch back. A half-completed handover would split a caseload\nbetween two practitioners with no record of the intent, and the practitioner\ncould not tell whether re-running it was safe.\n\n⚠️ ``moved`` may be lower than the number submitted — clients already owned\nby the target are skipped, which in an overlapping selection is correct\nrather than an error.\n\n⚠️ Registered *before* ``/{client_id}`` matters not at all here, because\nFastAPI matches literal path segments ahead of parameters regardless of\ndeclaration order across routers. Named anyway because a reader will wonder.",
+        "operationId": "clientsBulkReassign",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkReassignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkReassignResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reassign several clients to one practitioner",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/app/clients/sort-options": {
+      "get": {
+        "description": "The sort vocabulary, so the UI does not hardcode it.\n\n🔒 Every value here is index-backed (migration 0013). Serving the list from\nthe server is what keeps a dropdown from offering an ordering the database\nwould have to sort in memory — API §6.3's allowlist, expressed as data.",
+        "operationId": "clientsSortOptions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ClientSortOption"
+                  },
+                  "title": "Response Clientssortoptions",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "The orderings the list supports",
         "tags": [
           "clients"
         ]

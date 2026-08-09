@@ -23,6 +23,19 @@ export type StageValue =
   | 'churned'
   | 'archived'
 
+/**
+ * 🔒 FR-M1-014's three archive views.
+ *
+ * ⚠️ Declared here rather than imported from `features/`: components may not
+ * import domain code (R8), and this value is what every component's `archived`
+ * prop is typed against. It mirrors the API's `ArchivedFilter` union by hand —
+ * deliberately, like `StageValue` does for `ClientStage`, so a component needing
+ * the value can reach it without crossing the boundary. The two are kept in
+ * agreement by the screen that maps them, which fails to compile if the wire
+ * union changes.
+ */
+export type ArchivedView = 'exclude' | 'include' | 'only'
+
 export const STAGE_LABEL: Record<StageValue, string> = {
   lead: 'New enquiry',
   contacted: 'Contacted',

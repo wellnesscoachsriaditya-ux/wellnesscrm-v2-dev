@@ -52,6 +52,7 @@ from app.platform.http.routers.auth import public_router as auth_public_router
 from app.platform.http.routers.clients import router as clients_router
 from app.platform.http.routers.collaboration import client_router as collaboration_client_router
 from app.platform.http.routers.collaboration import tag_router as collaboration_tag_router
+from app.platform.http.routers.discovery import router as discovery_router
 from app.platform.http.routers.timeline import router as timeline_router
 from app.platform.identity.authentication import resolve_actor as authenticate
 from app.platform.identity.credentials import raise_if_credentials_are_local
@@ -231,6 +232,11 @@ def create_app() -> FastAPI:
     # the reason its own docstring gives: by S6 the timeline's producers will
     # outnumber everything in `collaboration.py`.
     app.include_router(timeline_router)
+    # The collection half of `/app/clients` — list, search, filter and bulk
+    # reassignment. Separate from `clients_router` because that one owns a single
+    # client's lifecycle and this owns the set; they share a prefix and collide
+    # on nothing.
+    app.include_router(discovery_router)
 
     # 🔒 ADR-05 — last, after every router is registered, so it sees the whole
     # route table. A route that declares no authorization action, declares one

@@ -64,7 +64,26 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List, search and filter clients
+         * @description The client list — FR-M1-021/022, NFR-005 (≤300 ms).
+         *
+         *     🔒 **A practitioner sees only their own and their assigned clients**
+         *     (AC-M1-006); an owner sees the tenant (FR-M0-017). Applied as a predicate
+         *     inside the query, because a list filtered after the fact would page short and
+         *     leak totals.
+         *
+         *     ⚠️ **Stages are OR, tags are AND.** Ticking two stages means "either" — the
+         *     natural reading of a status filter. Ticking two tags means "both", because
+         *     tags are how a caseload is *narrowed*: "PCOS or post-natal" would return a
+         *     longer list than the practitioner started with, which is the opposite of what
+         *     choosing a second filter is for.
+         *
+         *     ⚠️ Archived clients are excluded by default (FR-M1-014, DB §22.2).
+         *     ``archived=only`` exists so a client archived by mistake can be found and
+         *     restored — without it the archive is a one-way door.
+         */
+        get: operations["clientsList"];
         put?: never;
         /**
          * Create a client
@@ -75,6 +94,63 @@ export interface paths {
          *     them. The entitlement binds on the transition to ``active`` (Slice B).
          */
         post: operations["clientsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reassign several clients to one practitioner
+         * @description Hand a departing practitioner's caseload over — EC-M1-04.
+         *
+         *     🔒 Owner-only, and **all or nothing**: one transaction, so a failure partway
+         *     rolls the whole batch back. A half-completed handover would split a caseload
+         *     between two practitioners with no record of the intent, and the practitioner
+         *     could not tell whether re-running it was safe.
+         *
+         *     ⚠️ ``moved`` may be lower than the number submitted — clients already owned
+         *     by the target are skipped, which in an overlapping selection is correct
+         *     rather than an error.
+         *
+         *     ⚠️ Registered *before* ``/{client_id}`` matters not at all here, because
+         *     FastAPI matches literal path segments ahead of parameters regardless of
+         *     declaration order across routers. Named anyway because a reader will wonder.
+         */
+        post: operations["clientsBulkReassign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/sort-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The orderings the list supports
+         * @description The sort vocabulary, so the UI does not hardcode it.
+         *
+         *     🔒 Every value here is index-backed (migration 0013). Serving the list from
+         *     the server is what keeps a dropdown from offering an ordering the database
+         *     would have to sort in memory — API §6.3's allowlist, expressed as data.
+         */
+        get: operations["clientsSortOptions"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -749,6 +825,47 @@ export interface components {
             message: string;
         };
         /**
+         * ArchivedFilter
+         * @description Whether archived clients appear — FR-M1-014.
+         *
+         *     🔒 DB §22.2: "Archived clients — excluded from lists, search, entitlement
+         *     count, all messaging." So ``EXCLUDE`` is the default and the partial indexes
+         *     carry the predicate.
+         *
+         *     ⚠️ ``ONLY`` exists because a practitioner who archived somebody by mistake
+         *     needs to find them to restore them (EC-M1-02), and a client who cannot be
+         *     found cannot be restored. Without it the archive is a one-way door.
+         * @enum {string}
+         */
+        ArchivedFilter: "exclude" | "only" | "include";
+        /**
+         * BulkReassignRequest
+         * @description Hand several clients to one practitioner — EC-M1-04.
+         */
+        BulkReassignRequest: {
+            /** Client Ids */
+            client_ids: string[];
+            /**
+             * Owner User Id
+             * Format: uuid
+             */
+            owner_user_id: string;
+        };
+        /**
+         * BulkReassignResponse
+         * @description What actually moved.
+         *
+         *     ⚠️ ``moved`` can be lower than the number of ids submitted, and that is not
+         *     a partial failure: clients already owned by the target are skipped, which in
+         *     an overlapping bulk selection is the correct outcome rather than an error.
+         */
+        BulkReassignResponse: {
+            /** Moved */
+            moved: number;
+            /** Requested */
+            requested: number;
+        };
+        /**
          * ClientCreateRequest
          * @description FR-M1-004 — name plus one contact method is the whole requirement.
          *
@@ -786,6 +903,79 @@ export interface components {
              * @enum {string}
              */
             stage: "lead" | "contacted" | "consultation_scheduled" | "active" | "paused" | "churned";
+        };
+        /**
+         * ClientListItemResponse
+         * @description One row of the client list — API §7.1.
+         *
+         *     🔒 ``owner_name`` is denormalised into the response to avoid an N+1 (API
+         *     §7.1) and because Principle 3 makes it the server's job to supply what the
+         *     client renders rather than something the UI resolves per row.
+         *
+         *     ⏳ ``is_at_risk``, ``last_activity_at`` and ``active_plan_version_id`` are
+         *     absent. API §7.1 lists them and DDR-13 requires at-risk state to be
+         *     *precomputed* into ``client_daily_metrics`` — a table S7 creates. Computing
+         *     them live is the read-time aggregation DDR-13 exists to reject, and shipping
+         *     a field that is permanently ``false`` would be worse than its absence.
+         */
+        ClientListItemResponse: {
+            /** Archived At */
+            archived_at: string | null;
+            /** City */
+            city: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            dietary_class: components["schemas"]["DietaryClass"] | null;
+            /** Email */
+            email: string | null;
+            /** Full Name */
+            full_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Mobile */
+            mobile: string | null;
+            /** Owner Name */
+            owner_name: string | null;
+            /**
+             * Owner User Id
+             * Format: uuid
+             */
+            owner_user_id: string;
+            stage: components["schemas"]["ClientStage"];
+            /** Tags */
+            tags: components["schemas"]["ClientTagSummary"][];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ClientListResponse
+         * @description API §5.1's collection envelope.
+         */
+        ClientListResponse: {
+            /** Items */
+            items: components["schemas"]["ClientListItemResponse"][];
+            page: components["schemas"]["ClientPageInfo"];
+        };
+        /**
+         * ClientPageInfo
+         * @description Where the next page resumes — API §6.1.
+         */
+        ClientPageInfo: {
+            /** Has More */
+            has_more: boolean;
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
         };
         /**
          * ClientPatch
@@ -863,6 +1053,40 @@ export interface components {
             updated_at: string;
         };
         /**
+         * ClientSort
+         * @description How the list may be ordered — FR-M1-022.
+         *
+         *     🔒 **A closed enum, because every value must be indexed.** API §6.3
+         *     allowlists sort columns per endpoint precisely so an unindexed sort cannot
+         *     reach production. Free-text `?sort=` would be a full scan on whichever
+         *     column somebody guessed.
+         *
+         *     ⚠️ FR-M1-022 asks for "name, recent activity and creation date". *Recent
+         *     activity* maps to ``updated_at`` in this slice, and that is an approximation
+         *     worth stating: a true activity clock spans appointments, messages and plan
+         *     events, which DDR-13 precomputes into ``client_daily_metrics`` — a table S7
+         *     creates. ``updated_at`` moves on every write to the client record, which is
+         *     the closest honest signal available now, and the enum value is named for the
+         *     intent so the column beneath it can change without breaking callers.
+         * @enum {string}
+         */
+        ClientSort: "name" | "recent_activity" | "created";
+        /**
+         * ClientSortOption
+         * @description One ordering the list offers — API §6.3.
+         *
+         *     🔒 A declared model rather than a bare ``dict[str, str]``, and the reason is
+         *     NFR-079: the generated client is the contract. A dict serialises to
+         *     ``{[key: string]: string}``, which types the *shape* of a map and tells the
+         *     frontend nothing about ``value`` or ``label`` — so a renamed field would
+         *     reach a dropdown as ``undefined`` instead of failing the build.
+         */
+        ClientSortOption: {
+            /** Label */
+            label: string;
+            value: components["schemas"]["ClientSort"];
+        };
+        /**
          * ClientStage
          * @description The lifecycle — DB §5.2, M1.4. 🟡 Values PROPOSED pending OD-01.
          *
@@ -873,6 +1097,26 @@ export interface components {
          * @enum {string}
          */
         ClientStage: "lead" | "contacted" | "consultation_scheduled" | "active" | "paused" | "churned" | "archived";
+        /**
+         * ClientTagSummary
+         * @description A tag as the list renders it — API §7.1's `{id, name, color}`.
+         *
+         *     ⚠️ Spelled ``colour`` here, matching ``TagColour`` and the rest of the
+         *     codebase. API §7.1 writes `color`; the inconsistency is the spec's, and
+         *     matching the code the frontend already generates types from is worth more
+         *     than matching the prose.
+         */
+        ClientTagSummary: {
+            /** Colour */
+            colour: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /**
          * CurrentSessionResponse
          * @description Who the caller is — identifiers and role, nothing else.
@@ -1404,6 +1648,51 @@ export interface operations {
             };
         };
     };
+    clientsList: {
+        parameters: {
+            query?: {
+                /** @description Search name, email or the last digits of a mobile (FR-M1-021). */
+                q?: string | null;
+                /** @description Repeat for OR within the field — API §6.2. */
+                stage?: components["schemas"]["ClientStage"][] | null;
+                /** @description Repeat to require ALL named tags — see below. */
+                tag_id?: string[] | null;
+                owner_user_id?: string[] | null;
+                archived?: components["schemas"]["ArchivedFilter"];
+                /** @description `name`, `recent_activity` or `created`; `-` prefix for descending. */
+                sort?: string | null;
+                /** @description Opaque, from a previous page. */
+                cursor?: string | null;
+                limit?: number;
+                /** @description Adds a COUNT — API §6.1. */
+                include_total?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     clientsCreate: {
         parameters: {
             query?: never;
@@ -1433,6 +1722,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsBulkReassign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkReassignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkReassignResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsSortOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientSortOption"][];
                 };
             };
         };
