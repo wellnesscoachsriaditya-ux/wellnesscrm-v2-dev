@@ -174,8 +174,24 @@ export interface RequestOptions {
    * "the call site forgot an argument".
    */
   path?: Record<string, string | number>
-  /** Query parameters. `undefined` values are dropped rather than sent as "undefined". */
-  query?: Record<string, string | number | boolean | undefined>
+  /**
+   * Query parameters. `undefined` values are dropped rather than sent as
+   * "undefined".
+   *
+   * 🔒 An **array becomes repeated keys** — `?stage=active&stage=paused` — which
+   * is API §6.2's filter encoding ("repeated params are OR within a field").
+   * Anything else would need the backend to parse a delimiter out of one value,
+   * and a tag name containing that delimiter would then silently split.
+   * An empty array sends nothing, so "filter by none" and "no filter" agree.
+   */
+  query?: Record<
+    string,
+    | string
+    | number
+    | boolean
+    | undefined
+    | readonly (string | number | boolean | undefined)[]
+  >
   /** JSON request body. Serialised here so callers never set Content-Type. */
   body?: unknown
   signal?: AbortSignal
@@ -231,7 +247,20 @@ export function createApiClient(options: ApiClientOptions = {}) {
     )
 
     for (const [key, value] of Object.entries(init.query ?? {})) {
-      if (value !== undefined) url.searchParams.set(key, String(value))
+      if (value === undefined) continue
+      // `append`, not `set` — an array becomes repeated keys (API §6.2).
+      // ⚠️ Entries are filtered as well as the array itself: `String(undefined)`
+      // is the literal `"undefined"`, which is the same defect the scalar branch
+      // avoids by skipping. A sparse filter list is easy to produce from a UI
+      // holding optional values, and the symptom would be a 422 naming an enum
+      // member nobody chose.
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item !== undefined) url.searchParams.append(key, String(item))
+        }
+      } else {
+        url.searchParams.set(key, String(value))
+      }
     }
 
     const hasBody = init.body !== undefined

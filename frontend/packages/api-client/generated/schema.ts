@@ -388,6 +388,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/app/clients/{client_id}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A client's unified timeline
+         * @description Reverse-chronological, cursor-paginated — FR-M1-018, NFR-006.
+         *
+         *     🔒 One indexed query regardless of how many modules feed the timeline, which
+         *     is the whole point of DDR-06's materialised projection and what keeps the
+         *     800 ms budget from eroding as S3–S6 add producers.
+         *
+         *     ⚠️ Repeated ``event_type`` params are OR within the field (API §6.2). An
+         *     absent one means everything — including event types this build cannot yet
+         *     produce, which is harmless: they simply match nothing.
+         */
+        get: operations["clientTimelineList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/timeline/filters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The event types worth filtering by
+         * @description The filter list FR-M1-019 drives.
+         *
+         *     🔒 **Only event types something can actually produce.** ``timeline_event_type``
+         *     declares the full S3–S6 vocabulary up front (one enum migration rather than
+         *     nine), so offering every member would give a practitioner filters like "Plan
+         *     issued" that always return nothing — which reads as a broken timeline rather
+         *     than an unbuilt feature.
+         *
+         *     ⚠️ Client-scoped in its path but not in its content: it lists what *the
+         *     system* can produce, not what this client has. Making it depend on the
+         *     client's own history would mean a filter appearing and disappearing as
+         *     events age out, and a `SELECT DISTINCT` on every timeline load.
+         */
+        get: operations["clientTimelineFilters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/app/tags": {
         parameters: {
             query?: never;
@@ -1156,6 +1215,107 @@ export interface components {
             name: string;
         };
         /**
+         * TimelineActorType
+         * @description Who caused it — DB §5.6 ``actor_type``.
+         *
+         *     🔒 Three kinds, and the distinction matters for reading the timeline rather
+         *     than for authorization. "Priya changed the stage" and "the system archived
+         *     them after 90 days" are different facts, and a timeline that renders both as
+         *     a bare name misattributes automated action to a person.
+         * @enum {string}
+         */
+        TimelineActorType: "practitioner" | "client" | "system";
+        /**
+         * TimelineEntryResponse
+         * @description One timeline entry — DB §5.6.
+         *
+         *     🔒 ``summary`` is a **non-clinical label** written by
+         *     ``kernel.timeline.summarise``. It never contains a measurement, a note body
+         *     or a diagnosis; see that module for why the guarantee is structural rather
+         *     than a review convention.
+         *
+         *     ⚠️ ``source_record_id`` may point at a record that no longer exists — a
+         *     retired tag, a revoked grant. The UI renders it as a link only when it can
+         *     resolve it, rather than the API pre-checking six tables on every read.
+         */
+        TimelineEntryResponse: {
+            /** Actor Id */
+            actor_id: string | null;
+            actor_type: components["schemas"]["TimelineActorType"];
+            event_type: components["schemas"]["TimelineEventType"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Source Module */
+            source_module: string;
+            /** Source Record Id */
+            source_record_id: string | null;
+            /** Summary */
+            summary: string;
+        };
+        /**
+         * TimelineEventType
+         * @description What kind of thing happened — DB §5.6 ``timeline_event_type``.
+         *
+         *     🔒 **A closed enum, because FR-M1-019 makes it a filter.** A free-text
+         *     ``event_type`` would mean the filter list is whatever happens to be in the
+         *     table, which changes per tenant and cannot be translated or ordered.
+         *
+         *     ⚠️ 🟡 **The member set is PROPOSED.** DB §5.6 names the column and its type
+         *     and stops there. These nine are derived from FR-M1-018's own list of what the
+         *     timeline must aggregate — "stage changes, appointments, assessments,
+         *     measurements, plans issued, messages sent, notes, documents and client-side
+         *     activity" — mapped onto what exists today plus what S3–S6 will add.
+         *
+         *     🔒 The members S2 cannot yet produce are declared anyway, and that is
+         *     deliberate: ``timeline_event_type`` is a PostgreSQL enum, and adding a value
+         *     later is a migration that cannot run inside a transaction with other DDL on
+         *     some versions. Declaring the full vocabulary once is cheaper than nine
+         *     migrations, and an unused value costs nothing. What must *not* happen is a
+         *     module inventing a tenth value at runtime — hence the closed set.
+         * @enum {string}
+         */
+        TimelineEventType: "stage_changed" | "note_added" | "tag_applied" | "ownership_changed" | "access_changed" | "client_archived" | "client_restored" | "enquiry_received" | "measurement_recorded" | "assessment_completed" | "plan_issued" | "appointment_scheduled" | "message_sent" | "document_uploaded" | "client_activity";
+        /**
+         * TimelineFilterResponse
+         * @description One filter a practitioner may apply — FR-M1-019.
+         */
+        TimelineFilterResponse: {
+            event_type: components["schemas"]["TimelineEventType"];
+            /** Label */
+            label: string;
+        };
+        /**
+         * TimelinePageInfo
+         * @description Where the next page resumes — API §6.1.
+         *
+         *     ⚠️ ``total`` is absent. API §6.1 omits it by default because a ``COUNT(*)``
+         *     on every request is wasteful, and a timeline is scrolled rather than counted
+         *     — nobody needs to know a client has 431 events.
+         */
+        TimelinePageInfo: {
+            /** Has More */
+            has_more: boolean;
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * TimelineResponse
+         * @description API §5.1's collection envelope.
+         */
+        TimelineResponse: {
+            /** Items */
+            items: components["schemas"]["TimelineEntryResponse"][];
+            page: components["schemas"]["TimelinePageInfo"];
+        };
+        /**
          * TokenResponse
          * @description What a client needs to make an authenticated request and to renew.
          *
@@ -1788,6 +1948,74 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTimelineList: {
+        parameters: {
+            query?: {
+                /** @description Filter by event type. Repeat for OR — API §6.2. */
+                event_type?: components["schemas"]["TimelineEventType"][] | null;
+                /** @description Opaque, from a previous page. */
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTimelineFilters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineFilterResponse"][];
+                };
             };
             /** @description Validation Error */
             422: {

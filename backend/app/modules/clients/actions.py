@@ -191,3 +191,23 @@ CLIENT_MANAGE_ACCESS = register_action(
     policies=_SCOPED,
     audit_metadata_keys={"grantee_user_id", "operation"},
 )
+
+
+# ─── Timeline (FR-M1-018, DDR-06) ────────────────────────────────────────
+
+#: 🔒 Its own action rather than folding into `client.read`, for the reason
+#: ADR-05 gives: an action is the unit authorization is reasoned about, and
+#: "who may read this client's history" is a question a clinic will eventually
+#: want to answer separately from "who may see their phone number".
+#:
+#: ⚠️ `TENANT_PII` even though a summary is a non-clinical label. The *sequence*
+#: is the sensitive part: "archived, restored, note added, note added" describes
+#: a person's engagement with the practice, and the operator boundary must keep
+#: that out of reach as firmly as the name it belongs to.
+CLIENT_READ_TIMELINE = register_action(
+    "client.read_timeline",
+    roles=_PRACTITIONER,
+    data_scope=DataScope.TENANT_PII,
+    policies=_SCOPED,
+    is_read=True,
+)

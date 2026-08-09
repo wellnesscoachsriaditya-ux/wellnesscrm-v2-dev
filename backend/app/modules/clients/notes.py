@@ -24,6 +24,8 @@ from app.kernel.collaboration import (
 )
 from app.kernel.context import UserRole
 from app.kernel.errors import NotFoundError, ValidationError
+from app.kernel.events import publish
+from app.kernel.timeline import ClientNoteAdded
 from app.modules.clients.models import ClientNote
 from app.modules.clients.service import now
 
@@ -89,6 +91,21 @@ async def add_note(
     )
     session.add(note)
     await session.flush()
+
+    # 🔒 DDR-06 — published inside the caller's transaction, so the note and its
+    # timeline entry commit together. ⚠️ The body is deliberately not carried:
+    # `kernel.events` refuses prose, and the timeline records only that a note
+    # exists (FR-M1-018), never what it says.
+    await publish(
+        ClientNoteAdded(
+            client_id=client_id,
+            tenant_id=tenant_id,
+            note_id=note.id,
+            author_user_id=author.user_id,
+            created_at=note.created_at,
+        ),
+        session,
+    )
     return note
 
 

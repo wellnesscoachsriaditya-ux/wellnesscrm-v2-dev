@@ -32,6 +32,7 @@ from app.kernel.clients import ClientStage, DietaryClass, SexType
 from app.kernel.clients import is_minor as derive_is_minor
 from app.kernel.collaboration import TagColour
 from app.kernel.db import pg_enum
+from app.kernel.timeline import TimelineActorType, TimelineEventType
 
 
 class Client(Base):
@@ -358,4 +359,96 @@ class ClientAssignment(Base):
             name="ck_client_assignments__revocation_complete",
         ),
         Index("ix_client_assignments__tenant_id", "tenant_id"),
+    )
+
+
+class TimelineEvent(Base):
+    """One entry in a client's unified timeline — DB §5.6, FR-M1-018.
+
+    🔒 **A materialised projection, written by event subscribers** (DDR-06). The
+    alternative — a UNION across every module's tables at read time — violates R6
+    and grows a join per new event type, which is how NFR-006's 800 ms budget
+    gets spent. Here a timeline load is one indexed query regardless of how many
+    modules feed it.
+
+    ⚠️ **Derived, never a source of truth.** Every row restates something a
+    module already owns. That is what makes the table safe to rebuild if it
+    drifts, and it is why nothing reads *from* here to make a decision.
+
+    🔒 **Append-only in practice, and by grant.** Migration 0012 revokes UPDATE
+    and DELETE from ``app_user``: a timeline is a history, and a history that can
+    be rewritten by the application is not one. An edited note appends a new row
+    rather than revising the old one — the fact that something *was* recorded and
+    later changed is usually the interesting part.
+
+    🔒 ``summary`` **must not contain clinical values** (DB §5.6, NFR-033). It is
+    written only by :func:`app.kernel.timeline.summarise` and its stage-aware
+    sibling, both of which take enums and return fixed labels. The check
+    constraint bounds the length; the function signature is what actually keeps
+    prose out.
+    """
+
+    __tablename__ = "timeline_events"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id"),
+        nullable=False,
+        comment="🔒 RLS discriminator",
+    )
+    client_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    event_type: Mapped[TimelineEventType] = mapped_column(
+        pg_enum(TimelineEventType, "timeline_event_type"),
+        nullable=False,
+        comment="🔒 Filtering — FR-M1-019",
+    )
+    occurred_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+    source_module: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="Provenance — which module produced this"
+    )
+    source_record_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        comment="Deep link to the underlying record. NULL when it has none.",
+    )
+    summary: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        comment="🔒 Non-clinical label only — DB §5.6",
+    )
+    actor_type: Mapped[TimelineActorType] = mapped_column(
+        pg_enum(TimelineActorType, "timeline_actor_type"), nullable=False
+    )
+    #: ⚠️ No FK to ``users``. An actor may be a client or the system, neither of
+    #: which has a ``users`` row, and a nullable FK that is only sometimes a user
+    #: would be a constraint that cannot be trusted either way.
+    actor_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True))
+
+    __table_args__ = (
+        # 🔒 NFR-006 (≤800 ms for 20 events) rests on this index and nothing
+        # else. `tenant_id` leads it because RLS adds that predicate to every
+        # query — an index starting at `client_id` would still work, but leaves
+        # the tenant filter as a post-scan check on the largest table in S2.
+        Index(
+            "ix_timeline_events__client_occurred",
+            "tenant_id",
+            "client_id",
+            text("occurred_at DESC"),
+            text("id DESC"),
+        ),
+        CheckConstraint("length(btrim(summary)) > 0", name="ck_timeline_events__summary_not_blank"),
+        CheckConstraint("length(summary) <= 200", name="ck_timeline_events__summary_length"),
+        # 🔒 The system acts as nobody. A `system` row carrying an actor id would
+        # attribute an automated action to a person, which is precisely the
+        # misreading `actor_type` exists to prevent.
+        CheckConstraint(
+            "actor_type <> 'system' OR actor_id IS NULL",
+            name="ck_timeline_events__system_has_no_actor",
+        ),
     )

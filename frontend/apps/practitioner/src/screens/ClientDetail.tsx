@@ -20,11 +20,15 @@ import type { NoteView } from '../components/clients/ClientNotesPanel'
 import { ClientSummary } from '../components/clients/ClientSummary'
 import { ClientTagsPanel } from '../components/clients/ClientTagsPanel'
 import type { TagView } from '../components/clients/ClientTagsPanel'
+import { ClientTimelinePanel } from '../components/clients/ClientTimelinePanel'
+import type { TimelineEntryView } from '../components/clients/ClientTimelinePanel'
 import { EntitlementNotice } from '../components/clients/EntitlementNotice'
 import type { StageValue } from '../components/clients/stages'
 import { useClientDetail } from '../features/clients/useClientDetail'
 import { useCollaboration } from '../features/clients/useCollaboration'
+import { useTimeline } from '../features/clients/useTimeline'
 import type { Grant, Note, Tag } from '../features/clients/collaborationApi'
+import type { TimelineEntry, TimelineEventType } from '../features/clients/timelineApi'
 import type { SelectableStage } from '../features/clients/api'
 import { useCurrentSession } from '../features/session/useCurrentSession'
 
@@ -57,6 +61,17 @@ function toGrantView(grant: Grant): GrantView {
     grantedAt: grant.granted_at,
     revokedAt: grant.revoked_at,
     isLive: grant.is_live,
+  }
+}
+
+function toTimelineView(entry: TimelineEntry): TimelineEntryView {
+  return {
+    id: entry.id,
+    eventType: entry.event_type,
+    occurredAt: entry.occurred_at,
+    summary: entry.summary,
+    actorType: entry.actor_type,
+    actorId: entry.actor_id,
   }
 }
 
@@ -96,6 +111,7 @@ export function ClientDetail() {
   // 🔒 `refresh` is passed because reassigning the owner changes a field on the
   // client record, which this hook does not own. See `useClientDetail.refresh`.
   const collaboration = useCollaboration(clientId, refresh)
+  const timeline = useTimeline(clientId)
   const { session } = useCurrentSession()
 
   if (loading) {
@@ -202,6 +218,29 @@ export function ClientDetail() {
         onGrant={(userId) => void collaboration.grant(userId)}
         onRevoke={(userId) => void collaboration.revoke(userId)}
         onReassign={(userId) => void collaboration.reassign(userId)}
+      />
+
+      {/* 🔒 FR-M1-018 — the unified history, last on the screen because it is
+        * the longest panel and the one a practitioner scrolls to deliberately.
+        * ⚠️ It does not re-read when a note or tag changes: the timeline is
+        * written by a transactional subscriber, so the entry exists the moment
+        * the mutation commits, but this hook holds a page fetched earlier. A
+        * practitioner sees it on their next load — acceptable for a history
+        * panel, and cheaper than invalidating on every mutation. */}
+      <ClientTimelinePanel
+        entries={timeline.entries.map(toTimelineView)}
+        filters={timeline.filters.map((filter) => ({
+          eventType: filter.event_type,
+          label: filter.label,
+        }))}
+        selected={timeline.selected}
+        loading={timeline.loading}
+        loadingMore={timeline.loadingMore}
+        error={timeline.error}
+        hasMore={timeline.hasMore}
+        onLoadMore={() => void timeline.loadMore()}
+        onToggleFilter={(eventType) => timeline.toggleFilter(eventType as TimelineEventType)}
+        onClearFilters={timeline.clearFilters}
       />
     </>
   )

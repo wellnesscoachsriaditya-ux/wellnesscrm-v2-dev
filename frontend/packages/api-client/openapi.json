@@ -1030,6 +1030,167 @@
         "title": "TagResponse",
         "type": "object"
       },
+      "TimelineActorType": {
+        "description": "Who caused it — DB §5.6 ``actor_type``.\n\n🔒 Three kinds, and the distinction matters for reading the timeline rather\nthan for authorization. \"Priya changed the stage\" and \"the system archived\nthem after 90 days\" are different facts, and a timeline that renders both as\na bare name misattributes automated action to a person.",
+        "enum": [
+          "practitioner",
+          "client",
+          "system"
+        ],
+        "title": "TimelineActorType",
+        "type": "string"
+      },
+      "TimelineEntryResponse": {
+        "description": "One timeline entry — DB §5.6.\n\n🔒 ``summary`` is a **non-clinical label** written by\n``kernel.timeline.summarise``. It never contains a measurement, a note body\nor a diagnosis; see that module for why the guarantee is structural rather\nthan a review convention.\n\n⚠️ ``source_record_id`` may point at a record that no longer exists — a\nretired tag, a revoked grant. The UI renders it as a link only when it can\nresolve it, rather than the API pre-checking six tables on every read.",
+        "properties": {
+          "actor_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "actor_type": {
+            "$ref": "#/components/schemas/TimelineActorType"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/TimelineEventType"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "source_module": {
+            "title": "Source Module",
+            "type": "string"
+          },
+          "source_record_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Record Id"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "event_type",
+          "occurred_at",
+          "summary",
+          "source_module",
+          "source_record_id",
+          "actor_type",
+          "actor_id"
+        ],
+        "title": "TimelineEntryResponse",
+        "type": "object"
+      },
+      "TimelineEventType": {
+        "description": "What kind of thing happened — DB §5.6 ``timeline_event_type``.\n\n🔒 **A closed enum, because FR-M1-019 makes it a filter.** A free-text\n``event_type`` would mean the filter list is whatever happens to be in the\ntable, which changes per tenant and cannot be translated or ordered.\n\n⚠️ 🟡 **The member set is PROPOSED.** DB §5.6 names the column and its type\nand stops there. These nine are derived from FR-M1-018's own list of what the\ntimeline must aggregate — \"stage changes, appointments, assessments,\nmeasurements, plans issued, messages sent, notes, documents and client-side\nactivity\" — mapped onto what exists today plus what S3–S6 will add.\n\n🔒 The members S2 cannot yet produce are declared anyway, and that is\ndeliberate: ``timeline_event_type`` is a PostgreSQL enum, and adding a value\nlater is a migration that cannot run inside a transaction with other DDL on\nsome versions. Declaring the full vocabulary once is cheaper than nine\nmigrations, and an unused value costs nothing. What must *not* happen is a\nmodule inventing a tenth value at runtime — hence the closed set.",
+        "enum": [
+          "stage_changed",
+          "note_added",
+          "tag_applied",
+          "ownership_changed",
+          "access_changed",
+          "client_archived",
+          "client_restored",
+          "enquiry_received",
+          "measurement_recorded",
+          "assessment_completed",
+          "plan_issued",
+          "appointment_scheduled",
+          "message_sent",
+          "document_uploaded",
+          "client_activity"
+        ],
+        "title": "TimelineEventType",
+        "type": "string"
+      },
+      "TimelineFilterResponse": {
+        "description": "One filter a practitioner may apply — FR-M1-019.",
+        "properties": {
+          "event_type": {
+            "$ref": "#/components/schemas/TimelineEventType"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_type",
+          "label"
+        ],
+        "title": "TimelineFilterResponse",
+        "type": "object"
+      },
+      "TimelinePageInfo": {
+        "description": "Where the next page resumes — API §6.1.\n\n⚠️ ``total`` is absent. API §6.1 omits it by default because a ``COUNT(*)``\non every request is wasteful, and a timeline is scrolled rather than counted\n— nobody needs to know a client has 431 events.",
+        "properties": {
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "has_more"
+        ],
+        "title": "TimelinePageInfo",
+        "type": "object"
+      },
+      "TimelineResponse": {
+        "description": "API §5.1's collection envelope.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineEntryResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/TimelinePageInfo"
+          }
+        },
+        "required": [
+          "items",
+          "page"
+        ],
+        "title": "TimelineResponse",
+        "type": "object"
+      },
       "TokenResponse": {
         "description": "What a client needs to make an authenticated request and to renew.\n\n🔒 No user object. The client fetches its own profile from a dedicated\nendpoint; embedding one here would put a name and email in every token\nrefresh and in whatever logs the response passes through.",
         "properties": {
@@ -2024,6 +2185,149 @@
         "summary": "Apply a tag to a client",
         "tags": [
           "collaboration"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/timeline": {
+      "get": {
+        "description": "Reverse-chronological, cursor-paginated — FR-M1-018, NFR-006.\n\n🔒 One indexed query regardless of how many modules feed the timeline, which\nis the whole point of DDR-06's materialised projection and what keeps the\n800 ms budget from eroding as S3–S6 add producers.\n\n⚠️ Repeated ``event_type`` params are OR within the field (API §6.2). An\nabsent one means everything — including event types this build cannot yet\nproduce, which is harmless: they simply match nothing.",
+        "operationId": "clientTimelineList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by event type. Repeat for OR — API §6.2.",
+            "in": "query",
+            "name": "event_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/TimelineEventType"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by event type. Repeat for OR — API §6.2.",
+              "title": "Event Type"
+            }
+          },
+          {
+            "description": "Opaque, from a previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque, from a previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "A client's unified timeline",
+        "tags": [
+          "timeline"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/timeline/filters": {
+      "get": {
+        "description": "The filter list FR-M1-019 drives.\n\n🔒 **Only event types something can actually produce.** ``timeline_event_type``\ndeclares the full S3–S6 vocabulary up front (one enum migration rather than\nnine), so offering every member would give a practitioner filters like \"Plan\nissued\" that always return nothing — which reads as a broken timeline rather\nthan an unbuilt feature.\n\n⚠️ Client-scoped in its path but not in its content: it lists what *the\nsystem* can produce, not what this client has. Making it depend on the\nclient's own history would mean a filter appearing and disappearing as\nevents age out, and a `SELECT DISTINCT` on every timeline load.",
+        "operationId": "clientTimelineFilters",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TimelineFilterResponse"
+                  },
+                  "title": "Response Clienttimelinefilters",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The event types worth filtering by",
+        "tags": [
+          "timeline"
         ]
       }
     },

@@ -341,11 +341,13 @@ async def client_tags_detach(request: Request, client_id: uuid.UUID, tag_id: uui
     than deleted precisely because *it* records a decision.
     """
     await authorized_client(request, client_id)
+    actor = get_context().actor
     await detach_tag(
         get_session(request),
-        tenant_id=get_context().actor.require_tenant(),
+        tenant_id=actor.require_tenant(),
         client_id=client_id,
         tag_id=tag_id,
+        actor_user_id=actor.subject_id,
     )
     record_audit(request, resource_id=client_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -488,6 +490,7 @@ async def owner_reassign(request: Request, client_id: uuid.UUID, body: ReassignR
         tenant_id=actor.require_tenant(),
         client_id=client_id,
         new_owner_user_id=body.owner_user_id,
+        actor_user_id=actor.subject_id,
         actor_role=actor.role,
     )
     record_audit(request, resource_id=client_id, changed_fields=["owner_user_id"])

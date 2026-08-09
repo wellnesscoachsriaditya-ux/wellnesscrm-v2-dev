@@ -25,7 +25,7 @@ from app.kernel.clients import configure_client_directory
 from app.kernel.entitlements import configure_entitlement_guard
 from app.kernel.events import configure_deferred_enqueuer, deferred_job_types
 from app.kernel.jobs import verify_handlers_exist
-from app.modules.clients import ClientRepositoryDirectory
+from app.modules.clients import ClientRepositoryDirectory, register_subscribers
 from app.platform.audit import (
     LoggingAuditSink,
     SqlAlchemyAuditSink,
@@ -52,6 +52,7 @@ from app.platform.http.routers.auth import public_router as auth_public_router
 from app.platform.http.routers.clients import router as clients_router
 from app.platform.http.routers.collaboration import client_router as collaboration_client_router
 from app.platform.http.routers.collaboration import tag_router as collaboration_tag_router
+from app.platform.http.routers.timeline import router as timeline_router
 from app.platform.identity.authentication import resolve_actor as authenticate
 from app.platform.identity.credentials import raise_if_credentials_are_local
 from app.platform.jobs import enqueue_for_event
@@ -161,6 +162,17 @@ def create_app() -> FastAPI:
     # implementation that knows about `subscriptions` and `usage_counters`.
     configure_entitlement_guard(DatabaseEntitlementGuard())
 
+    # 🔒 DDR-06 — the timeline's subscribers. Wired at the entry point rather
+    # than at import time so the handler set is a deliberate decision rather than
+    # a consequence of which modules a test happened to import. Idempotent, so
+    # the worker calling it too is harmless.
+    #
+    # ⚠️ These are *transactional* handlers: a timeline entry commits with the
+    # change that caused it, and a failure here rolls back that change. That is
+    # DDR-06's explicit choice — an eventually-consistent timeline would show
+    # nothing to a practitioner who just made a change and looked.
+    register_subscribers()
+
     # 🔒 Fail startup if a deferred subscriber names a job type nothing can run.
     # Those rows would enqueue, fail on every attempt and dead-letter — found in
     # production, at the moment the work was actually needed.
@@ -215,6 +227,10 @@ def create_app() -> FastAPI:
     # what stops one router file growing to cover four unrelated concerns.
     app.include_router(collaboration_client_router)
     app.include_router(collaboration_tag_router)
+    # Shares the `/app/clients` prefix for the same reason, and is separate for
+    # the reason its own docstring gives: by S6 the timeline's producers will
+    # outnumber everything in `collaboration.py`.
+    app.include_router(timeline_router)
 
     # 🔒 ADR-05 — last, after every router is registered, so it sees the whole
     # route table. A route that declares no authorization action, declares one

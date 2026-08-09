@@ -109,6 +109,46 @@ describe('createApiClient', () => {
     expect(url.searchParams.has('cursor')).toBe(false)
   })
 
+  it('repeats a key for an array value rather than sending one comma-joined string', async () => {
+    // 🔒 API §6.2 specifies repeated keys (`?type=a&type=b`), which is what
+    // FastAPI decodes into a list. `String(['a','b'])` yields `'a,b'` — a single
+    // value the backend rejects as an invalid enum member, so the failure
+    // surfaces as a 422 on a filter the user picked from our own UI.
+    const { fetch, calls } = stubFetch({ items: [] })
+    const client = createApiClient({ baseUrl: '/api', fetch })
+
+    await client.request('get', '/api/v1/public/health', {
+      query: { type: ['note_added', 'stage_changed'], limit: 25 },
+    })
+
+    const url = new URL(calls[0]?.url ?? '')
+    expect(url.searchParams.getAll('type')).toEqual(['note_added', 'stage_changed'])
+    expect(url.searchParams.get('limit')).toBe('25')
+  })
+
+  it('omits an empty array entirely', async () => {
+    // An empty filter means "no filter". Sending `?type=` would be a request for
+    // events whose type is the empty string, which matches nothing — an empty
+    // timeline where the user expected everything.
+    const { fetch, calls } = stubFetch({ items: [] })
+    const client = createApiClient({ baseUrl: '/api', fetch })
+
+    await client.request('get', '/api/v1/public/health', { query: { type: [] } })
+
+    expect(new URL(calls[0]?.url ?? '').searchParams.has('type')).toBe(false)
+  })
+
+  it('drops undefined entries inside an array', async () => {
+    const { fetch, calls } = stubFetch({ items: [] })
+    const client = createApiClient({ baseUrl: '/api', fetch })
+
+    await client.request('get', '/api/v1/public/health', {
+      query: { type: ['note_added', undefined] },
+    })
+
+    expect(new URL(calls[0]?.url ?? '').searchParams.getAll('type')).toEqual(['note_added'])
+  })
+
   it('sends credentials so the ADR-A02 refresh cookie will be included', async () => {
     const { fetch, calls } = stubFetch({ status: 'ok' })
     const client = createApiClient({ baseUrl: '/api', fetch })

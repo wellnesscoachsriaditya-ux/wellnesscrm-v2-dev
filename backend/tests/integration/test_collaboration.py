@@ -462,6 +462,7 @@ async def test_reassigning_the_owner_moves_access(
             tenant_id=tenant_a,
             client_id=client_id,
             new_owner_user_id=colleague,
+            actor_user_id=owner_user,
             actor_role=UserRole.OWNER,
         )
 

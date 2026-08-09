@@ -23,6 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.kernel.collaboration import TagColour, tag_match_key, validate_tag_name
 from app.kernel.errors import NotFoundError, ValidationError
+from app.kernel.events import publish
+from app.kernel.timeline import ClientTagsChanged
 from app.modules.clients.models import ClientTag, Tag
 from app.modules.clients.service import now
 
@@ -208,9 +210,29 @@ async def attach_tag(
     )
     await session.flush()
 
+    # 🔒 DDR-06. ⚠️ Published only when a row was actually added — the early
+    # return above means a repeated apply produces no event, so the idempotent
+    # endpoint does not grow a timeline entry per click.
+    await publish(
+        ClientTagsChanged(
+            client_id=client_id,
+            tenant_id=tenant_id,
+            tag_id=tag_id,
+            attached=True,
+            actor_user_id=actor_user_id,
+            changed_at=now(),
+        ),
+        session,
+    )
+
 
 async def detach_tag(
-    session: AsyncSession, *, tenant_id: uuid.UUID, client_id: uuid.UUID, tag_id: uuid.UUID
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    client_id: uuid.UUID,
+    tag_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None = None,
 ) -> None:
     """Remove a tag from a client — a real DELETE.
 
@@ -221,10 +243,26 @@ async def detach_tag(
 
     Idempotent for the same reason as :func:`attach_tag`.
     """
-    await session.execute(
+    result = await session.execute(
         delete(ClientTag).where(
             ClientTag.tenant_id == tenant_id,
             ClientTag.client_id == client_id,
             ClientTag.tag_id == tag_id,
         )
     )
+
+    # ⚠️ Only publish when a row actually went. `DELETE` on an absent row
+    # succeeds silently, so without checking the rowcount a practitioner
+    # double-clicking "remove" would append two timeline entries for one removal.
+    if result.rowcount:
+        await publish(
+            ClientTagsChanged(
+                client_id=client_id,
+                tenant_id=tenant_id,
+                tag_id=tag_id,
+                attached=False,
+                actor_user_id=actor_user_id,
+                changed_at=now(),
+            ),
+            session,
+        )

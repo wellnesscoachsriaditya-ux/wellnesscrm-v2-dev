@@ -103,6 +103,10 @@ function urlOf(input: RequestInfo | URL): string {
 function stubRoutes(...routes: Route[]) {
   const collaborationDefaults: Route = (url) => {
     if (url.includes('/notes')) return jsonResponse([])
+    // ⚠️ Before `/timeline`, because `/timeline/filters` contains both and the
+    // filter list is an array while the timeline is an envelope.
+    if (url.includes('/timeline/filters')) return jsonResponse([])
+    if (url.includes('/timeline')) return jsonResponse({ items: [], page: { has_more: false } })
     if (url.includes('/tags')) return jsonResponse([])
     if (url.includes('/access')) return jsonResponse([])
     if (url.includes('/auth/me')) return jsonResponse(SESSION)
@@ -328,6 +332,68 @@ describe('client detail', () => {
     })
 
     expect(JSON.parse(call[1].body as string)).toEqual({ user_id: 'user-new' })
+  })
+
+  it('renders the timeline the server returned', async () => {
+    // 🔒 FR-M1-018 through the real transport: the envelope's `items`/`page`
+    // shape is decoded, projected onto the panel's props, and rendered. A
+    // mocked hook would assert our own fake matches our own expectations.
+    stubRoutes(clientRoute(CLIENT), (url) =>
+      url.includes('/timeline') && !url.includes('/filters')
+        ? jsonResponse({
+            items: [
+              {
+                id: 'evt-1',
+                event_type: 'stage_changed',
+                occurred_at: '2026-08-08T09:00:00Z',
+                summary: 'New enquiry → Contacted',
+                source_module: 'clients',
+                source_record_id: null,
+                actor_type: 'practitioner',
+                actor_id: 'user-1',
+              },
+            ],
+            page: { next_cursor: null, has_more: false },
+          })
+        : undefined,
+    )
+
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Asha Menon', level: 1 })
+
+    expect(await screen.findByText('New enquiry → Contacted')).toBeInTheDocument()
+  })
+
+  it('sends each chosen timeline filter as its own query parameter', async () => {
+    // 🔒 API §6.2 — repeated keys, not a comma-joined string. FastAPI decodes
+    // repeated keys into a list; a joined value is rejected as an invalid enum
+    // member, so this failing would 422 on a filter picked from our own UI.
+    const fetchSpy = stubRoutes(
+      clientRoute(CLIENT),
+      (url) =>
+        url.includes('/timeline/filters')
+          ? jsonResponse([{ event_type: 'note_added', label: 'Notes' }])
+          : undefined,
+      (url) =>
+        url.includes('/timeline')
+          ? jsonResponse({ items: [], page: { next_cursor: null, has_more: false } })
+          : undefined,
+    )
+
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Asha Menon', level: 1 })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Notes' }))
+
+    const filtered = await waitFor(() => {
+      const found = fetchSpy.mock.calls
+        .map(([url]) => urlOf(url))
+        .find((url) => url.includes('event_type=note_added'))
+      if (!found) throw new Error('no filtered timeline request yet')
+      return found
+    })
+
+    expect(new URL(filtered).searchParams.getAll('event_type')).toEqual(['note_added'])
   })
 
   it('shows the request id on an unexpected failure', async () => {

@@ -30,6 +30,7 @@ from types import FrameType
 
 from app.kernel.events import configure_deferred_enqueuer, deferred_job_types
 from app.kernel.jobs import verify_handlers_exist
+from app.modules.clients import register_subscribers
 from app.platform.config import get_settings
 from app.platform.db import dispose_engine
 from app.platform.job_runner import JobRunner
@@ -160,6 +161,14 @@ async def main() -> None:
     # would dead-letter every row that reached it.
     configure_deferred_enqueuer(enqueue_for_event)
     verify_handlers_exist(deferred_job_types())
+
+    # 🔒 DDR-06 — and needed here for a reason easy to miss. Subscriptions are
+    # process-global state, so a job handler that changes a client's stage would
+    # publish into a registry with no timeline subscriber in it: the change would
+    # commit and the timeline would silently lack the entry. Registering in both
+    # entry points is what makes "every event produces a row" true regardless of
+    # which process published it. Idempotent by handler identity.
+    register_subscribers()
 
     worker = Worker(poll_interval_seconds=settings.worker_poll_interval_seconds)
 

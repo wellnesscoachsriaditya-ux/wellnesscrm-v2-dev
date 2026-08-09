@@ -29,6 +29,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.kernel.collaboration import assert_grant_is_meaningful, may_manage_access
 from app.kernel.context import UserRole
 from app.kernel.errors import AuthorizationError, NotFoundError, ValidationError
+from app.kernel.events import publish
+from app.kernel.timeline import ClientAccessChanged, ClientOwnershipChanged
 from app.modules.clients.models import ClientAssignment
 from app.modules.clients.service import get_client, now
 
@@ -141,11 +143,49 @@ async def grant_access(
             action="No further action is needed.",
         ) from exc
 
+    await _publish_access_change(
+        session,
+        tenant_id=tenant_id,
+        client_id=client_id,
+        grantee_user_id=grantee_user_id,
+        granted=True,
+        actor_user_id=actor_user_id,
+        moment=row.granted_at,
+    )
+
     return GrantRecord(
         user_id=row.user_id,
         granted_by_user_id=row.granted_by_user_id,
         granted_at=row.granted_at,
         revoked_at=None,
+    )
+
+
+async def _publish_access_change(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    client_id: uuid.UUID,
+    grantee_user_id: uuid.UUID,
+    granted: bool,
+    actor_user_id: uuid.UUID,
+    moment: datetime,
+) -> None:
+    """🔒 DDR-06 — a colleague joining or leaving is a care fact, not only a
+    security one. A practitioner reading a client's history needs to know when
+    somebody else gained access, or the notes from that period read as though
+    they came from nowhere.
+    """
+    await publish(
+        ClientAccessChanged(
+            client_id=client_id,
+            tenant_id=tenant_id,
+            grantee_user_id=grantee_user_id,
+            granted=granted,
+            actor_user_id=actor_user_id,
+            changed_at=moment,
+        ),
+        session,
     )
 
 
@@ -188,6 +228,16 @@ async def revoke_access(
     row.revoked_by_user_id = actor_user_id
     await session.flush()
 
+    await _publish_access_change(
+        session,
+        tenant_id=tenant_id,
+        client_id=client_id,
+        grantee_user_id=grantee_user_id,
+        granted=False,
+        actor_user_id=actor_user_id,
+        moment=moment,
+    )
+
     return GrantRecord(
         user_id=row.user_id,
         granted_by_user_id=row.granted_by_user_id,
@@ -202,6 +252,7 @@ async def reassign_owner(
     tenant_id: uuid.UUID,
     client_id: uuid.UUID,
     new_owner_user_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
     actor_role: UserRole | None,
 ) -> None:
     """Move a client to a different owning practitioner — EC-M1-04.
@@ -232,6 +283,25 @@ async def reassign_owner(
             action="Choose a different practitioner.",
         )
 
+    # Captured before the write — the event carries where the client came *from*,
+    # and reading it after the assignment would report the destination twice.
+    previous_owner_user_id = client.owner_user_id
+
     client.owner_user_id = new_owner_user_id
     client.updated_at = now()
     await session.flush()
+
+    # 🔒 DDR-06. Both ids ride the event: "who was this client moved away from"
+    # is the question a handover audit actually asks, and the timeline is where
+    # a practitioner looks for it first.
+    await publish(
+        ClientOwnershipChanged(
+            client_id=client_id,
+            tenant_id=tenant_id,
+            from_user_id=previous_owner_user_id,
+            to_user_id=new_owner_user_id,
+            actor_user_id=actor_user_id,
+            changed_at=client.updated_at,
+        ),
+        session,
+    )
