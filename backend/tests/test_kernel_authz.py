@@ -82,6 +82,21 @@ class FakeResource:
     owner_user_id: uuid.UUID | None
 
 
+@dataclass(frozen=True)
+class FakeSharedResource:
+    """A resource that also offers grants — the `SharedResource` protocol.
+
+    🔒 Structural, like `FakeResource`. The whole reason `owner_or_assigned`
+    consults grants through a protocol rather than a concrete type is that
+    `client_assignments` belongs to a module the kernel may not know about
+    (Arch R1), and this fake is what proves the seam holds without one.
+    """
+
+    tenant_id: uuid.UUID | None
+    owner_user_id: uuid.UUID | None
+    granted_user_ids: frozenset[uuid.UUID] = frozenset()
+
+
 def practitioner(
     *, tenant: uuid.UUID = TENANT_A, subject: uuid.UUID = USER_1, role: UserRole | None = None
 ) -> Actor:
@@ -436,6 +451,65 @@ def test_owner_or_assigned_grants_an_operator_nothing_extra() -> None:
     decision = owner_or_assigned(operator(subject=USER_2), FakeResource(TENANT_A, USER_1))
     assert not decision
     assert decision.reason == "not_assigned_to_actor"
+
+
+# ─── Shared access (EC-M0-04) ────────────────────────────────────────────
+
+
+def test_an_explicit_grant_reaches_a_colleagues_client() -> None:
+    """🔒 EC-M0-04 — "one owning practitioner, additional explicit grants".
+
+    The clinic case: two practitioners share a client, and the one who does not
+    own them still needs to work. Without this branch, shared care is impossible
+    and the only workaround is transferring ownership, which loses the answer to
+    "who is accountable for this client".
+    """
+    decision = owner_or_assigned(
+        practitioner(subject=USER_2),
+        FakeSharedResource(TENANT_A, USER_1, frozenset({USER_2})),
+    )
+    assert decision
+    assert decision.reason == "explicit_grant"
+
+
+def test_a_grant_to_somebody_else_does_not_help() -> None:
+    """⚠️ The obvious bug the branch could have: checking that grants *exist*
+    rather than that they name this actor."""
+    decision = owner_or_assigned(
+        practitioner(subject=USER_2),
+        FakeSharedResource(TENANT_A, USER_1, frozenset({uuid.uuid4()})),
+    )
+    assert not decision
+    assert decision.reason == "not_assigned_to_actor"
+
+
+def test_an_empty_grant_set_changes_nothing() -> None:
+    """A shared-capable resource with no grants behaves exactly like a plain one."""
+    decision = owner_or_assigned(
+        practitioner(subject=USER_2), FakeSharedResource(TENANT_A, USER_1, frozenset())
+    )
+    assert not decision
+
+
+def test_a_grant_does_not_cross_a_tenant_boundary() -> None:
+    """🔒 Grants are checked by the *policy*; tenancy is checked by `can()` before
+    any policy runs. This asserts the ordering holds — a grant naming this actor
+    must not rescue a resource in another tenant.
+    """
+    register_action(
+        "thing.read",
+        roles={UserRole.PRACTITIONER},
+        data_scope=DataScope.TENANT_PII,
+        policies=[owner_or_assigned],
+        is_read=True,
+    )
+    decision = can(
+        practitioner(subject=USER_2, tenant=TENANT_A),
+        "thing.read",
+        FakeSharedResource(TENANT_B, USER_1, frozenset({USER_2})),
+    )
+    assert not decision
+    assert decision.reason.startswith("cross_tenant")
 
 
 # ─── The client realm (FR-M0-018) ────────────────────────────────────────

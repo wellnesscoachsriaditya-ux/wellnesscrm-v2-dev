@@ -52,6 +52,16 @@ export interface ClientDetailState {
   archive: () => Promise<void>
   restore: () => Promise<void>
   dismissRefusal: () => void
+  /**
+   * Re-read the client.
+   *
+   * 🔒 Needed because `owner_user_id` can change from outside this hook — the
+   * access panel reassigns the owning practitioner (EC-M1-04) through
+   * `useCollaboration`, and the owner is a field on *this* record. Without a
+   * re-read the screen would keep showing the practitioner who no longer owns
+   * the client.
+   */
+  refresh: () => Promise<void>
 }
 
 function toRefusal(error: ApiError): EntitlementRefusal {
@@ -144,5 +154,16 @@ export function useClientDetail(clientId: string): ClientDetailState {
     archive: useCallback(() => run(() => archiveClient(clientId)), [clientId, run]),
     restore: useCallback(() => run(() => restoreClient(clientId)), [clientId, run]),
     dismissRefusal: useCallback(() => setRefusal(null), []),
+    // ⚠️ Not routed through `run`. A refresh is a read: it must not clear the
+    // entitlement refusal the practitioner is still reading, and it does not
+    // belong on the `busy` flag that disables the action buttons.
+    refresh: useCallback(async () => {
+      try {
+        setClient(await fetchClient(clientId))
+      } catch (cause: unknown) {
+        setError(cause instanceof ApiError ? cause.message : 'That client could not be loaded.')
+        setRequestId(cause instanceof ApiError ? cause.requestId : null)
+      }
+    }, [clientId]),
   }
 }

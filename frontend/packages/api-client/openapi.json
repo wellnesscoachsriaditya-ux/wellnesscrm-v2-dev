@@ -446,6 +446,31 @@
         "title": "ClientStage",
         "type": "string"
       },
+      "CurrentSessionResponse": {
+        "description": "Who the caller is — identifiers and role, nothing else.\n\n🔒 **No name, email or phone** (NFR-033). ``TokenResponse`` says the client\n\"fetches its own profile from a dedicated endpoint\"; this is that endpoint,\nand it deliberately answers the *authorization* question rather than the\ndisplay one. The UI needs ``user_id`` to know which notes it may edit\n(FR-M3-020) and ``role`` to know whether to offer access management\n(FR-M0-017) — neither needs a name.",
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "tenant_id",
+          "role"
+        ],
+        "title": "CurrentSessionResponse",
+        "type": "object"
+      },
       "DependencyStatus": {
         "description": "State of one dependency.",
         "properties": {
@@ -494,6 +519,65 @@
         "title": "DietaryClass",
         "type": "string"
       },
+      "GrantRequest": {
+        "properties": {
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "GrantRequest",
+        "type": "object"
+      },
+      "GrantResponse": {
+        "description": "One access grant — EC-M0-04.\n\n⚠️ Identifiers only, no names. Resolving a user id to a name is the caller's\njob through the team endpoint; embedding it here would put a second copy of a\nperson's name in a response that is already about access control (NFR-033).",
+        "properties": {
+          "granted_at": {
+            "format": "date-time",
+            "title": "Granted At",
+            "type": "string"
+          },
+          "granted_by_user_id": {
+            "format": "uuid",
+            "title": "Granted By User Id",
+            "type": "string"
+          },
+          "is_live": {
+            "title": "Is Live",
+            "type": "boolean"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "granted_by_user_id",
+          "granted_at",
+          "revoked_at",
+          "is_live"
+        ],
+        "title": "GrantResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -540,6 +624,65 @@
           "password"
         ],
         "title": "LoginRequest",
+        "type": "object"
+      },
+      "NoteResponse": {
+        "description": "One note — FR-M1-007, \"with timestamp and author\".",
+        "properties": {
+          "author_user_id": {
+            "format": "uuid",
+            "title": "Author User Id",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "client_id": {
+            "format": "uuid",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "body",
+          "author_user_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "NoteResponse",
+        "type": "object"
+      },
+      "NoteWriteRequest": {
+        "properties": {
+          "body": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "NoteWriteRequest",
         "type": "object"
       },
       "PasswordResetConfirm": {
@@ -688,6 +831,20 @@
         "title": "ReadinessResponse",
         "type": "object"
       },
+      "ReassignRequest": {
+        "properties": {
+          "owner_user_id": {
+            "format": "uuid",
+            "title": "Owner User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_user_id"
+        ],
+        "title": "ReassignRequest",
+        "type": "object"
+      },
       "RefreshRequest": {
         "properties": {
           "refresh_token": {
@@ -816,6 +973,63 @@
         "title": "StageChangeRequest",
         "type": "object"
       },
+      "TagColour": {
+        "description": "The palette a tag may use — DB §5.4 (\"``color`` for UI\").\n\n🔒 **A named palette rather than free hex, deliberately.** Three reasons, in\norder of weight:\n\n1. **Contrast is a guarantee, not a hope.** Every value here maps to a design\n   token whose contrast is asserted by ``tokens/contrast.test.ts`` (NFR-060).\n   A practitioner picking ``#ffff00`` would produce a tag nobody can read,\n   and no test anywhere would catch it.\n2. ADR-03 — raw colour values live in the design system and nowhere else.\n   Free hex in the database is that rule broken through the back door.\n3. A closed set survives a theme change. Hex does not: a dark mode added\n   later has to re-interpret every value a user ever chose.\n\n⚠️ 🟡 The *set* is PROPOSED. DB §5.4 names the column and stops there, so\nthese eight are my choice — enough to group a caseload without becoming a\ndecision the practitioner has to make carefully.",
+        "enum": [
+          "slate",
+          "red",
+          "amber",
+          "green",
+          "teal",
+          "blue",
+          "violet",
+          "pink"
+        ],
+        "title": "TagColour",
+        "type": "string"
+      },
+      "TagCreateRequest": {
+        "properties": {
+          "colour": {
+            "$ref": "#/components/schemas/TagColour",
+            "default": "slate"
+          },
+          "name": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "TagCreateRequest",
+        "type": "object"
+      },
+      "TagResponse": {
+        "properties": {
+          "colour": {
+            "$ref": "#/components/schemas/TagColour"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "colour"
+        ],
+        "title": "TagResponse",
+        "type": "object"
+      },
       "TokenResponse": {
         "description": "What a client needs to make an authenticated request and to renew.\n\n🔒 No user object. The client fetches its own profile from a dedicated\nendpoint; embedding one here would put a name and email in every token\nrefresh and in whatever logs the response passes through.",
         "properties": {
@@ -845,6 +1059,17 @@
         ],
         "title": "TokenResponse",
         "type": "object"
+      },
+      "UserRole": {
+        "description": "Roles within a tenant (FR-M0-016).",
+        "enum": [
+          "owner",
+          "practitioner",
+          "client",
+          "platform_operator"
+        ],
+        "title": "UserRole",
+        "type": "string"
       },
       "ValidationError": {
         "properties": {
@@ -913,6 +1138,28 @@
           }
         },
         "summary": "Sign out",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/app/auth/me": {
+      "get": {
+        "description": "Identify the caller from their verified token.\n\n🔒 Read from the token, never from a parameter. An endpoint that accepted a\nuser id would let any authenticated caller ask about anyone.\n\n⚠️ Built in S2 Slice C rather than S1 because it had no consumer until the\nnotes UI needed to know who the author is — FR-M3-020's \"editable by their\nauthor\" cannot be expressed in an interface that does not know who is\nlooking.",
+        "operationId": "authCurrentSession",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "The current session",
         "tags": [
           "auth"
         ]
@@ -1072,6 +1319,170 @@
         ]
       }
     },
+    "/api/v1/app/clients/{client_id}/access": {
+      "get": {
+        "description": "Grants on this client — EC-M0-04.\n\n``include_revoked`` surfaces the history EC-M1-04 requires be retained. Off\nby default: a list mixing live and revoked rows invites a caller to forget\nthe difference.",
+        "operationId": "clientAccessList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_revoked",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Revoked",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GrantResponse"
+                  },
+                  "title": "Response Clientaccesslist",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Who can see this client",
+        "tags": [
+          "collaboration"
+        ]
+      },
+      "post": {
+        "description": "Share a client with a colleague — EC-M0-04.\n\n🔒 Owner-only, twice over: the action's role gate and the check inside\n``assignments.grant_access``. Deliberately redundant, because a future route\nthat forgot the declaration would otherwise widen access silently.",
+        "operationId": "clientAccessGrant",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrantResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Grant a colleague access to this client",
+        "tags": [
+          "collaboration"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/access/{user_id}": {
+      "delete": {
+        "description": "Withdraw access — EC-M1-04.\n\n🔒 Stamps ``revoked_at`` rather than deleting: \"who could see this client\nlast March\" is a question a DPDP access request can ask, and a deleted row\ncannot answer it.",
+        "operationId": "clientAccessRevoke",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrantResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove a colleague's access",
+        "tags": [
+          "collaboration"
+        ]
+      }
+    },
     "/api/v1/app/clients/{client_id}/archive": {
       "post": {
         "description": "Soft-delete a client — FR-M1-010, AC-M1-007.\n\n🔒 Removes them from default views without deleting anything, and frees the\nentitlement slot immediately if they were ``active``. The stage is preserved,\nwhich is what lets :func:`restore_client` put them back where they were.\n\n⚠️ Takes no body. A reason has nowhere safe to go in this slice — see\n``transitions.archive``.",
@@ -1113,6 +1524,269 @@
         "summary": "Archive a client",
         "tags": [
           "clients"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/notes": {
+      "get": {
+        "description": "The note thread, newest first — FR-M1-007.\n\n🔒 Never reachable from the client realm (FR-M3-021): this router is\npractitioner-only, the action permits practitioner roles alone, and\n``client_notes`` has no client-realm RLS policy.",
+        "operationId": "clientNotesList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NoteResponse"
+                  },
+                  "title": "Response Clientnoteslist",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List a client's notes",
+        "tags": [
+          "collaboration"
+        ]
+      },
+      "post": {
+        "description": "Append a note — FR-M1-007.",
+        "operationId": "clientNotesCreate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add a note to a client",
+        "tags": [
+          "collaboration"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/notes/{note_id}": {
+      "delete": {
+        "description": "Take a note out of the thread — a soft delete (DB §22.2).\n\n⚠️ ``DELETE`` in HTTP terms, ``archived_at`` in the database. The verb\ndescribes the caller's intent; nothing is destroyed, which is what AC-M1-007\nrequires of every user-facing removal.",
+        "operationId": "clientNotesArchive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Note Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove a note",
+        "tags": [
+          "collaboration"
+        ]
+      },
+      "patch": {
+        "description": "Rewrite a note's body — FR-M3-020.\n\n🔒 **Author only**, including against the tenant owner: the note carries an\nauthor's name, so only they may change what it says. The owner's remedy for a\nnote that should not stand is to remove it, which is recorded as their act.\n\n🔒 The edit is audited by the pipeline, which is what satisfies FR-M3-020's\n\"with edits recorded in the audit log\" — a framework-written entry cannot be\nforgotten.",
+        "operationId": "clientNotesUpdate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Note Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit a note",
+        "tags": [
+          "collaboration"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/owner": {
+      "post": {
+        "description": "Move a client to a different owning practitioner — EC-M1-04.\n\n⚠️ **One client at a time.** EC-M1-04 describes reassigning a departing\npractitioner's caseload in bulk; that needs a selection UI and an answer for\nwhat happens when 40 of 50 succeed. Slice E owns it, alongside the list that\nwould drive the selection.",
+        "operationId": "clientOwnerReassign",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReassignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reassign the owning practitioner",
+        "tags": [
+          "collaboration"
         ]
       }
     },
@@ -1211,6 +1885,255 @@
         "summary": "Change a client's lifecycle stage",
         "tags": [
           "clients"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/tags": {
+      "get": {
+        "operationId": "clientTagsList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TagResponse"
+                  },
+                  "title": "Response Clienttagslist",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List a client's tags",
+        "tags": [
+          "collaboration"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/tags/{tag_id}": {
+      "delete": {
+        "description": "Remove a tag — a real delete, and the one place in the module that is true.\n\nThe junction row asserts \"this client carries this label\"; withdrawn, it\nrecords nothing that happened. Compare ``client_assignments``, revoked rather\nthan deleted precisely because *it* records a decision.",
+        "operationId": "clientTagsDetach",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Tag Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove a tag from a client",
+        "tags": [
+          "collaboration"
+        ]
+      },
+      "put": {
+        "description": "Apply a tag — idempotent, and ``PUT`` for exactly that reason.\n\nApplying a label twice is indistinguishable from applying it once, so the\nsecond call has nothing to report. Refusing it would make the UI's tag toggle\nbehave differently depending on how fast the practitioner clicks.",
+        "operationId": "clientTagsAttach",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Tag Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply a tag to a client",
+        "tags": [
+          "collaboration"
+        ]
+      }
+    },
+    "/api/v1/app/tags": {
+      "get": {
+        "description": "Every live tag, alphabetical and case-insensitively ordered.",
+        "operationId": "tagsList",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TagResponse"
+                  },
+                  "title": "Response Tagslist",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List the tenant's tags",
+        "tags": [
+          "collaboration"
+        ]
+      },
+      "post": {
+        "description": "Define a tag — FR-M1-008.\n\n🔒 Refuses a duplicate case-insensitively: a practitioner with \"PCOS\" who\ntypes \"pcos\" means the tag they already have, and a second one would split\ntheir caseload across two labels that look identical in a filter.",
+        "operationId": "tagsCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a tag",
+        "tags": [
+          "collaboration"
+        ]
+      }
+    },
+    "/api/v1/app/tags/{tag_id}": {
+      "delete": {
+        "description": "Retire a tag — a soft delete.\n\n⚠️ Leaves its applications in place, so a tag retired by mistake can be\nbrought back with its clients intact. The name is released for reuse, because\n``uq_tags__tenant_name`` is partial on the archive flag.",
+        "operationId": "tagsArchive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Tag Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retire a tag",
+        "tags": [
+          "collaboration"
         ]
       }
     },

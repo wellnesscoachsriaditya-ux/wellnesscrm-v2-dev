@@ -12,12 +12,53 @@
 
 import { ErrorState, PageHeader, Spinner } from '@wellnesscrm/design-system'
 import { useIaLocation } from '@wellnesscrm/ia'
+import { ClientAccessPanel } from '../components/clients/ClientAccessPanel'
+import type { GrantView } from '../components/clients/ClientAccessPanel'
 import { ClientLifecyclePanel } from '../components/clients/ClientLifecyclePanel'
+import { ClientNotesPanel } from '../components/clients/ClientNotesPanel'
+import type { NoteView } from '../components/clients/ClientNotesPanel'
 import { ClientSummary } from '../components/clients/ClientSummary'
+import { ClientTagsPanel } from '../components/clients/ClientTagsPanel'
+import type { TagView } from '../components/clients/ClientTagsPanel'
 import { EntitlementNotice } from '../components/clients/EntitlementNotice'
 import type { StageValue } from '../components/clients/stages'
 import { useClientDetail } from '../features/clients/useClientDetail'
+import { useCollaboration } from '../features/clients/useCollaboration'
+import type { Grant, Note, Tag } from '../features/clients/collaborationApi'
 import type { SelectableStage } from '../features/clients/api'
+import { useCurrentSession } from '../features/session/useCurrentSession'
+
+/**
+ * Project the wire shapes onto what the components render.
+ *
+ * 🔒 The mapping lives here rather than in the components, so a field rename in
+ * the API is a compile error in one file instead of a silent `undefined` in
+ * three. The components' props are named for what they mean on screen; the wire
+ * types are named for the contract.
+ */
+function toNoteView(note: Note): NoteView {
+  return {
+    id: note.id,
+    body: note.body,
+    authorUserId: note.author_user_id,
+    createdAt: note.created_at,
+    updatedAt: note.updated_at,
+  }
+}
+
+function toTagView(tag: Tag): TagView {
+  return { id: tag.id, name: tag.name, colour: tag.colour }
+}
+
+function toGrantView(grant: Grant): GrantView {
+  return {
+    userId: grant.user_id,
+    grantedByUserId: grant.granted_by_user_id,
+    grantedAt: grant.granted_at,
+    revokedAt: grant.revoked_at,
+    isLive: grant.is_live,
+  }
+}
 
 /**
  * 🔒 The stages the dropdown offers, in funnel order.
@@ -50,7 +91,12 @@ export function ClientDetail() {
     archive,
     restore,
     dismissRefusal,
+    refresh,
   } = useClientDetail(clientId)
+  // 🔒 `refresh` is passed because reassigning the owner changes a field on the
+  // client record, which this hook does not own. See `useClientDetail.refresh`.
+  const collaboration = useCollaboration(clientId, refresh)
+  const { session } = useCurrentSession()
 
   if (loading) {
     return (
@@ -114,6 +160,48 @@ export function ClientDetail() {
         onArchive={() => void archive()}
         onRestore={() => void restore()}
         busy={busy}
+      />
+
+      {/* 🔒 FR-M1-008. Rendered before notes because tags are how a practitioner
+        * orients themselves before reading — the label answers "who is this"
+        * faster than the thread does. */}
+      <ClientTagsPanel
+        allTags={collaboration.allTags.map(toTagView)}
+        clientTagIds={collaboration.clientTags.map((tag) => tag.id)}
+        error={collaboration.tagsError}
+        busy={collaboration.busy}
+        onToggle={(tagId, attached) => void collaboration.toggleTag(tagId, attached)}
+        onCreate={(name, colour) => void collaboration.createAndAttachTag(name, colour)}
+      />
+
+      {/* 🔒 FR-M1-007 / FR-M3-020. `currentUserId` is what makes the edit
+        * control appear only for a note's own author; without a session the
+        * fallback shows none, which is the safe direction. */}
+      <ClientNotesPanel
+        notes={collaboration.notes.map(toNoteView)}
+        currentUserId={session?.user_id ?? ''}
+        isOwner={session?.role === 'owner'}
+        error={collaboration.notesError}
+        busy={collaboration.busy}
+        onAdd={(body) => void collaboration.addNote(body)}
+        onEdit={(noteId, body) => void collaboration.editNote(noteId, body)}
+        onRemove={(noteId) => void collaboration.removeNote(noteId)}
+      />
+
+      {/* 🔒 EC-M0-04 / FR-M0-017. Rendered last: it is the panel a practitioner
+        * reaches for least often, and `canManage` is owner-only, so for most
+        * users it is a read-only statement of who else can see this client.
+        * Without a session the fallback is no controls, which is the safe
+        * direction — the API would refuse them anyway. */}
+      <ClientAccessPanel
+        ownerUserId={client.owner_user_id}
+        grants={collaboration.grants.map(toGrantView)}
+        canManage={session?.role === 'owner'}
+        error={collaboration.accessError}
+        busy={collaboration.busy}
+        onGrant={(userId) => void collaboration.grant(userId)}
+        onRevoke={(userId) => void collaboration.revoke(userId)}
+        onReassign={(userId) => void collaboration.reassign(userId)}
       />
     </>
   )

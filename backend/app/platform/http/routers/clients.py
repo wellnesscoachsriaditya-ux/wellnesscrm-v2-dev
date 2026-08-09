@@ -44,18 +44,19 @@ from app.modules.clients import (
     CLIENT_UPDATE,
     MAX_REASON_LENGTH,
     UNSET,
+    Client,
     ClientCreate,
     ClientUpdate,
     Unset,
     archive,
     change_stage,
     create_client,
-    get_client,
+    load_for_access,
     restore,
     update_client,
 )
 from app.platform.http.authz import requires
-from app.platform.http.pipeline import get_session, realm_router, record_audit
+from app.platform.http.pipeline import authorize, get_session, realm_router, record_audit
 
 router = realm_router("/api/v1/app/clients", tags=["clients"])
 
@@ -170,6 +171,35 @@ def _parse_if_match(raw: str) -> datetime:
         raise PreconditionRequiredError("client") from exc
 
 
+async def authorized_client(request: Request, client_id: uuid.UUID) -> Client:
+    """Load a client and authorize *this* action against it — FR-M0-017, AC-M1-006.
+
+    🔒 **The single seam every client-bound route goes through.** The pipeline's
+    coarse check answered "may a practitioner read clients"; this answers "may
+    this practitioner read *this* client", which is the question a
+    two-practitioner clinic turns on. ``load_for_access`` supplies the owner and
+    the live grants (EC-M0-04), and ``authorize`` re-enters
+    ``kernel.authz.can()`` with them.
+
+    ⚠️ A practitioner who is neither owner nor grantee gets **404, not 403**
+    (API §5.4) — the mapping lives in ``pipeline._error_for``, keyed on the
+    ``not_assigned_to_actor`` reason. A 403 would confirm the client exists and
+    let a colleague's caseload be enumerated one request at a time.
+
+    ⚠️ Costs one extra read on the write paths, which re-load the row under a
+    lock inside their service. That is deliberate: authorization must be decided
+    before the write, and the lock must be taken inside the transaction that
+    writes. Collapsing them would mean authorizing against a row read outside the
+    lock, which is the weaker of the two.
+    """
+    actor = get_context().actor
+    client, view = await load_for_access(
+        get_session(request), tenant_id=actor.require_tenant(), client_id=client_id
+    )
+    await authorize(request, view)
+    return client
+
+
 # ─── Endpoints ───────────────────────────────────────────────────────────
 
 
@@ -232,10 +262,7 @@ async def read(request: Request, client_id: uuid.UUID, response: Response) -> Cl
     from default *views* without deleting anything, and restoring one requires
     being able to read it first.
     """
-    actor = get_context().actor
-    client = await get_client(
-        get_session(request), tenant_id=actor.require_tenant(), client_id=client_id
-    )
+    client = await authorized_client(request, client_id)
     record_audit(request, resource_id=client.id)
     response.headers["ETag"] = _etag(client.updated_at)
     return _response(client)
@@ -262,6 +289,10 @@ async def update(
     """
     if if_match is None:
         raise PreconditionRequiredError("client")
+
+    # 🔒 Scope first. An edit is a write, so the practitioner must be shown to
+    # have access to *this* client before the precondition or the payload matter.
+    await authorized_client(request, client_id)
 
     actor = get_context().actor
     supplied = body.model_fields_set
@@ -343,6 +374,8 @@ async def change_client_stage(
     🔒 AC-M1-003 — converting a lead keeps the record, its identifier and all its
     prior history, because this changes a column rather than moving a row.
     """
+    await authorized_client(request, client_id)
+
     actor = get_context().actor
     updated = await change_stage(
         get_session(request),
@@ -385,6 +418,8 @@ async def archive_client(
     ⚠️ Takes no body. A reason has nowhere safe to go in this slice — see
     ``transitions.archive``.
     """
+    await authorized_client(request, client_id)
+
     actor = get_context().actor
     archived = await archive(
         get_session(request),
@@ -420,6 +455,8 @@ async def restore_client(
     🔒 Returns **402** when the restored stage is ``active`` and the plan is at
     its ceiling (EC-M1-06) — archiving frees a slot, so restoring takes one back.
     """
+    await authorized_client(request, client_id)
+
     actor = get_context().actor
     restored = await restore(
         get_session(request),

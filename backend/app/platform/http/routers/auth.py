@@ -17,6 +17,7 @@ cookie is unusable from one. The web client keeps the access token in memory
 
 from __future__ import annotations
 
+import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Request, Response, status
@@ -45,6 +46,22 @@ SESSION_END = register_action(
     roles={UserRole.OWNER, UserRole.PRACTITIONER, UserRole.CLIENT},
     data_scope=DataScope.PLATFORM,
     audit_metadata_keys={"realm"},
+)
+
+#: 🔒 "Who am I", answered from the verified token.
+#:
+#: ``TENANT_METADATA``, not ``TENANT_PII``: the response carries the caller's own
+#: identifiers and role and no name, email or phone. That is what keeps it out of
+#: operator reach by classification rather than by a rule someone must remember.
+#:
+#: ⚠️ ``operator_access`` is **not** declared. An operator asking "who am I" has
+#: no tenant, so the answer would be meaningless — and declaring it would put a
+#: tenant-shaped response on a cross-tenant token.
+SESSION_READ = register_action(
+    "session.read",
+    roles={UserRole.OWNER, UserRole.PRACTITIONER, UserRole.CLIENT},
+    data_scope=DataScope.TENANT_METADATA,
+    is_read=True,
 )
 
 app_router = realm_router("/api/v1/app/auth", tags=["auth"])
@@ -245,6 +262,52 @@ async def refresh(payload: RefreshRequest, request: Request) -> TokenResponse:
         now=utcnow(),
     )
     return _token_response(tokens)
+
+
+class CurrentSessionResponse(BaseModel):
+    """Who the caller is — identifiers and role, nothing else.
+
+    🔒 **No name, email or phone** (NFR-033). ``TokenResponse`` says the client
+    "fetches its own profile from a dedicated endpoint"; this is that endpoint,
+    and it deliberately answers the *authorization* question rather than the
+    display one. The UI needs ``user_id`` to know which notes it may edit
+    (FR-M3-020) and ``role`` to know whether to offer access management
+    (FR-M0-017) — neither needs a name.
+    """
+
+    user_id: uuid.UUID
+    tenant_id: uuid.UUID
+    role: UserRole
+
+
+@app_router.get(
+    "/me",
+    summary="The current session",
+    operation_id="authCurrentSession",
+)
+@requires(SESSION_READ)
+async def current_session(request: Request) -> CurrentSessionResponse:
+    """Identify the caller from their verified token.
+
+    🔒 Read from the token, never from a parameter. An endpoint that accepted a
+    user id would let any authenticated caller ask about anyone.
+
+    ⚠️ Built in S2 Slice C rather than S1 because it had no consumer until the
+    notes UI needed to know who the author is — FR-M3-020's "editable by their
+    author" cannot be expressed in an interface that does not know who is
+    looking.
+    """
+    actor = get_context().actor
+    if actor.role is None:  # pragma: no cover - authz refuses a roleless actor first
+        raise AuthenticationError(
+            message="You are not signed in.",
+            action="Sign in and try again.",
+        )
+    return CurrentSessionResponse(
+        user_id=actor.require_subject(),
+        tenant_id=actor.require_tenant(),
+        role=actor.role,
+    )
 
 
 @app_router.post(

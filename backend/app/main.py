@@ -50,6 +50,8 @@ from app.platform.http.routers.auth import app_router as auth_app_router
 from app.platform.http.routers.auth import portal_router as auth_portal_router
 from app.platform.http.routers.auth import public_router as auth_public_router
 from app.platform.http.routers.clients import router as clients_router
+from app.platform.http.routers.collaboration import client_router as collaboration_client_router
+from app.platform.http.routers.collaboration import tag_router as collaboration_tag_router
 from app.platform.identity.authentication import resolve_actor as authenticate
 from app.platform.identity.credentials import raise_if_credentials_are_local
 from app.platform.jobs import enqueue_for_event
@@ -207,6 +209,12 @@ def create_app() -> FastAPI:
     #   S6  /portal/*           client portal
     #   S12 /admin/*            operator console
     app.include_router(clients_router)
+    # ⚠️ Registered after `clients_router` and sharing its `/app/clients` prefix.
+    # The paths do not collide — every route here carries a further segment
+    # (`/notes`, `/tags`, `/access`) — and keeping them in a separate module is
+    # what stops one router file growing to cover four unrelated concerns.
+    app.include_router(collaboration_client_router)
+    app.include_router(collaboration_tag_router)
 
     # 🔒 ADR-05 — last, after every router is registered, so it sees the whole
     # route table. A route that declares no authorization action, declares one

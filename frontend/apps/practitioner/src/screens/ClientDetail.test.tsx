@@ -76,13 +76,84 @@ function renderScreen() {
   )
 }
 
+/**
+ * Stub `fetch` by route rather than by call order.
+ *
+ * ⚠️ The screen loads four things on mount — the client, its notes, its tags and
+ * the tag vocabulary — and the order they resolve in is not part of the
+ * contract. A `mockResolvedValueOnce` chain encodes that order as if it were,
+ * so adding a panel breaks every test for reasons unrelated to what they assert.
+ * Routing on the URL means a test says what it means: "the stage endpoint
+ * returns this".
+ */
+type Route = (url: string, init: RequestInit) => Response | undefined
+
+/**
+ * The request URL as a string.
+ *
+ * ⚠️ `String(input)` looks equivalent and is not: `RequestInfo` includes
+ * `Request`, which has no meaningful `toString` and stringifies to
+ * `[object Object]` — so a route matcher would silently stop matching.
+ */
+function urlOf(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input
+  return input instanceof URL ? input.href : input.url
+}
+
+function stubRoutes(...routes: Route[]) {
+  const collaborationDefaults: Route = (url) => {
+    if (url.includes('/notes')) return jsonResponse([])
+    if (url.includes('/tags')) return jsonResponse([])
+    if (url.includes('/access')) return jsonResponse([])
+    if (url.includes('/auth/me')) return jsonResponse(SESSION)
+    return undefined
+  }
+
+  return vi
+    .spyOn(globalThis, 'fetch')
+    .mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = urlOf(input)
+      for (const route of [...routes, collaborationDefaults]) {
+        const response = route(url, init ?? {})
+        if (response) return Promise.resolve(response)
+      }
+      throw new Error(`unstubbed request: ${init?.method ?? 'GET'} ${url}`)
+    })
+}
+
+const SESSION = { user_id: 'user-1', tenant_id: 'tenant-1', role: 'practitioner' }
+
+/** The client GET, which every test needs and none is about. */
+function clientRoute(client: unknown): Route {
+  return (url, init) => {
+    const isGet = (init.method ?? 'GET').toUpperCase() === 'GET'
+    return isGet && url.endsWith(`/clients/${CLIENT_ID}`) ? jsonResponse(client) : undefined
+  }
+}
+
+/** A POST to one of the lifecycle actions. */
+function actionRoute(suffix: string, response: Response): Route {
+  return (url, init) =>
+    url.endsWith(suffix) && (init.method ?? '').toUpperCase() === 'POST' ? response : undefined
+}
+
+/**
+ * Who is signed in.
+ *
+ * 🔒 The role decides whether the access controls render at all (FR-M0-017), so
+ * a test about them has to state it rather than inherit the default.
+ */
+function sessionRoute(role: 'owner' | 'practitioner'): Route {
+  return (url) => (url.includes('/auth/me') ? jsonResponse({ ...SESSION, role }) : undefined)
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
 })
 
 describe('client detail', () => {
   it('shows the client once loaded', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(CLIENT))
+    stubRoutes(clientRoute(CLIENT))
     renderScreen()
 
     expect(await screen.findByRole('heading', { name: 'Asha Menon', level: 1 })).toBeInTheDocument()
@@ -92,9 +163,7 @@ describe('client detail', () => {
   it('states the WhatsApp limitation when there is no mobile', async () => {
     // 🔒 EC-M1-08 — a client with only an email is legitimate and loses
     // WhatsApp delivery. The system must say so rather than leave a blank.
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      jsonResponse({ ...CLIENT, mobile: null, email: 'asha@example.test' }),
-    )
+    stubRoutes(clientRoute({ ...CLIENT, mobile: null, email: 'asha@example.test' }))
     renderScreen()
 
     expect(await screen.findByText(/whatsapp delivery is unavailable/i)).toBeInTheDocument()
@@ -103,22 +172,25 @@ describe('client detail', () => {
   it('explains a plan-limit refusal without a second request', async () => {
     // 🔒 FR-M1-002 / FR-M0-045 — the 402 carries the limit, the usage, the plan
     // and the upgrade path, and all four are rendered from that one response.
-    const fetchSpy = vi.spyOn(globalThis, 'fetch')
-    fetchSpy.mockResolvedValueOnce(jsonResponse(CLIENT))
-    fetchSpy.mockResolvedValueOnce(
-      errorResponse(402, {
-        type: 'entitlement_exceeded',
-        message: "You've reached 30 active clients on the Starter plan.",
-        action: 'You can set a client to inactive if they have finished their programme, or upgrade to Growth.',
-        request_id: 'req_test',
-        details: {
-          resource: 'active_clients',
-          limit: 30,
-          used: 30,
-          plan_code: 'starter',
-          upgrade_to: 'growth',
-        },
-      }),
+    stubRoutes(
+      clientRoute(CLIENT),
+      actionRoute(
+        '/stage',
+        errorResponse(402, {
+          type: 'entitlement_exceeded',
+          message: "You've reached 30 active clients on the Starter plan.",
+          action:
+            'You can set a client to inactive if they have finished their programme, or upgrade to Growth.',
+          request_id: 'req_test',
+          details: {
+            resource: 'active_clients',
+            limit: 30,
+            used: 30,
+            plan_code: 'starter',
+            upgrade_to: 'growth',
+          },
+        }),
+      ),
     )
 
     renderScreen()
@@ -143,10 +215,12 @@ describe('client detail', () => {
     // 🔒 Principle 3 — the client renders, never derives. The stage badge comes
     // from the response, not from what the dropdown was set to, so a server
     // that decided differently is what the practitioner sees.
-    const fetchSpy = vi.spyOn(globalThis, 'fetch')
-    fetchSpy.mockResolvedValueOnce(jsonResponse(CLIENT))
-    fetchSpy.mockResolvedValueOnce(
-      jsonResponse({ ...CLIENT, stage: 'active', activated_at: '2026-08-08T09:00:00Z' }),
+    stubRoutes(
+      clientRoute(CLIENT),
+      actionRoute(
+        '/stage',
+        jsonResponse({ ...CLIENT, stage: 'active', activated_at: '2026-08-08T09:00:00Z' }),
+      ),
     )
 
     renderScreen()
@@ -159,9 +233,10 @@ describe('client detail', () => {
   })
 
   it('posts to the stage endpoint with the chosen stage', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch')
-    fetchSpy.mockResolvedValueOnce(jsonResponse(CLIENT))
-    fetchSpy.mockResolvedValueOnce(jsonResponse({ ...CLIENT, stage: 'contacted' }))
+    const fetchSpy = stubRoutes(
+      clientRoute(CLIENT),
+      actionRoute('/stage', jsonResponse({ ...CLIENT, stage: 'contacted' })),
+    )
 
     renderScreen()
     await screen.findByRole('heading', { name: 'Asha Menon', level: 1 })
@@ -169,32 +244,90 @@ describe('client detail', () => {
     await userEvent.selectOptions(screen.getByLabelText('Move to stage'), 'contacted')
     await userEvent.click(screen.getByRole('button', { name: 'Update stage' }))
 
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2))
-    const [url, init] = fetchSpy.mock.calls[1] as [string, RequestInit]
+    // ⚠️ Found by URL, not by call index. The screen loads four things on mount
+    // and their order is not part of the contract, so an index here would break
+    // the next time a panel is added.
+    const call = await waitFor(() => {
+      const found = fetchSpy.mock.calls.find(
+        ([url, init]) => urlOf(url).endsWith('/stage') && init?.method === 'POST',
+      )
+      if (!found) throw new Error('no POST to /stage yet')
+      return found as [string, RequestInit]
+    })
+
     // 🔒 The path parameter is substituted, not left as a template.
-    expect(url).toContain(`/api/v1/app/clients/${CLIENT_ID}/stage`)
-    expect(init.method).toBe('POST')
+    expect(call[0]).toContain(`/api/v1/app/clients/${CLIENT_ID}/stage`)
     // The client always serialises the body itself, so this is a string. Checked
     // rather than coerced: `String()` on an object would silently compare
     // against '[object Object]' and the assertion would pass for the wrong body.
-    expect(typeof init.body).toBe('string')
-    expect(JSON.parse(init.body as string)).toEqual({ to_stage: 'contacted' })
+    expect(typeof call[1].body).toBe('string')
+    expect(JSON.parse(call[1].body as string)).toEqual({ to_stage: 'contacted' })
   })
 
   it('restores an archived client through the restore endpoint', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch')
-    fetchSpy.mockResolvedValueOnce(
-      jsonResponse({ ...CLIENT, stage: 'paused', archived_at: '2026-08-05T10:00:00Z' }),
+    const fetchSpy = stubRoutes(
+      clientRoute({ ...CLIENT, stage: 'paused', archived_at: '2026-08-05T10:00:00Z' }),
+      actionRoute('/restore', jsonResponse({ ...CLIENT, stage: 'paused' })),
     )
-    fetchSpy.mockResolvedValueOnce(jsonResponse({ ...CLIENT, stage: 'paused' }))
 
     renderScreen()
     await screen.findByRole('heading', { name: 'Asha Menon', level: 1 })
 
     await userEvent.click(screen.getByRole('button', { name: 'Restore client' }))
 
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2))
-    expect(fetchSpy.mock.calls[1]?.[0]).toContain(`/api/v1/app/clients/${CLIENT_ID}/restore`)
+    await waitFor(() =>
+      expect(
+        fetchSpy.mock.calls.some(([url]) => urlOf(url).endsWith(`/clients/${CLIENT_ID}/restore`)),
+      ).toBe(true),
+    )
+  })
+
+  it('offers no access controls to a practitioner, and does to an owner', async () => {
+    // 🔒 FR-M0-017 / EC-M0-04 — `client.manage_access` is owner-only while
+    // `client.read_access` is not. The session's role is what decides, so this
+    // is asserted through the screen rather than the panel: the wiring from
+    // `/auth/me` to `canManage` is the part that can silently invert.
+    stubRoutes(clientRoute(CLIENT))
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Asha Menon', level: 1 })
+
+    expect(screen.getByText(/only the account owner can change who has access/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Share with a colleague')).not.toBeInTheDocument()
+  })
+
+  it('lets the owner share the client with a colleague', async () => {
+    // ⚠️ `sessionRoute` overrides the default practitioner session. The owner
+    // role is what puts the controls on screen, so it has to come first.
+    const fetchSpy = stubRoutes(
+      sessionRoute('owner'),
+      clientRoute(CLIENT),
+      (url, init) =>
+        url.endsWith('/access') && (init.method ?? 'GET').toUpperCase() === 'POST'
+          ? jsonResponse({
+              user_id: 'user-new',
+              granted_by_user_id: 'user-1',
+              granted_at: '2026-08-09T10:00:00Z',
+              revoked_at: null,
+              is_live: true,
+            })
+          : undefined,
+    )
+
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Asha Menon', level: 1 })
+
+    await userEvent.type(await screen.findByLabelText('Share with a colleague'), 'user-new')
+    await userEvent.click(screen.getByRole('button', { name: 'Give access' }))
+
+    const call = await waitFor(() => {
+      const found = fetchSpy.mock.calls.find(
+        ([url, init]) => urlOf(url).endsWith('/access') && init?.method === 'POST',
+      )
+      if (!found) throw new Error('no POST to /access yet')
+      return found as [string, RequestInit]
+    })
+
+    expect(JSON.parse(call[1].body as string)).toEqual({ user_id: 'user-new' })
   })
 
   it('shows the request id on an unexpected failure', async () => {

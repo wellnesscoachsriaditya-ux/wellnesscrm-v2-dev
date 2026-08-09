@@ -452,6 +452,20 @@ def _client_ip_hash(request: Request) -> str | None:
     )
 
 
+#: 🔒 Denial reasons that must be reported as **404, not 403** — API §5.4.
+#:
+#: A 403 confirms the resource exists. For a cross-tenant read that leaks the
+#: existence of another tenant's data; for an unassigned client it lets a
+#: practitioner enumerate a colleague's caseload one request at a time, which is
+#: exactly the isolation AC-M1-006 asserts. Both are indistinguishable from
+#: absent, deliberately.
+#:
+#: ⚠️ Matched by prefix against the reason `kernel.authz` produced, so these
+#: strings are part of that module's contract. `owner_or_assigned` says so at
+#: its own definition.
+_NOT_FOUND_REASONS: tuple[str, ...] = ("cross_tenant", "not_assigned_to_actor")
+
+
 def _error_for(decision: Decision, actor: Actor) -> AppError:
     """Map a denial onto the response the caller should see.
 
@@ -460,8 +474,9 @@ def _error_for(decision: Decision, actor: Actor) -> AppError:
 
     * **401** when nobody is signed in — the honest answer, and the one that
       makes the client re-authenticate rather than give up.
-    * **404** across a tenant boundary — 🔒 a 403 would confirm the resource
-      exists, which is the leak itself.
+    * **404** across a tenant boundary, and for a client the practitioner is not
+      assigned to — 🔒 a 403 would confirm the resource exists, which is the leak
+      itself. See :data:`_NOT_FOUND_REASONS`.
     * **403** otherwise.
     """
     if not actor.is_authenticated:
@@ -470,7 +485,7 @@ def _error_for(decision: Decision, actor: Actor) -> AppError:
             action="Sign in and try again.",
         )
 
-    if decision.reason.startswith("cross_tenant"):
+    if decision.reason.startswith(_NOT_FOUND_REASONS):
         return NotFoundError(
             message="That record doesn't exist.",
             action="Check the link, or go back and try again.",

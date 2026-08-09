@@ -1081,7 +1081,14 @@ def test_a_policy_denial_is_403_and_audited(
 
     response = _client(router).get(f"/api/v1/app/things/{THING_1}")
 
-    assert response.status_code == 403
+    # 🔒 API §5.4 — **404, not 403.** "Applies to cross-tenant access and to a
+    # practitioner requesting an unassigned client." A 403 confirms the resource
+    # exists, which lets a colleague's caseload be enumerated one request at a
+    # time — the leak AC-M1-006 asserts against.
+    assert response.status_code == 404
+    # ⚠️ The *reason* is still the specific one, and is still audited. The
+    # response is deliberately vague; the audit log is not, or a denial would be
+    # uninvestigable.
     assert sink.entries[0].metadata["reason"] == "not_assigned_to_actor"
     assert sink.entries[0].resource_id == THING_1
 
@@ -1114,9 +1121,51 @@ def test_a_resource_denial_rolls_back_the_transaction(
 
     response = _client(router).post(f"/api/v1/app/things/{THING_1}")
 
-    assert response.status_code == 403
+    # 404 rather than 403 — API §5.4, see the read test above. What this asserts
+    # is the rollback: the status code is incidental to it.
+    assert response.status_code == 404
     assert transactions.last.rolled_back
     assert not transactions.last.committed
+
+
+def test_a_role_denial_is_403_not_404(
+    sink: InMemoryAuditSink, transactions: FakeTransactions
+) -> None:
+    """🔒 The counterpart to the two tests above — the distinction is the point.
+
+    API §5.4 makes *existence-revealing* denials 404: another tenant's resource,
+    or a client this practitioner is not assigned to. Everything else stays 403.
+
+    ⚠️ Without this test, "map denials to 404" would pass every other assertion in
+    the file while hiding every authorization failure behind "doesn't exist" —
+    which is unhelpful to a legitimate user hitting a permissions problem, and
+    makes a real misconfiguration look like missing data.
+    """
+    register_action(
+        "thing.destroy",
+        roles={UserRole.OWNER},
+        data_scope=DataScope.TENANT_PII,
+    )
+    _as_actor(
+        Actor(
+            actor_type=ActorType.PRACTITIONER,
+            realm=AuthRealm.PRACTITIONER,
+            subject_id=USER_1,
+            tenant_id=TENANT_A,
+            role=UserRole.PRACTITIONER,
+        )
+    )
+    router = realm_router("/api/v1/app")
+
+    @router.post("/things/{thing_id}/destroy")
+    @requires(REGISTRY.get("thing.destroy"))  # type: ignore[arg-type]
+    async def destroy_thing(thing_id: uuid.UUID, request: Request) -> None:
+        raise AssertionError("the coarse role gate should have refused this")
+
+    response = _client(router).post(f"/api/v1/app/things/{THING_1}/destroy")
+
+    assert response.status_code == 403
+    assert sink.entries[0].metadata["reason"].startswith("role_not_permitted")
 
 
 # ─── Exempt routes ───────────────────────────────────────────────────────

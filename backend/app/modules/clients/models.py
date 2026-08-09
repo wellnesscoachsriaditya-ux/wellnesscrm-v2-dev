@@ -30,6 +30,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.kernel import Base
 from app.kernel.clients import ClientStage, DietaryClass, SexType
 from app.kernel.clients import is_minor as derive_is_minor
+from app.kernel.collaboration import TagColour
 from app.kernel.db import pg_enum
 
 
@@ -181,4 +182,180 @@ class ClientStageHistory(Base):
             "from_stage IS NULL OR from_stage <> to_stage",
             name="ck_client_stage_history__actual_transition",
         ),
+    )
+
+
+class ClientNote(Base):
+    """A practitioner's free-text note about a client — DB §5.4, FR-M1-007.
+
+    🔒 **Never client-visible** (FR-M3-021). Enforced three ways, and the
+    redundancy is the point: no client-realm route reaches it, the authorization
+    actions permit practitioner roles only, and migration 0011 gives the table
+    **no client-realm RLS policy at all** — DB §17.1 notes that an absent policy
+    is stronger than a condition in one, because there is nothing to write
+    wrongly.
+
+    🔒 Author-editable (FR-M3-020). ``author_user_id`` is NOT NULL because it is
+    what that rule keys off; an unattributed note is one nobody can be asked
+    about. See ``kernel.collaboration.assert_may_edit_note``.
+    """
+
+    __tablename__ = "client_notes"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id"),
+        nullable=False,
+        comment="🔒 RLS discriminator",
+    )
+    client_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    author_user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=False,
+        comment="🔒 FR-M3-020 — only this user may edit the body",
+    )
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+    archived_at: Mapped[datetime | None] = mapped_column(comment="Soft delete (DB §22.2)")
+
+    __table_args__ = (
+        CheckConstraint("length(btrim(body)) > 0", name="ck_client_notes__body_not_blank"),
+        Index("ix_client_notes__tenant_id", "tenant_id"),
+    )
+
+
+class Tag(Base):
+    """A label in the tenant's own vocabulary — DB §5.4, FR-M1-008.
+
+    🔒 Tenant-scoped and practitioner-defined. Uniqueness is **case-insensitive**
+    and lives in migration 0011 as a partial unique index on
+    ``(tenant_id, lower(name))``: SQLAlchemy cannot express a functional partial
+    index in a column definition, so the migration is authoritative for it.
+    ``kernel.collaboration.tag_match_key`` computes the same value.
+    """
+
+    __tablename__ = "tags"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id"),
+        nullable=False,
+        comment="🔒 RLS discriminator",
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    colour: Mapped[TagColour] = mapped_column(
+        pg_enum(TagColour, "tag_colour"),
+        nullable=False,
+        server_default="slate",
+        comment="🔒 A closed palette, not free hex — ADR-03 and NFR-060",
+    )
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+    archived_at: Mapped[datetime | None] = mapped_column(comment="Soft delete (DB §22.2)")
+
+    __table_args__ = (
+        CheckConstraint("length(btrim(name)) > 0", name="ck_tags__name_not_blank"),
+        CheckConstraint("length(name) <= 40", name="ck_tags__name_length"),
+    )
+
+
+class ClientTag(Base):
+    """The junction — DB §5.4.
+
+    ⚠️ Untagging is a real DELETE, not a soft delete. The row records no event:
+    it is the assertion "this client carries this label", and once withdrawn
+    there is nothing to keep. A tombstone would also complicate the primary key
+    that makes "is this client tagged X" a single lookup.
+    """
+
+    __tablename__ = "client_tags"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id"),
+        nullable=False,
+        comment="🔒 RLS discriminator",
+    )
+    client_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    tag_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tags.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    tagged_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+    tagged_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id")
+    )
+
+    __table_args__ = (Index("ix_client_tags__tenant_id", "tenant_id"),)
+
+
+class ClientAssignment(Base):
+    """An *additional* practitioner granted access to a client — DB §5.5, EC-M0-04.
+
+    🔒 **Additional only.** The owning practitioner is ``clients.owner_user_id``
+    and stays the single answer to "whose client is this". One owner, N grants is
+    what keeps accountability unambiguous while supporting shared care.
+
+    🔒 **Revoked, never deleted.** EC-M1-04 requires assignment history to survive
+    a practitioner leaving — "who could see this client last March" is a question
+    a DPDP access request can ask, and a deleted row cannot answer it. That is
+    why ``granted_at`` is part of the primary key: one pair legitimately recurs
+    over time, and the two-column key DB §5.5 sketches would refuse a re-grant
+    after a revoke.
+
+    A partial unique index in migration 0011 keeps at most **one live grant** per
+    pair — two would make a revoke appear to do nothing.
+    """
+
+    __tablename__ = "client_assignments"
+
+    client_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True
+    )
+    granted_at: Mapped[datetime] = mapped_column(
+        primary_key=True,
+        server_default=text("now()"),
+        comment="🔒 Part of the key — see the class docstring",
+    )
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id"),
+        nullable=False,
+        comment="🔒 RLS discriminator",
+    )
+    granted_by_user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column()
+    revoked_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id")
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "(revoked_at IS NULL) = (revoked_by_user_id IS NULL)",
+            name="ck_client_assignments__revocation_complete",
+        ),
+        Index("ix_client_assignments__tenant_id", "tenant_id"),
     )

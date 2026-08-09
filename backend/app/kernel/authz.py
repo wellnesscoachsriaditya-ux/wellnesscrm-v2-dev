@@ -34,7 +34,7 @@ makes adding a module a module-local change rather than a kernel edit.
 from __future__ import annotations
 
 import enum
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
@@ -117,6 +117,29 @@ class Resource(Protocol):
 
     @property
     def owner_user_id(self) -> object: ...
+
+
+@runtime_checkable
+class SharedResource(Protocol):
+    """A resource whose access extends beyond its owner — EC-M0-04.
+
+    🔒 Separate from :class:`Resource` and **optional**, because most resources
+    have no grant model. A module that supports shared access supplies
+    ``granted_user_ids`` on the object it hands to :func:`can`, and
+    :func:`owner_or_assigned` consults it; everything else is unaffected.
+
+    ⚠️ The grants are a *value*, not a query. A policy is synchronous and must
+    stay that way — a predicate that hit the database would put an I/O call
+    inside the authorization decision, where its failure mode is an exception in
+    the middle of a permission check rather than a denial. The module loads the
+    grants alongside the resource and passes both.
+
+    ⚠️ Only **live** grants belong here. A revoked grant is history, and a
+    resource that included it would keep access alive after the owner removed it.
+    """
+
+    @property
+    def granted_user_ids(self) -> Collection[object]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -393,11 +416,17 @@ def _apply_policies(action: Action, actor: Actor, resource: Resource | None) -> 
 
 def owner_or_assigned(actor: Actor, resource: Resource | None) -> Decision:
     """Allow a tenant owner anything in their tenant; a practitioner only what
-    is assigned to them (FR-M0-017).
+    is assigned or granted to them (FR-M0-017, EC-M0-04).
 
     🔒 The unassigned case is a *denial*, not an empty result. A practitioner
     reaching for a colleague's client is either a bug or an attempt; both should
     be visible in the audit log rather than silently returning nothing.
+
+    ⚠️ The denial reason ``not_assigned_to_actor`` is load-bearing: the HTTP
+    layer maps it to **404, not 403** (API §5.4), because a 403 confirms the
+    resource exists and lets a practitioner enumerate a colleague's caseload one
+    request at a time. Renaming it without updating
+    ``platform.http.pipeline._error_for`` would silently downgrade that.
 
     🔒 No operator branch. An operator that reaches this policy has already been
     confined to non-PII scopes by :func:`can`; granting them "owner" rights here
@@ -417,6 +446,17 @@ def owner_or_assigned(actor: Actor, resource: Resource | None) -> Decision:
 
     if owner_id == actor.subject_id:
         return allow("assigned_practitioner")
+
+    # 🔒 EC-M0-04 — shared care. One owning practitioner, N explicit grants, so
+    # "who owns this client" stays unambiguous while a colleague can still be
+    # given access. Checked after ownership because the common case is the owner
+    # and this is the only branch that touches a collection.
+    if (
+        isinstance(resource, SharedResource)
+        and actor.subject_id is not None
+        and actor.subject_id in resource.granted_user_ids
+    ):
+        return allow("explicit_grant")
 
     return deny("not_assigned_to_actor")
 

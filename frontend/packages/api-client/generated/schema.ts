@@ -29,6 +29,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/app/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The current session
+         * @description Identify the caller from their verified token.
+         *
+         *     🔒 Read from the token, never from a parameter. An endpoint that accepted a
+         *     user id would let any authenticated caller ask about anyone.
+         *
+         *     ⚠️ Built in S2 Slice C rather than S1 because it had no consumer until the
+         *     notes UI needed to know who the author is — FR-M3-020's "editable by their
+         *     author" cannot be expressed in an interface that does not know who is
+         *     looking.
+         */
+        get: operations["authCurrentSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/app/clients": {
         parameters: {
             query?: never;
@@ -85,6 +113,62 @@ export interface paths {
         patch: operations["clientsUpdate"];
         trace?: never;
     };
+    "/api/v1/app/clients/{client_id}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who can see this client
+         * @description Grants on this client — EC-M0-04.
+         *
+         *     ``include_revoked`` surfaces the history EC-M1-04 requires be retained. Off
+         *     by default: a list mixing live and revoked rows invites a caller to forget
+         *     the difference.
+         */
+        get: operations["clientAccessList"];
+        put?: never;
+        /**
+         * Grant a colleague access to this client
+         * @description Share a client with a colleague — EC-M0-04.
+         *
+         *     🔒 Owner-only, twice over: the action's role gate and the check inside
+         *     ``assignments.grant_access``. Deliberately redundant, because a future route
+         *     that forgot the declaration would otherwise widen access silently.
+         */
+        post: operations["clientAccessGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/access/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a colleague's access
+         * @description Withdraw access — EC-M1-04.
+         *
+         *     🔒 Stamps ``revoked_at`` rather than deleting: "who could see this client
+         *     last March" is a question a DPDP access request can ask, and a deleted row
+         *     cannot answer it.
+         */
+        delete: operations["clientAccessRevoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/app/clients/{client_id}/archive": {
         parameters: {
             query?: never;
@@ -106,6 +190,95 @@ export interface paths {
          *     ``transitions.archive``.
          */
         post: operations["clientsArchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a client's notes
+         * @description The note thread, newest first — FR-M1-007.
+         *
+         *     🔒 Never reachable from the client realm (FR-M3-021): this router is
+         *     practitioner-only, the action permits practitioner roles alone, and
+         *     ``client_notes`` has no client-realm RLS policy.
+         */
+        get: operations["clientNotesList"];
+        put?: never;
+        /**
+         * Add a note to a client
+         * @description Append a note — FR-M1-007.
+         */
+        post: operations["clientNotesCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a note
+         * @description Take a note out of the thread — a soft delete (DB §22.2).
+         *
+         *     ⚠️ ``DELETE`` in HTTP terms, ``archived_at`` in the database. The verb
+         *     describes the caller's intent; nothing is destroyed, which is what AC-M1-007
+         *     requires of every user-facing removal.
+         */
+        delete: operations["clientNotesArchive"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a note
+         * @description Rewrite a note's body — FR-M3-020.
+         *
+         *     🔒 **Author only**, including against the tenant owner: the note carries an
+         *     author's name, so only they may change what it says. The owner's remedy for a
+         *     note that should not stand is to remove it, which is recorded as their act.
+         *
+         *     🔒 The edit is audited by the pipeline, which is what satisfies FR-M3-020's
+         *     "with edits recorded in the audit log" — a framework-written entry cannot be
+         *     forgotten.
+         */
+        patch: operations["clientNotesUpdate"];
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reassign the owning practitioner
+         * @description Move a client to a different owning practitioner — EC-M1-04.
+         *
+         *     ⚠️ **One client at a time.** EC-M1-04 describes reassigning a departing
+         *     practitioner's caseload in bulk; that needs a selection UI and an answer for
+         *     what happens when 40 of 50 succeed. Slice E owns it, alongside the list that
+         *     would drive the selection.
+         */
+        post: operations["clientOwnerReassign"];
         delete?: never;
         options?: never;
         head?: never;
@@ -161,6 +334,107 @@ export interface paths {
          */
         post: operations["clientsChangeStage"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a client's tags */
+        get: operations["clientTagsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Apply a tag to a client
+         * @description Apply a tag — idempotent, and ``PUT`` for exactly that reason.
+         *
+         *     Applying a label twice is indistinguishable from applying it once, so the
+         *     second call has nothing to report. Refusing it would make the UI's tag toggle
+         *     behave differently depending on how fast the practitioner clicks.
+         */
+        put: operations["clientTagsAttach"];
+        post?: never;
+        /**
+         * Remove a tag from a client
+         * @description Remove a tag — a real delete, and the one place in the module that is true.
+         *
+         *     The junction row asserts "this client carries this label"; withdrawn, it
+         *     records nothing that happened. Compare ``client_assignments``, revoked rather
+         *     than deleted precisely because *it* records a decision.
+         */
+        delete: operations["clientTagsDetach"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tenant's tags
+         * @description Every live tag, alphabetical and case-insensitively ordered.
+         */
+        get: operations["tagsList"];
+        put?: never;
+        /**
+         * Create a tag
+         * @description Define a tag — FR-M1-008.
+         *
+         *     🔒 Refuses a duplicate case-insensitively: a practitioner with "PCOS" who
+         *     types "pcos" means the tag they already have, and a second one would split
+         *     their caseload across two labels that look identical in a filter.
+         */
+        post: operations["tagsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Retire a tag
+         * @description Retire a tag — a soft delete.
+         *
+         *     ⚠️ Leaves its applications in place, so a tag retired by mistake can be
+         *     brought back with its clients intact. The name is released for reuse, because
+         *     ``uq_tags__tenant_name`` is partial on the archive flag.
+         */
+        delete: operations["tagsArchive"];
         options?: never;
         head?: never;
         patch?: never;
@@ -541,6 +815,30 @@ export interface components {
          */
         ClientStage: "lead" | "contacted" | "consultation_scheduled" | "active" | "paused" | "churned" | "archived";
         /**
+         * CurrentSessionResponse
+         * @description Who the caller is — identifiers and role, nothing else.
+         *
+         *     🔒 **No name, email or phone** (NFR-033). ``TokenResponse`` says the client
+         *     "fetches its own profile from a dedicated endpoint"; this is that endpoint,
+         *     and it deliberately answers the *authorization* question rather than the
+         *     display one. The UI needs ``user_id`` to know which notes it may edit
+         *     (FR-M3-020) and ``role`` to know whether to offer access management
+         *     (FR-M0-017) — neither needs a name.
+         */
+        CurrentSessionResponse: {
+            role: components["schemas"]["UserRole"];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
          * DependencyStatus
          * @description State of one dependency.
          */
@@ -568,6 +866,43 @@ export interface components {
          * @enum {string}
          */
         DietaryClass: "vegetarian" | "eggetarian" | "non_vegetarian" | "vegan" | "jain";
+        /** GrantRequest */
+        GrantRequest: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
+         * GrantResponse
+         * @description One access grant — EC-M0-04.
+         *
+         *     ⚠️ Identifiers only, no names. Resolving a user id to a name is the caller's
+         *     job through the team endpoint; embedding it here would put a second copy of a
+         *     person's name in a response that is already about access control (NFR-033).
+         */
+        GrantResponse: {
+            /**
+             * Granted At
+             * Format: date-time
+             */
+            granted_at: string;
+            /**
+             * Granted By User Id
+             * Format: uuid
+             */
+            granted_by_user_id: string;
+            /** Is Live */
+            is_live: boolean;
+            /** Revoked At */
+            revoked_at: string | null;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -594,6 +929,44 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /**
+         * NoteResponse
+         * @description One note — FR-M1-007, "with timestamp and author".
+         */
+        NoteResponse: {
+            /**
+             * Author User Id
+             * Format: uuid
+             */
+            author_user_id: string;
+            /** Body */
+            body: string;
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** NoteWriteRequest */
+        NoteWriteRequest: {
+            /** Body */
+            body: string;
         };
         /** PasswordResetConfirm */
         PasswordResetConfirm: {
@@ -659,6 +1032,14 @@ export interface components {
             dependencies?: components["schemas"]["DependencyStatus"][];
             /** Ready */
             ready: boolean;
+        };
+        /** ReassignRequest */
+        ReassignRequest: {
+            /**
+             * Owner User Id
+             * Format: uuid
+             */
+            owner_user_id: string;
         };
         /** RefreshRequest */
         RefreshRequest: {
@@ -735,6 +1116,46 @@ export interface components {
             to_stage: "lead" | "contacted" | "consultation_scheduled" | "active" | "paused" | "churned";
         };
         /**
+         * TagColour
+         * @description The palette a tag may use — DB §5.4 ("``color`` for UI").
+         *
+         *     🔒 **A named palette rather than free hex, deliberately.** Three reasons, in
+         *     order of weight:
+         *
+         *     1. **Contrast is a guarantee, not a hope.** Every value here maps to a design
+         *        token whose contrast is asserted by ``tokens/contrast.test.ts`` (NFR-060).
+         *        A practitioner picking ``#ffff00`` would produce a tag nobody can read,
+         *        and no test anywhere would catch it.
+         *     2. ADR-03 — raw colour values live in the design system and nowhere else.
+         *        Free hex in the database is that rule broken through the back door.
+         *     3. A closed set survives a theme change. Hex does not: a dark mode added
+         *        later has to re-interpret every value a user ever chose.
+         *
+         *     ⚠️ 🟡 The *set* is PROPOSED. DB §5.4 names the column and stops there, so
+         *     these eight are my choice — enough to group a caseload without becoming a
+         *     decision the practitioner has to make carefully.
+         * @enum {string}
+         */
+        TagColour: "slate" | "red" | "amber" | "green" | "teal" | "blue" | "violet" | "pink";
+        /** TagCreateRequest */
+        TagCreateRequest: {
+            /** @default slate */
+            colour: components["schemas"]["TagColour"];
+            /** Name */
+            name: string;
+        };
+        /** TagResponse */
+        TagResponse: {
+            colour: components["schemas"]["TagColour"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /**
          * TokenResponse
          * @description What a client needs to make an authenticated request and to renew.
          *
@@ -756,6 +1177,12 @@ export interface components {
              */
             token_type: "Bearer";
         };
+        /**
+         * UserRole
+         * @description Roles within a tenant (FR-M0-016).
+         * @enum {string}
+         */
+        UserRole: "owner" | "practitioner" | "client" | "platform_operator";
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -794,6 +1221,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    authCurrentSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentSessionResponse"];
+                };
             };
         };
     };
@@ -898,6 +1345,106 @@ export interface operations {
             };
         };
     };
+    clientAccessList: {
+        parameters: {
+            query?: {
+                include_revoked?: boolean;
+            };
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientAccessGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientAccessRevoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     clientsArchive: {
         parameters: {
             query?: never;
@@ -917,6 +1464,173 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ClientResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientNotesList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientNotesCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientNotesArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientNotesUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientOwnerReassign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -982,6 +1696,181 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTagsList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTagsAttach: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTagsDetach: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tagsList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResponse"][];
+                };
+            };
+        };
+    };
+    tagsCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tagsArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResponse"];
                 };
             };
             /** @description Validation Error */
