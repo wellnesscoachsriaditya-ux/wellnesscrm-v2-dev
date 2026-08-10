@@ -314,6 +314,31 @@ class StorageBackend(Protocol):
         ...
 
 
+class DownloadAuthorizer(Protocol):
+    """Authorize a retrieval and issue a URL — the port a *module* holds.
+
+    🔒 **Why this exists separately from :class:`StorageBackend`.** A backend
+    signs URLs for keys somebody else already authorized; this authorizes. A
+    domain module needs the second thing (a client document must resolve to a
+    URL) and R5 forbids it importing ``platform``, where the implementation
+    lives. So the port is declared here and the router passes the implementation
+    in — the same shape as ``EntitlementGuard`` (S1-E) and ``ClientDirectory``
+    (S2-A).
+
+    ⚠️ **The only implementation is ``platform.storage.authorize_download``**,
+    and that is deliberate: it re-reads the file under RLS, refuses anything not
+    servable, and re-checks the key against the tenant before signing. A second
+    implementation that skipped any of those would be NFR-035 broken in a place
+    no reviewer would think to look.
+    """
+
+    async def authorize_download(
+        self, session: object, *, tenant_id: uuid.UUID, file_id: uuid.UUID
+    ) -> str:
+        """A short-lived URL, after checking the caller may have it."""
+        ...
+
+
 # ─── Confirmation (ADR-12) ───────────────────────────────────────────────
 
 
