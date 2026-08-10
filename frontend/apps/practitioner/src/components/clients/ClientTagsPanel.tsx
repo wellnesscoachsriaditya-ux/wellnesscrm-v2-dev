@@ -11,7 +11,18 @@
  */
 
 import { useState } from 'react'
-import { Badge, Button, Card, CardBody, CardHeader, FormField, Input, Select } from '@wellnesscrm/design-system'
+import {
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  EmptyState,
+  FormField,
+  Input,
+  Select,
+  Spinner,
+} from '@wellnesscrm/design-system'
 
 /** 🔒 The palette the API accepts. Mirrors `kernel.collaboration.TagColour`. */
 export const TAG_COLOURS = [
@@ -38,6 +49,12 @@ export interface ClientTagsPanelProps {
   clientTagIds: readonly string[]
   error?: string | null
   busy?: boolean
+  /**
+   * ⚠️ **Distinct from `busy`.** `busy` is a mutation in flight; this is the
+   * first read still arriving. Without it the tenant's whole tag vocabulary
+   * reads as "none yet" while it is still being fetched.
+   */
+  loading?: boolean
   onToggle: (tagId: string, attached: boolean) => void
   onCreate: (name: string, colour: TagColourName) => void
 }
@@ -71,6 +88,7 @@ export function ClientTagsPanel({
   clientTagIds,
   error = null,
   busy = false,
+  loading = false,
   onToggle,
   onCreate,
 }: ClientTagsPanelProps) {
@@ -91,8 +109,13 @@ export function ClientTagsPanel({
       <CardBody>
         {error !== null && <p role="alert">{error}</p>}
 
-        {allTags.length === 0 ? (
-          <p>No tags yet. Create one below to start grouping your clients.</p>
+        {loading ? (
+          <Spinner label="Loading tags…" />
+        ) : allTags.length === 0 ? (
+          <EmptyState
+            title="No tags yet"
+            description="Create one below to start grouping your clients."
+          />
         ) : (
           <ul aria-label="Tags">
             {allTags.map((tag) => {

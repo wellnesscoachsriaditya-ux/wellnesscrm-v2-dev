@@ -17,7 +17,9 @@ import {
   CardBody,
   CardHeader,
   ConfirmDialog,
+  EmptyState,
   FormField,
+  Spinner,
   Textarea,
 } from '@wellnesscrm/design-system'
 
@@ -37,6 +39,13 @@ export interface ClientNotesPanelProps {
   isOwner: boolean
   error?: string | null
   busy?: boolean
+  /**
+   * ⚠️ **Distinct from `busy`.** `busy` is a mutation in flight; this is the
+   * first read still arriving. Without it an empty `notes` array renders "No
+   * notes yet" during the load, which tells the practitioner a client has no
+   * history at the exact moment their history is being fetched.
+   */
+  loading?: boolean
   onAdd: (body: string) => void
   onEdit: (noteId: string, body: string) => void
   onRemove: (noteId: string) => void
@@ -48,6 +57,7 @@ export function ClientNotesPanel({
   isOwner,
   error = null,
   busy = false,
+  loading = false,
   onAdd,
   onEdit,
   onRemove,
@@ -82,8 +92,13 @@ export function ClientNotesPanel({
           Add note
         </Button>
 
-        {notes.length === 0 ? (
-          <p>No notes yet.</p>
+        {loading ? (
+          <Spinner label="Loading notes…" />
+        ) : notes.length === 0 ? (
+          <EmptyState
+            title="No notes yet"
+            description="Notes are private to your practice — the client never sees them."
+          />
         ) : (
           // 🔒 FR-M1-007 — a list, newest first, as the server ordered it. The
           // component does not sort: ordering is the server's decision and a

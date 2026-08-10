@@ -17,7 +17,7 @@
  * that exists, which costs one interaction and no divergence.
  */
 
-import { Button, ErrorState, PageHeader, Tabs } from '@wellnesscrm/design-system'
+import { Button, Card, CardBody, ErrorState, PageHeader, Tabs } from '@wellnesscrm/design-system'
 import { useIaLocation } from '@wellnesscrm/ia'
 import { useNavigate } from 'react-router-dom'
 import { EnquiryFormPanel } from '../components/clients/EnquiryFormPanel'
@@ -100,6 +100,23 @@ export function Leads() {
           error={form.error}
           onToggleActive={(next) => void form.setActive(next)}
         />
+      )}
+
+      {/* ⚠️ The panel above renders only once the form has loaded, and
+        * `useEnquiryForm` reports its failure by leaving `form` null and setting
+        * `error` — so without this branch a failed fetch showed nothing at all:
+        * no share link, and no reason for its absence. The practitioner's own
+        * enquiry link is US-M2-01, so silence is the one unacceptable outcome.
+        *
+        * Not an `ErrorState`: the enquiry *list* below is the point of the page
+        * and is unaffected, and replacing the screen over a missing panel would
+        * cost the practitioner their queue. */}
+      {form.form === null && form.error !== null && (
+        <Card>
+          <CardBody>
+            <p role="alert">{form.error}</p>
+          </CardBody>
+        </Card>
       )}
 
       <Tabs

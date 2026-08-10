@@ -2,6 +2,7 @@ import { defineIa } from '@wellnesscrm/ia'
 import { ClientCreate } from '../screens/ClientCreate'
 import { ClientDetail } from '../screens/ClientDetail'
 import { ClientList } from '../screens/ClientList'
+import { Dashboard } from '../screens/Dashboard'
 import { Leads } from '../screens/Leads'
 import { placeholder } from '../screens/Placeholder'
 import {
@@ -39,7 +40,12 @@ export const ia = defineIa({
       path: '/',
       label: 'Dashboard',
       nav: { order: 1, icon: dashboardIcon },
-      view: placeholder('S2', 'Today’s appointments, clients needing attention, and what to do next.'),
+      // ⚠️ **No `permission`.** Every practitioner has a landing screen, and the
+      // panels on it are individually scoped by the endpoints they read — a
+      // practitioner sees their own enquiries and clients, an owner sees the
+      // tenant (AC-M1-006). Gating the route itself would hide the whole app
+      // from anyone whose role lacked one panel's action.
+      view: Dashboard,
     },
 
     // ─── M1 Client Record ─────────────────────────────────────────────────

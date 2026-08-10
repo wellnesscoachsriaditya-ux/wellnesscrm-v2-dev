@@ -73,7 +73,7 @@ describe('who can see this client', () => {
     })
 
     expect(screen.queryByText('user-former')).not.toBeInTheDocument()
-    expect(screen.getByText(/no one else has been given access/i)).toBeInTheDocument()
+    expect(screen.getByText(/not shared with anyone/i)).toBeInTheDocument()
   })
 
   it('explains the empty case rather than showing a bare list', () => {

@@ -25,8 +25,10 @@ import {
   CardBody,
   CardHeader,
   ConfirmDialog,
+  EmptyState,
   FormField,
   Input,
+  Spinner,
 } from '@wellnesscrm/design-system'
 
 export interface GrantView {
@@ -45,6 +47,13 @@ export interface ClientAccessPanelProps {
   canManage: boolean
   error?: string | null
   busy?: boolean
+  /**
+   * ⚠️ **Distinct from `busy`.** `busy` is a mutation in flight; this is the
+   * first read still arriving. Without it the panel states that nobody else has
+   * access while the grant list is still loading — a claim about who can see a
+   * client, made before we know.
+   */
+  loading?: boolean
   onGrant: (userId: string) => void
   onRevoke: (userId: string) => void
   onReassign: (userId: string) => void
@@ -56,6 +65,7 @@ export function ClientAccessPanel({
   canManage,
   error = null,
   busy = false,
+  loading = false,
   onGrant,
   onRevoke,
   onReassign,
@@ -89,8 +99,13 @@ export function ClientAccessPanel({
           Owning practitioner: <Badge tone="info">{ownerUserId}</Badge>
         </p>
 
-        {live.length === 0 ? (
-          <p>No one else has been given access. Only the owning practitioner can open this client.</p>
+        {loading ? (
+          <Spinner label="Loading access…" />
+        ) : live.length === 0 ? (
+          <EmptyState
+            title="Not shared with anyone"
+            description="Only the owning practitioner can open this client."
+          />
         ) : (
           <ul aria-label="Shared access">
             {live.map((grant) => (

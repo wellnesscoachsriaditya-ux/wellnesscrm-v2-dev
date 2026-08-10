@@ -186,6 +186,7 @@ export function ClientDetail() {
         clientTagIds={collaboration.clientTags.map((tag) => tag.id)}
         error={collaboration.tagsError}
         busy={collaboration.busy}
+        loading={collaboration.loading}
         onToggle={(tagId, attached) => void collaboration.toggleTag(tagId, attached)}
         onCreate={(name, colour) => void collaboration.createAndAttachTag(name, colour)}
       />
@@ -199,6 +200,7 @@ export function ClientDetail() {
         isOwner={session?.role === 'owner'}
         error={collaboration.notesError}
         busy={collaboration.busy}
+        loading={collaboration.loading}
         onAdd={(body) => void collaboration.addNote(body)}
         onEdit={(noteId, body) => void collaboration.editNote(noteId, body)}
         onRemove={(noteId) => void collaboration.removeNote(noteId)}
@@ -215,6 +217,7 @@ export function ClientDetail() {
         canManage={session?.role === 'owner'}
         error={collaboration.accessError}
         busy={collaboration.busy}
+        loading={collaboration.loading}
         onGrant={(userId) => void collaboration.grant(userId)}
         onRevoke={(userId) => void collaboration.revoke(userId)}
         onReassign={(userId) => void collaboration.reassign(userId)}

@@ -73,7 +73,7 @@ describe('writing notes', () => {
   it('says so when there are no notes yet', () => {
     // NFR-064 — every list has an empty state. A blank panel reads as broken.
     renderPanel({ notes: [] })
-    expect(screen.getByText('No notes yet.')).toBeInTheDocument()
+    expect(screen.getByText('No notes yet')).toBeInTheDocument()
   })
 })
 
