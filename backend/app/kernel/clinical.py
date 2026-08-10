@@ -39,7 +39,7 @@ from typing import Any, Protocol
 
 from app.kernel.clients import DietaryClass, SexType
 from app.kernel.errors import ConflictError, ValidationError
-from app.kernel.events import DomainEvent
+from app.kernel.events import DomainEvent, register_event
 
 # ─── Vocabulary (DB §7.2, §7.3, §7.5) ────────────────────────────────────
 
@@ -935,6 +935,7 @@ def display_precedence(source: MeasurementSource) -> int:
 # ─── Events (DDR-06) ─────────────────────────────────────────────────────
 
 
+@register_event("assessment.completed")
 @dataclass(frozen=True, slots=True)
 class AssessmentCompleted(DomainEvent):
     """A client or practitioner submitted an assessment — FR-M3-004, AC-M1-004.
@@ -955,6 +956,7 @@ class AssessmentCompleted(DomainEvent):
     actor_user_id: uuid.UUID | None = None
 
 
+@register_event("measurement.recorded")
 @dataclass(frozen=True, slots=True)
 class MeasurementRecorded(DomainEvent):
     """A dated measurement was recorded — FR-M3-011, FR-M1-018."""
@@ -967,6 +969,7 @@ class MeasurementRecorded(DomainEvent):
     actor_user_id: uuid.UUID | None = None
 
 
+@register_event("document.uploaded")
 @dataclass(frozen=True, slots=True)
 class DocumentUploaded(DomainEvent):
     """A document was attached to a client — FR-M3-024/025.
@@ -986,6 +989,7 @@ class DocumentUploaded(DomainEvent):
     actor_user_id: uuid.UUID | None = None
 
 
+@register_event("consultation_note.recorded")
 @dataclass(frozen=True, slots=True)
 class ConsultationNoteRecorded(DomainEvent):
     """A consultation note was written — FR-M3-018.

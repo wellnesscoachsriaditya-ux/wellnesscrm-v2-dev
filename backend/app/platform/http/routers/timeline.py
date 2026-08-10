@@ -168,6 +168,12 @@ async def timeline_filters(request: Request, client_id: uuid.UUID) -> list[Timel
 #: a noun for a category ("Stage changes") while a summary is a statement about
 #: one occurrence ("Note added"), and forcing one string to do both makes a
 #: filter list read like a sentence fragment.
+#: ⚠️ 🔒 **Every producible type must appear here.** The comprehension above
+#: subscripts this dict for each one, so a producer added without a label raises
+#: `KeyError` and returns 500 from the filters endpoint — not a missing filter, a
+#: broken page. `enquiry_received` shipped in that state in S2 Slice F and was
+#: found in M3; `test_every_producible_event_type_has_a_filter_label` now fails
+#: instead of a practitioner's timeline.
 _FILTER_LABELS: dict[TimelineEventType, str] = {
     TimelineEventType.STAGE_CHANGED: "Stage changes",
     TimelineEventType.NOTE_ADDED: "Notes",
@@ -176,4 +182,9 @@ _FILTER_LABELS: dict[TimelineEventType, str] = {
     TimelineEventType.ACCESS_CHANGED: "Access",
     TimelineEventType.CLIENT_ARCHIVED: "Archived",
     TimelineEventType.CLIENT_RESTORED: "Restored",
+    TimelineEventType.ENQUIRY_RECEIVED: "Enquiries",
+    # ── M3, the clinical workspace ──
+    TimelineEventType.ASSESSMENT_COMPLETED: "Assessments",
+    TimelineEventType.MEASUREMENT_RECORDED: "Measurements",
+    TimelineEventType.DOCUMENT_UPLOADED: "Documents",
 }

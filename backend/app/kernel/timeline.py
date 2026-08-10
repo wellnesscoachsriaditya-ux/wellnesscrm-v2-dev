@@ -211,6 +211,19 @@ _PRODUCIBLE: frozenset[TimelineEventType] = frozenset(
         # the slice plan puts D before F: the subscriber must exist before lead
         # capture writes through it.
         TimelineEventType.ENQUIRY_RECEIVED,
+        # 🔒 M3 — the clinical workspace's three producers. Declared in the enum
+        # since S2 (see the class docstring on why the whole vocabulary shipped
+        # at once); these are the slice that gave them writers.
+        #
+        # ⚠️ There is deliberately **no entry for consultation notes.** A note is
+        # invisible to the client (FR-M3-021, AC-M3-006) and DB §5.6 is explicit
+        # that a timeline row leaks its *existence*. `ConsultationNoteRecorded`
+        # is published for auditability but writes no timeline entry — the
+        # practitioner reads the notes panel, and the portal cannot infer one was
+        # written. Adding NOTE_ADDED here would undo that.
+        TimelineEventType.MEASUREMENT_RECORDED,
+        TimelineEventType.ASSESSMENT_COMPLETED,
+        TimelineEventType.DOCUMENT_UPLOADED,
     }
 )
 

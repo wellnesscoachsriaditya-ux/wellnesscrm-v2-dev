@@ -163,14 +163,32 @@ def test_future_event_types_are_not_offered_as_filters() -> None:
     """
     for event_type in (
         TimelineEventType.PLAN_ISSUED,
-        TimelineEventType.MEASUREMENT_RECORDED,
         TimelineEventType.APPOINTMENT_SCHEDULED,
         TimelineEventType.MESSAGE_SENT,
-        TimelineEventType.DOCUMENT_UPLOADED,
-        TimelineEventType.ASSESSMENT_COMPLETED,
         TimelineEventType.CLIENT_ACTIVITY,
     ):
         assert not is_producible(event_type)
+
+
+def test_clinical_event_types_became_producible_in_m3() -> None:
+    """The three M3 producers moved out of the future set — FR-M1-018.
+
+    ⚠️ Pinned as its own test rather than by quietly deleting three lines from
+    the list above, for the same reason `ENQUIRY_RECEIVED` was: the *transition*
+    is what needs guarding. Each of these values predates its producer, and the
+    moment a producer lands is the moment the filter starts returning rows.
+
+    🔒 `NOTE_ADDED` is not here and must not be. Consultation notes are invisible
+    to the client (FR-M3-021, AC-M3-006) and DB §5.6 warns that a timeline row
+    leaks a note's *existence*; `ConsultationNoteRecorded` is published for
+    auditability and deliberately writes no timeline entry.
+    """
+    for event_type in (
+        TimelineEventType.ASSESSMENT_COMPLETED,
+        TimelineEventType.MEASUREMENT_RECORDED,
+        TimelineEventType.DOCUMENT_UPLOADED,
+    ):
+        assert is_producible(event_type)
 
 
 def test_enquiry_received_became_producible_in_slice_f() -> None:
@@ -183,6 +201,33 @@ def test_enquiry_received_became_producible_in_slice_f() -> None:
     the "always empty filter" this suite exists to prevent.
     """
     assert is_producible(TimelineEventType.ENQUIRY_RECEIVED)
+
+
+def test_every_producible_event_type_has_a_filter_label() -> None:
+    """🔒 A producer without a filter label returns 500, not a missing filter.
+
+    ``timeline_filters`` subscripts ``_FILTER_LABELS`` for every producible type,
+    so a `KeyError` there is an unhandled exception on a page a practitioner
+    opens — the whole filter list fails, not one entry.
+
+    ⚠️ **This is not hypothetical.** `ENQUIRY_RECEIVED` became producible in S2
+    Slice F and shipped with no label; `GET /clients/{id}/timeline/filters` would
+    have 500'd for every tenant. It went unnoticed because the two facts live in
+    different files and nothing compared them. This test is that comparison, and
+    it is why the M3 producers were caught before merge rather than after.
+    """
+    from app.platform.http.routers.timeline import _FILTER_LABELS
+
+    unlabelled = sorted(
+        event_type.value
+        for event_type in TimelineEventType
+        if is_producible(event_type) and event_type not in _FILTER_LABELS
+    )
+    assert unlabelled == [], (
+        f"these event types can be produced but have no filter label: {unlabelled}. "
+        "Add one to `_FILTER_LABELS` in `routers/timeline.py` — a producible type "
+        "without a label makes the filters endpoint raise KeyError."
+    )
 
 
 def test_the_system_actor_is_distinguishable() -> None:

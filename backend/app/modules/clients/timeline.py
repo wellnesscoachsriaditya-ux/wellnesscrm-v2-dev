@@ -28,6 +28,12 @@ from sqlalchemy import Select, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.kernel.clients import ClientArchived, ClientRestored, ClientStageChanged
+from app.kernel.clinical import (
+    AssessmentCompleted,
+    DocumentUploaded,
+    MeasurementRecorded,
+    MeasurementSource,
+)
 from app.kernel.events import subscribe
 from app.kernel.leads import EnquiryReceived
 from app.kernel.timeline import (
@@ -274,6 +280,81 @@ async def on_enquiry_received(event: EnquiryReceived, session: AsyncSession, /) 
     )
 
 
+async def on_assessment_completed(event: AssessmentCompleted, session: AsyncSession, /) -> None:
+    """FR-M3-001, FR-M1-018 — a completed assessment lands on the timeline.
+
+    🔒 The actor is the **client** when they filled it in themselves (FR-M3-004),
+    and that distinction is the point of the row: "the client completed their
+    assessment" is a prompt to review it, while "you completed it for them" is a
+    record of work already done.
+
+    ⚠️ The summary carries no answers. `summarise` takes an enum and cannot
+    express one (NFR-033), which is what stops a medical history reaching the
+    table most likely to be read in bulk.
+    """
+    await record(
+        session,
+        tenant_id=event.tenant_id,
+        client_id=event.client_id,
+        event_type=TimelineEventType.ASSESSMENT_COMPLETED,
+        summary=summarise(TimelineEventType.ASSESSMENT_COMPLETED),
+        occurred_at=event.occurred_at,
+        actor_type=(
+            TimelineActorType.CLIENT
+            if event.completed_by_client
+            else TimelineActorType.PRACTITIONER
+        ),
+        # 🔒 A client-completed assessment has no practitioner actor, and the
+        # client's own id is not a `users.id` — the column would be wrong.
+        actor_id=None if event.completed_by_client else event.actor_user_id,
+        source_record_id=event.response_id,
+    )
+
+
+async def on_measurement_recorded(event: MeasurementRecorded, session: AsyncSession, /) -> None:
+    """FR-M3-011, FR-M1-018 — a dated measurement on the timeline.
+
+    ⚠️ One row per measurement, including the several a single date may carry
+    (EC-M3-05). Collapsing them would hide that a client's self-report and the
+    practitioner's reading disagreed, which is the interesting part.
+    """
+    by_client = event.source is MeasurementSource.CLIENT
+    await record(
+        session,
+        tenant_id=event.tenant_id,
+        client_id=event.client_id,
+        event_type=TimelineEventType.MEASUREMENT_RECORDED,
+        summary=summarise(TimelineEventType.MEASUREMENT_RECORDED),
+        occurred_at=event.occurred_at,
+        actor_type=TimelineActorType.CLIENT if by_client else TimelineActorType.PRACTITIONER,
+        actor_id=None if by_client else event.actor_user_id,
+        source_record_id=event.measurement_id,
+    )
+
+
+async def on_document_uploaded(event: DocumentUploaded, session: AsyncSession, /) -> None:
+    """FR-M3-024/025, FR-M1-018 — a document on the timeline.
+
+    🔒 The summary is the fixed "Document uploaded" label — **not** the filename
+    and not the document type. A filename routinely carries a person's name and
+    condition ("priya-thyroid-2026.pdf"), and the type ("lab_report") is itself a
+    clinical hint. The practitioner opens the documents panel to see which.
+    """
+    await record(
+        session,
+        tenant_id=event.tenant_id,
+        client_id=event.client_id,
+        event_type=TimelineEventType.DOCUMENT_UPLOADED,
+        summary=summarise(TimelineEventType.DOCUMENT_UPLOADED),
+        occurred_at=event.occurred_at,
+        actor_type=(
+            TimelineActorType.CLIENT if event.uploaded_by_client else TimelineActorType.PRACTITIONER
+        ),
+        actor_id=None if event.uploaded_by_client else event.actor_user_id,
+        source_record_id=event.document_id,
+    )
+
+
 def register_subscribers() -> None:
     """Wire the DDR-06 subscribers.
 
@@ -297,6 +378,19 @@ def register_subscribers() -> None:
     # Neither imports the other (R3) — the event class lives in the kernel,
     # which is the layer both may depend on.
     subscribe(EnquiryReceived, transactional=on_enquiry_received)
+    # 🔒 M3. Same shape: `clinical` publishes, `clients` subscribes, and the
+    # event classes live in `kernel.clinical` so neither module imports the
+    # other. `timeline_events` is this module's table, so its writers belong
+    # here — a subscriber in `clinical` would have had to import this file,
+    # which R3 forbids and the boundary checker rejected.
+    #
+    # ⚠️ 🔒 **`ConsultationNoteRecorded` is deliberately absent.** A note is
+    # invisible to the client (FR-M3-021, AC-M3-006) and DB §5.6 warns that a
+    # timeline row leaks its *existence* into a surface the portal reads a
+    # projection of. The event is published for auditability; it writes no row.
+    subscribe(AssessmentCompleted, transactional=on_assessment_completed)
+    subscribe(MeasurementRecorded, transactional=on_measurement_recorded)
+    subscribe(DocumentUploaded, transactional=on_document_uploaded)
 
 
 # ─── Reading (FR-M1-018, ADR-A05) ────────────────────────────────────────
