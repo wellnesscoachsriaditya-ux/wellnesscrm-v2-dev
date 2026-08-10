@@ -182,3 +182,125 @@ def test_the_list_query_scopes_by_the_actor() -> None:
         "withdrawn colleague would keep seeing the client in their list"
     )
     assert "_visible_to(statement" in source, "list_clients no longer applies the predicate"
+
+
+# ─── Enquiries (S2 Slice F) ──────────────────────────────────────────────
+#
+# 🔒 An enquiry carries a name, a mobile and a stated health goal — the same
+# facts as the client record it created. So AC-M1-006 has to hold on this surface
+# too, and the checks above cannot see it: they read `client.*` action names and
+# `{client_id}` route paths, and the enquiry routes have neither.
+#
+# ⚠️ This is the leak that would otherwise be invisible: a practitioner refused a
+# client's record reading the same details from the enquiry that produced them.
+# Same data, different door.
+
+_LEADS = Path(__file__).resolve().parents[1] / "app" / "modules" / "leads"
+
+#: 🔒 Enquiry actions that legitimately carry no `owner_or_assigned`, each with
+#: the reason it cannot and what protects it instead. Same contract as
+#: `_POLICY_EXEMPT`: adding a name here removes a guarantee.
+_ENQUIRY_POLICY_EXEMPT: dict[str, str] = {
+    # A list has no single resource, and the policy takes one. Scoped inside the
+    # query by `leads.discovery._visible_to`, asserted below.
+    "enquiry.list": "scoped inside the query by leads.discovery._visible_to",
+    # The resource is a *submission*, which has no `owner_user_id` for the policy
+    # to inspect. The router resolves the enquiry's client and authorizes that
+    # instead — asserted below, because the redirection is the whole protection.
+    "enquiry.respond": "the router authorizes the submission's client explicitly",
+    # A form is a title and some intro prose — no fact about any person, which is
+    # why the public endpoint may serve it to a stranger (API §11.1).
+    "enquiry_form.read": "TENANT_METADATA — the form contains no client data",
+    "enquiry_form.update": "TENANT_METADATA — the form contains no client data",
+}
+
+
+def test_every_enquiry_action_is_scoped_or_explicitly_exempt() -> None:
+    """🔒 AC-M1-006 on the enquiry surface — the same rule, a different module.
+
+    ⚠️ Every enquiry action is currently exempt, and that reads alarmingly until
+    the reasons are checked one by one. The test still earns its place: it fails
+    the moment a *new* action is added without a decision being recorded here.
+    """
+    actions = (_LEADS / "actions.py").read_text(encoding="utf-8")
+
+    declared = re.findall(
+        r'register_action\(\s*"((?:enquiry|enquiry_form)\.[\w_]+)"(.*?)\n\)', actions, re.DOTALL
+    )
+    assert declared, "no enquiry actions found — has the file moved?"
+
+    unscoped = [
+        name
+        for name, block in declared
+        if name not in _ENQUIRY_POLICY_EXEMPT and "_SCOPED" not in block
+    ]
+    assert not unscoped, (
+        "these enquiry actions carry no ownership policy and no recorded "
+        f"exemption (AC-M1-006): {', '.join(sorted(unscoped))}"
+    )
+
+    stale = sorted(set(_ENQUIRY_POLICY_EXEMPT) - {name for name, _ in declared})
+    assert not stale, f"these enquiry exemptions no longer name a real action: {stale}"
+
+
+def test_the_enquiry_list_scopes_through_the_client() -> None:
+    """🔒 The replacement protection for ``enquiry.list``, asserted not trusted.
+
+    An enquiry is scoped by who may see the *client* it is about, and the rule
+    comes from the `clients` module through the kernel port — not reimplemented
+    here, which is what keeps the two from drifting.
+    """
+    source = (_LEADS / "discovery.py").read_text(encoding="utf-8")
+
+    assert "def _visible_to(" in source, "the enquiry list's scoping predicate has gone"
+    assert "visible_client_ids(" in source, (
+        "the enquiry list no longer scopes through `ClientDirectory."
+        "visible_client_ids` — if it now derives visibility itself, that is a "
+        "second definition of AC-M1-006 which will drift from the first"
+    )
+    assert "_visible_to(statement" in source, "list_enquiries no longer applies the predicate"
+    assert "UserRole.OWNER" in source, "the owner's tenant-wide exemption has gone"
+
+
+def test_the_respond_route_authorizes_the_enquiry_s_client() -> None:
+    """🔒 The replacement protection for ``enquiry.respond``.
+
+    ``owner_or_assigned`` cannot run on a submission — it reads `owner_user_id`
+    and a submission has none. The router therefore resolves the client behind
+    the enquiry and authorizes *that*. If it stopped, any practitioner in the
+    tenant could clear a colleague's enquiry and the action's missing policy
+    would become a real hole rather than a deliberate one.
+    """
+    source = (_ROUTERS / "enquiries.py").read_text(encoding="utf-8")
+    body = _endpoint_bodies(source)["enquiries_mark_responded"]
+
+    assert "load_submission_client(" in body, "the route no longer resolves the enquiry's client"
+    assert "load_for_access(" in body, "the route no longer loads the client's grants"
+    assert "await authorize(" in body, "the route no longer applies the authorization decision"
+
+
+def test_the_public_enquiry_endpoints_never_reveal_a_match() -> None:
+    """🔒 EC-M2-02 / API §11.2 — the client-enumeration oracle, guarded structurally.
+
+    ``acknowledgement()`` takes no arguments, so it cannot branch on the match
+    (pinned in `test_kernel_leads.py`). This checks the *router* does not
+    reintroduce the branch by reading `is_duplicate` off the result and shaping a
+    response from it.
+
+    ⚠️ Source inspection, like the rest of this file. The behavioural proof is in
+    `tests/integration/test_lead_capture.py`, which submits a matching and a
+    non-matching enquiry and compares the two responses byte for byte.
+    """
+    source = (_ROUTERS / "public_forms.py").read_text(encoding="utf-8")
+    body = _endpoint_bodies(source)["submit_enquiry"]
+
+    assert "is_duplicate" not in body, (
+        "the public submit endpoint reads `is_duplicate`. Whatever it does with "
+        "it, the value must not reach the response — that is the "
+        "client-enumeration oracle API §11.2 calls the most serious privacy leak "
+        "available on the public surface (EC-M2-02)."
+    )
+    assert "acknowledgement()" in body, (
+        "the public response is no longer built by `acknowledgement()`, which is "
+        "the function whose signature makes the reply unable to vary on the match"
+    )

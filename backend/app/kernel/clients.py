@@ -36,13 +36,16 @@ from __future__ import annotations
 import enum
 import re
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Literal, Protocol
 
+from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.kernel.consent import MINOR_AGE_THRESHOLD
+from app.kernel.context import UserRole
 from app.kernel.errors import ValidationError
 from app.kernel.events import DomainEvent, register_event
 
@@ -580,6 +583,160 @@ class ClientDirectory(Protocol):
         the practitioner can disprove by eye (DB §14.4).
         """
         ...
+
+    async def find_many(
+        self, session: AsyncSession, /, *, tenant_id: uuid.UUID, client_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, ClientIdentity]:
+        """Several clients at once, keyed by id — the list-projection read.
+
+        🔒 **Exists to prevent an N+1 across a module boundary.** A module
+        rendering a list of rows that each name a client — the enquiry list is
+        the first — would otherwise call :meth:`find` per row. Twenty-five rows
+        becomes twenty-five queries, and the fix a developer reaches for is
+        joining the ``clients`` table directly, which is the R6 violation this
+        port exists to make unnecessary.
+
+        ⚠️ Returns a mapping rather than a list, and omits ids that resolved to
+        nothing. A caller must handle a missing key: a client erased under
+        FR-M0-027 legitimately disappears while rows referencing it survive.
+        """
+        ...
+
+    def visible_client_ids(
+        self, *, actor_user_id: uuid.UUID, role: UserRole | None
+    ) -> Select[tuple[uuid.UUID]]:
+        """🔒 A SELECT of the client ids this practitioner may see — AC-M1-006.
+
+        **Returns a query, not results, and that is the entire point.** Another
+        module scoping a list of its own rows by client visibility needs the rule
+        as a *predicate it can embed*, because a list filtered after the fact
+        pages short and leaks its total (the argument `clients.discovery` makes
+        for its own WHERE clause). Handing back a materialised id list would
+        break at the first practitioner with a thousand clients.
+
+        Embedded as a subquery::
+
+            statement.where(EnquirySubmission.client_id.in_(
+                directory.visible_client_ids(actor_user_id=…, role=…)
+            ))
+
+        🔒 An **owner sees the whole tenant** (FR-M0-017), so their query is
+        unrestricted by user — still tenant-scoped, because RLS applies to the
+        subquery like everything else.
+
+        ⚠️ Synchronous and takes no session: it builds a statement rather than
+        running one. The caller's session executes it as part of their own query,
+        inside their transaction and under their tenant scope.
+        """
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class LeadIntake:
+    """What an enquiry knows about the person it is about — FR-M2-003/005.
+
+    🔒 **The narrowest possible creation payload.** Name, one contact method, and
+    the provenance FR-M2-009 requires. There is no ``stage`` field: an intake
+    always produces a ``lead`` (FR-M2-005), and a parameter permitting anything
+    else would let the public path create an ``active`` client — which is metered
+    (M1.5) and would put an unauthenticated endpoint on the billing surface.
+
+    ⚠️ No ``owner_user_id`` either. A prospect cannot name their practitioner, so
+    the implementation resolves the tenant's account owner — see
+    :meth:`ClientIntake.create_lead`.
+    """
+
+    full_name: str
+    mobile: str | None = None
+    email: str | None = None
+    #: 🔒 A normalised token from ``kernel.leads.normalise_source``, never raw
+    #: input. The public endpoint is what normalises it.
+    source: str | None = None
+    source_detail: str | None = None
+
+
+class ClientIntake(Protocol):
+    """🔒 How an enquiry creates the client it captured — FR-M2-005, M1.3.
+
+    **Why this exists, given that :class:`ClientDirectory` is deliberately
+    read-only.** M1.3 makes a lead a ``clients`` row, DB §5 makes ``clients`` the
+    only writer of that table, and R3 forbids ``leads`` importing ``clients`` at
+    all. Those three are jointly satisfiable in exactly one way: a kernel port
+    that the ``clients`` module implements. The write still happens *inside*
+    ``clients`` — this is a call into the owner, not a way around it.
+
+    🔒 **Kept separate from ``ClientDirectory`` on purpose.** That protocol's
+    docstring states that a create method on it "would let any module write into a
+    table it does not own". The distinction this port draws is that it is not
+    general: one method, one resulting stage, no field that can reach an
+    entitlement. A module holding this cannot update a client, change a stage, or
+    create anything but a lead. Five modules read the directory; only ``leads``
+    is wired to this.
+
+    ⚠️ **Never metered** (FR-M1-003, EC-M2-06). A lead consumes no entitlement, so
+    implementations must not consult the guard. A tenant at their client limit
+    still accepts enquiries — the limit binds at conversion to ``active``, which
+    is a practitioner action behind authorization.
+    """
+
+    async def create_lead(
+        self,
+        session: AsyncSession,
+        /,
+        *,
+        tenant_id: uuid.UUID,
+        intake: LeadIntake,
+    ) -> ClientIdentity:
+        """Create a client at stage ``lead`` and return its identity.
+
+        🔒 Writes the opening ``client_stage_history`` row too (FR-M1-015), with
+        a NULL ``changed_by_user_id`` — an enquiry is system-driven, and
+        attributing it to the owning practitioner would record a decision they
+        did not make.
+
+        🔒 **Ownership falls to the tenant's account owner.** ``owner_user_id`` is
+        NOT NULL (FR-M1-009) and a prospect cannot choose a practitioner. The
+        account owner is the one role guaranteed to exist for every tenant and
+        the one FR-M0-017 already gives a view of everything, so a lead is never
+        invisible to the person who must act on it (US-M2-03). A practitioner
+        reassigns it afterwards like any other client (EC-M1-04).
+
+        Raises:
+            ValidationError: On a malformed name or mobile, or no contact method.
+            NotFoundError: If the tenant has no account owner to assign to —
+                which means the tenant is not viable, not that the enquiry is
+                bad, so it must not be reported to the submitter as their error.
+        """
+        ...
+
+
+#: The installed intake. Wired at the entry point beside the directory, and for
+#: the same reason (R1).
+_intake: ClientIntake | None = None
+
+
+def configure_client_intake(intake: ClientIntake) -> None:
+    """Install the intake port. Called once, at startup, by an entry point."""
+    global _intake
+    _intake = intake
+
+
+def get_client_intake() -> ClientIntake:
+    """The installed intake.
+
+    Raises:
+        RuntimeError: If nothing is installed. 🔒 Loud rather than degrading: an
+            enquiry that silently created no client would return the same
+            acknowledgement to the prospect while losing the lead entirely, and
+            M2.2 prices that at ₹2,500–4,000/month of recurring revenue.
+    """
+    if _intake is None:
+        raise RuntimeError(
+            "No ClientIntake is installed. The `clients` module registers one at "
+            "startup via `configure_client_intake()`. Without it the public "
+            "enquiry form would acknowledge submissions and create nothing."
+        )
+    return _intake
 
 
 #: The installed directory. 🔒 Same seam as ``CredentialStore`` and

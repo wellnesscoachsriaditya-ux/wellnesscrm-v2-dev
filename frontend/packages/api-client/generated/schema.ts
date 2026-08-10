@@ -523,6 +523,151 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/app/enquiries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List enquiries
+         * @description Every enquiry, newest first — API §7.2.
+         *
+         *     ⚠️ **Newest first, unlike the needs-response view.** This is the archive a
+         *     practitioner searches ("did she ever contact us?"); that one is a work queue
+         *     where the oldest is the most urgent. Same rows, opposite ordering, because
+         *     they answer opposite questions.
+         */
+        get: operations["enquiriesList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/enquiries/needs-response": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Enquiries awaiting a response
+         * @description 🔒 The work queue — FR-M2-011, AC-M2-005. **Oldest first.**
+         *
+         *     US-M2-03 is "so none are forgotten", and M2.2 prices a forgotten enquiry at
+         *     ₹2,500–4,000/month of recurring revenue. The oldest unanswered enquiry is the
+         *     most urgent one; a queue that buried it under today's arrivals would be the
+         *     failure this view exists to prevent.
+         *
+         *     ⚠️ Registered before ``/{submission_id}/respond`` matters not at all —
+         *     FastAPI matches literal segments ahead of parameters regardless of
+         *     declaration order. Named because a reader will wonder.
+         */
+        get: operations["enquiriesNeedsResponse"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/enquiries/{submission_id}/respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark an enquiry as answered
+         * @description Clear an enquiry from the needs-response queue — FR-M2-011.
+         *
+         *     🔒 **The row-level check runs here, not in the module.** ``enquiry.respond``
+         *     carries no ``owner_or_assigned`` policy because a submission has no
+         *     ``owner_user_id`` for one to inspect. So the client behind the enquiry is
+         *     loaded through ``clients.load_for_access`` and authorized explicitly — which
+         *     is what stops a practitioner clearing a colleague's enquiry (AC-M1-006).
+         *
+         *     ⚠️ ``leads`` could not do this itself: R3 forbids it importing ``clients``,
+         *     and the access model belongs to ``clients``. The router is the one layer
+         *     permitted to see both.
+         *
+         *     🔒 Idempotent — a second call keeps the original responder and timestamp.
+         */
+        post: operations["enquiriesMarkResponded"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/enquiry-forms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's enquiry form
+         * @description The practitioner's own form — API §7.2, FR-M2-001.
+         *
+         *     ⚠️ **A list, though MVP has exactly one.** API §7.2 names the endpoint
+         *     ``GET /app/enquiry-forms`` and FR-M2-012 makes several per tenant a Phase 2
+         *     feature. Returning a list now means the frontend's type does not change when
+         *     the second form arrives — a bare object would make that a breaking change to
+         *     the generated client.
+         *
+         *     🔒 Creates the form on first read if the tenant has none. See
+         *     ``leads.ensure_form``: doing it here rather than at registration keeps the
+         *     identity path from importing a domain module.
+         */
+        get: operations["enquiryFormsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/enquiry-forms/{form_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit the enquiry form
+         * @description Change the form's heading, introduction, or whether it accepts enquiries.
+         *
+         *     🔒 **Deactivating is how a practitioner closes their books** — EC-M2-07's
+         *     other half. The form 404s publicly while every submission it ever took stays
+         *     intact; migration 0015 revokes DELETE so there is no way to do otherwise.
+         *
+         *     ⚠️ No ``If-Match``. A form has one editor in the launch persona's practice and
+         *     the fields are independent — a lost update here costs a re-typed sentence,
+         *     where on a client record it would cost clinical data. ``PATCH /app/clients``
+         *     requires a precondition for that reason; this deliberately does not.
+         */
+        patch: operations["enquiryFormsUpdate"];
+        trace?: never;
+    };
     "/api/v1/app/tags": {
         parameters: {
             query?: never;
@@ -696,6 +841,64 @@ export interface paths {
          * @description Redeem a verification token and sign the user in (FR-M0-002).
          */
         post: operations["authVerifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/forms/{tenant_slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The public enquiry form
+         * @description The form a shareable link resolves to — FR-M2-001, API §11.1.
+         *
+         *     🔒 **404 for unknown, inactive and suspended alike** (EC-M2-07). API §11.1 is
+         *     explicit that a suspended tenant returns 404 "with a neutral message — never
+         *     'this practitioner hasn't paid'". Distinguishing the cases would publish a
+         *     fact about someone's business that nobody asked us to publish.
+         *
+         *     ⚠️ Runs with **no tenant scope**. Resolving the slug is what establishes the
+         *     tenant, so the read happens under migration 0015's ``enquiry_forms__public_read``
+         *     policy — the only tenant-less read in the codebase, and one whose row API §11.1
+         *     calls "effectively public information".
+         */
+        get: operations["publicEnquiryForm"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/forms/{tenant_slug}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit an enquiry
+         * @description Accept an enquiry — FR-M2-005, API §11.2.
+         *
+         *     🔒 **202 with an identical body in every accepted case.** New client, matched
+         *     client (EC-M2-02), or silently-dropped spam (EC-M2-03) — one response. The
+         *     two refusals that *are* visible are the ones the submitter can act on: a 403
+         *     for declined consent (EC-M2-04) and a 422 for a malformed mobile (EC-M2-01).
+         *
+         *     🔒 **Never metered** (EC-M2-06, FR-M1-003). A tenant at their client limit
+         *     still accepts enquiries; the limit binds at conversion to `active`.
+         */
+        post: operations["publicEnquirySubmit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1169,6 +1372,187 @@ export interface components {
          * @enum {string}
          */
         DietaryClass: "vegetarian" | "eggetarian" | "non_vegetarian" | "vegan" | "jain";
+        /**
+         * EnquiryFormPatch
+         * @description A partial edit of the form — API §7.2's PATCH.
+         *
+         *     ⚠️ ``intro_text`` uses the model's own "was this key present" information
+         *     rather than a sentinel: ``model_fields_set`` distinguishes "clear the intro"
+         *     (sent as ``null``) from "leave it alone" (absent). Both arrive as ``None``,
+         *     and conflating them means a practitioner editing only the title silently
+         *     loses their intro text.
+         */
+        EnquiryFormPatch: {
+            /** Intro Text */
+            intro_text?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * EnquiryFormResponse
+         * @description The practitioner's own view of their form — API §7.2.
+         */
+        EnquiryFormResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Intro Text */
+            intro_text: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Share Url */
+            share_url: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * EnquiryListItemResponse
+         * @description One enquiry as the practitioner sees it — API §7.2.
+         *
+         *     🔒 Carries the **submitted** values, not the client's current ones (DB §6.2).
+         *     A practitioner triaging an enquiry needs what the prospect actually typed,
+         *     which may since have been corrected on the client record.
+         *
+         *     🔒 ``age_hours`` and ``is_ageing`` are server-computed (Principle 3) — a
+         *     browser deriving them would disagree across a timezone or a clock skew, and
+         *     the number deciding who gets called next would differ per device.
+         */
+        EnquiryListItemResponse: {
+            /** Age Hours */
+            age_hours: number;
+            /** Client Id */
+            client_id: string | null;
+            /** Client Owner User Id */
+            client_owner_user_id: string | null;
+            client_stage: components["schemas"]["ClientStage"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Ageing */
+            is_ageing: boolean;
+            /** Is Duplicate Of Existing */
+            is_duplicate_of_existing: boolean;
+            /** Owner Name */
+            owner_name: string | null;
+            /** Primary Goal */
+            primary_goal: string;
+            /** Responded At */
+            responded_at: string | null;
+            /** Responded By User Id */
+            responded_by_user_id: string | null;
+            source: components["schemas"]["LeadSource"] | null;
+            /** Source Detail */
+            source_detail: string | null;
+            /**
+             * Submitted At
+             * Format: date-time
+             */
+            submitted_at: string;
+            /** Submitted Email */
+            submitted_email: string | null;
+            /** Submitted Mobile */
+            submitted_mobile: string | null;
+            /** Submitted Name */
+            submitted_name: string;
+        };
+        /**
+         * EnquiryListResponse
+         * @description API §5.1's collection envelope.
+         */
+        EnquiryListResponse: {
+            /**
+             * Ageing After Hours
+             * @default 24
+             */
+            ageing_after_hours: number;
+            /** Items */
+            items: components["schemas"]["EnquiryListItemResponse"][];
+            page: components["schemas"]["EnquiryPageInfo"];
+        };
+        /**
+         * EnquiryPageInfo
+         * @description Where the next page resumes — API §6.1.
+         */
+        EnquiryPageInfo: {
+            /** Has More */
+            has_more: boolean;
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /**
+         * EnquirySubmitRequest
+         * @description API §11.2's request body.
+         *
+         *     ⚠️ Every constraint here is duplicated in ``kernel.leads`` and in the database
+         *     CHECKs, and the redundancy is deliberate: this one produces a field-level 422
+         *     the form can render inline (EC-M2-01), the kernel's is what any other caller
+         *     would hit, and the CHECK is what holds if both are bypassed.
+         */
+        EnquirySubmitRequest: {
+            /** Captcha Token */
+            captcha_token?: string | null;
+            /** Company */
+            company?: string | null;
+            /**
+             * Consent Granted
+             * @default false
+             */
+            consent_granted: boolean;
+            /** Consent Notice Id */
+            consent_notice_id?: string | null;
+            /** Elapsed Seconds */
+            elapsed_seconds?: number | null;
+            /** Email */
+            email?: string | null;
+            /** Full Name */
+            full_name: string;
+            /** Mobile */
+            mobile?: string | null;
+            /** Primary Goal */
+            primary_goal: string;
+            /** Source */
+            source?: string | null;
+            /** Source Detail */
+            source_detail?: string | null;
+        };
+        /**
+         * EnquirySubmitResponse
+         * @description 🔒 API §11.2's 202 — and the whole of what a submitter learns.
+         *
+         *     ⚠️ **No identifiers.** Not the client id, not the submission id, not whether
+         *     a record already existed. `message` comes from
+         *     `kernel.leads.acknowledgement()`, which takes no arguments and therefore
+         *     cannot vary on the match (EC-M2-02).
+         */
+        EnquirySubmitResponse: {
+            /** Message */
+            message: string;
+            /**
+             * Submitted
+             * @default true
+             */
+            submitted: boolean;
+        };
         /** GrantRequest */
         GrantRequest: {
             /**
@@ -1211,6 +1595,30 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * LeadSource
+         * @description Where an enquiry came from — FR-M2-009, US-M2-04.
+         *
+         *     ⚠️ 🟡 **PROPOSED.** FR-M2-009 requires "a lead source, either selected by the
+         *     prospect or derived from a link parameter" and names no vocabulary; DB §5.1
+         *     types ``clients.source`` as free text. These members are derived from §3.1's
+         *     competitive set and P1's own described channels — Instagram DMs, WhatsApp and
+         *     referrals — plus the two a form cannot avoid needing.
+         *
+         *     🔒 **A closed enum here, stored as text.** The column stays ``text`` (DB §5.1)
+         *     because a practitioner-entered source on a manual lead is legitimate and a
+         *     PostgreSQL enum would need a migration per channel. The closed set governs
+         *     what the *public form* may record — which is the half an attacker controls —
+         *     while :func:`normalise_source` keeps a hand-typed source from becoming a
+         *     second spelling of an existing one.
+         *
+         *     ⚠️ ``OTHER`` is a real answer, not a fallback for parse failure. US-M2-04 is
+         *     "which channel produces enquiries"; a bucket that silently absorbs
+         *     unrecognised values would make that question unanswerable exactly when a new
+         *     channel started working.
+         * @enum {string}
+         */
+        LeadSource: "instagram" | "whatsapp" | "referral" | "google" | "facebook" | "walk_in" | "other";
         /**
          * LivenessResponse
          * @description Process is alive.
@@ -1321,6 +1729,51 @@ export interface components {
             ref?: string | null;
             /** Type */
             type: string;
+        };
+        /**
+         * PublicConsentNotice
+         * @description The notice a prospect must agree to — API §11.1, FR-M2-004.
+         *
+         *     🔒 The **body** is sent, not just a reference. DPDP requires consent against
+         *     text the person actually saw (NFR-051), and a form that linked to a notice
+         *     elsewhere could not evidence that they saw it.
+         */
+        PublicConsentNotice: {
+            /** Body */
+            body: string;
+            /**
+             * Notice Id
+             * Format: uuid
+             */
+            notice_id: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: string;
+        };
+        /**
+         * PublicFormResponse
+         * @description API §11.1's response.
+         *
+         *     🔒 **An allowlist, not a projection of the row.** API §11.1: "never client
+         *     counts, plan details, or any tenant-internal state". `tenant_id` is
+         *     deliberately absent — the submit endpoint re-resolves it from the slug rather
+         *     than trusting one echoed back, so publishing it would buy nothing and leak an
+         *     internal identifier.
+         */
+        PublicFormResponse: {
+            consent: components["schemas"]["PublicConsentNotice"];
+            /**
+             * Form Id
+             * Format: uuid
+             */
+            form_id: string;
+            /** Intro Text */
+            intro_text: string | null;
+            /** Practice Name */
+            practice_name: string;
+            /** Title */
+            title: string;
         };
         /**
          * ReadinessResponse
@@ -2370,6 +2823,160 @@ export interface operations {
             };
         };
     };
+    enquiriesList: {
+        parameters: {
+            query?: {
+                /** @description FR-M2-009 attribution. */
+                source?: components["schemas"]["LeadSource"] | null;
+                /** @description Opaque, from a previous page. */
+                cursor?: string | null;
+                limit?: number;
+                /** @description Adds a COUNT — API §6.1. */
+                include_total?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enquiriesNeedsResponse: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+                include_total?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enquiriesMarkResponded: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enquiryFormsList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryFormResponse"][];
+                };
+            };
+        };
+    };
+    enquiryFormsUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                form_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnquiryFormPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryFormResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     tagsList: {
         parameters: {
             query?: never;
@@ -2637,6 +3244,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publicEnquiryForm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicFormResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publicEnquirySubmit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnquirySubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquirySubmitResponse"];
                 };
             };
             /** @description Validation Error */

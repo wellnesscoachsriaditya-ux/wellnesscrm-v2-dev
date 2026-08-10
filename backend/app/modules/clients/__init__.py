@@ -45,7 +45,7 @@ from app.modules.clients.assignments import (
     reassign_owner,
     revoke_access,
 )
-from app.modules.clients.directory import ClientRepositoryDirectory
+from app.modules.clients.directory import ClientRepositoryDirectory, ClientRepositoryIntake
 from app.modules.clients.discovery import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -141,6 +141,7 @@ __all__ = [
     "ClientNote",
     "ClientPage",
     "ClientRepositoryDirectory",
+    "ClientRepositoryIntake",
     "ClientStageHistory",
     "ClientTag",
     "ClientUpdate",

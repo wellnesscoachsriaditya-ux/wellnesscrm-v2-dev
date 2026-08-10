@@ -21,11 +21,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.kernel.clients import configure_client_directory
+from app.kernel.clients import configure_client_directory, configure_client_intake
 from app.kernel.entitlements import configure_entitlement_guard
 from app.kernel.events import configure_deferred_enqueuer, deferred_job_types
 from app.kernel.jobs import verify_handlers_exist
-from app.modules.clients import ClientRepositoryDirectory, register_subscribers
+from app.modules.clients import (
+    ClientRepositoryDirectory,
+    ClientRepositoryIntake,
+    register_subscribers,
+)
 from app.platform.audit import (
     LoggingAuditSink,
     SqlAlchemyAuditSink,
@@ -47,12 +51,15 @@ from app.platform.http.middleware import (
 )
 from app.platform.http.pipeline import configure_actor_resolver, verify_route_authorization
 from app.platform.http.routers.auth import app_router as auth_app_router
+from app.platform.http.routers.auth import auth_public as auth_public_router
 from app.platform.http.routers.auth import portal_router as auth_portal_router
-from app.platform.http.routers.auth import public_router as auth_public_router
 from app.platform.http.routers.clients import router as clients_router
 from app.platform.http.routers.collaboration import client_router as collaboration_client_router
 from app.platform.http.routers.collaboration import tag_router as collaboration_tag_router
 from app.platform.http.routers.discovery import router as discovery_router
+from app.platform.http.routers.enquiries import form_router as enquiry_form_router
+from app.platform.http.routers.enquiries import router as enquiries_router
+from app.platform.http.routers.public_forms import router as public_forms_router
 from app.platform.http.routers.timeline import router as timeline_router
 from app.platform.identity.authentication import resolve_actor as authenticate
 from app.platform.identity.credentials import raise_if_credentials_are_local
@@ -157,6 +164,13 @@ def create_app() -> FastAPI:
     # is the one place allowed to know about both.
     configure_client_directory(ClientRepositoryDirectory())
 
+    # 🔒 FR-M2-005 — the write half of the same seam, and separate from the
+    # directory on purpose. `ClientDirectory` is read-only and says so; folding a
+    # create method into it would hand every module that reads clients the
+    # ability to write them. Only `leads` is wired to this one, and all it can
+    # produce is a client at stage `lead` — never a metered `active` one.
+    configure_client_intake(ClientRepositoryIntake())
+
     # 🔒 FR-M0-045 — the seam a module enforces a plan limit through. Same reason
     # as the two above: R5 forbids `app.modules.*` importing `app.platform.*`, so
     # the kernel declares the protocol and the entry point supplies the
@@ -237,6 +251,17 @@ def create_app() -> FastAPI:
     # client's lifecycle and this owns the set; they share a prefix and collide
     # on nothing.
     app.include_router(discovery_router)
+
+    # 🔒 S2 Slice F — lead capture. The practitioner's enquiry list and form
+    # settings, plus the public form itself.
+    #
+    # ⚠️ `public_forms_router` is the only router in the application on
+    # `PublicRoute`: unauthenticated, transaction-opening, and named in
+    # EXEMPT_PATHS. `verify_route_authorization` below aborts startup if that
+    # last part is ever untrue.
+    app.include_router(enquiries_router)
+    app.include_router(enquiry_form_router)
+    app.include_router(public_forms_router)
 
     # 🔒 ADR-05 — last, after every router is registered, so it sees the whole
     # route table. A route that declares no authorization action, declares one

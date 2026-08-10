@@ -20,7 +20,7 @@ from __future__ import annotations
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Request, Response, status
+from fastapi import Request, Response, status
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, EmailStr, Field
 
@@ -28,7 +28,12 @@ from app.kernel.authz import DataScope, register_action
 from app.kernel.context import UserRole, get_context
 from app.kernel.errors import AuthenticationError
 from app.platform.http.authz import requires
-from app.platform.http.pipeline import get_session, realm_router, record_audit
+from app.platform.http.pipeline import (
+    get_session,
+    public_router,
+    realm_router,
+    record_audit,
+)
 from app.platform.identity import service
 from app.platform.identity.credentials import MIN_PASSWORD_LENGTH, get_credential_store
 from app.platform.identity.tokens import IssuedTokens, utcnow
@@ -36,7 +41,12 @@ from app.platform.logging import get_logger
 
 logger = get_logger(__name__)
 
-public_router = APIRouter(prefix="/api/v1/public/auth", tags=["auth"])
+#: 🔒 On ``PublicRoute``, not a bare ``APIRouter``. Every endpoint below calls
+#: ``get_session()``, and only a route class that opens a transaction can
+#: supply one — on a plain router all six answered 500 (see `PublicRoute`).
+#: Exemption from *authorization* still comes from ``EXEMPT_PATHS``; the route
+#: class decides only that the request gets a database.
+auth_public = public_router("/api/v1/public/auth", tags=["auth"])
 
 #: 🔒 Logout is authorized. Declared here rather than in a module because the
 #: kernel owns sessions — this is the one authentication action that acts on an
@@ -167,7 +177,7 @@ class PortalSessionResponse(BaseModel):
 # ─── Practitioner endpoints ──────────────────────────────────────────────
 
 
-@public_router.post(
+@auth_public.post(
     "/register",
     status_code=status.HTTP_201_CREATED,
     response_model=RegisterResponse,
@@ -207,7 +217,7 @@ async def register(payload: RegisterRequest, request: Request) -> RegisterRespon
     return RegisterResponse()
 
 
-@public_router.post(
+@auth_public.post(
     "/verify-email",
     response_model=TokenResponse,
     summary="Confirm an email address",
@@ -224,7 +234,7 @@ async def verify_email(payload: VerifyEmailRequest, request: Request) -> TokenRe
     return _token_response(tokens)
 
 
-@public_router.post(
+@auth_public.post(
     "/login",
     response_model=TokenResponse,
     summary="Sign in",
@@ -243,7 +253,7 @@ async def login(payload: LoginRequest, request: Request) -> TokenResponse:
     return _token_response(tokens)
 
 
-@public_router.post(
+@auth_public.post(
     "/refresh",
     response_model=TokenResponse,
     summary="Rotate the session",
@@ -337,7 +347,7 @@ async def logout(request: Request) -> Response:
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@public_router.post(
+@auth_public.post(
     "/password-reset/request",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=AcceptedResponse,
@@ -358,7 +368,7 @@ async def request_password_reset(
     return AcceptedResponse()
 
 
-@public_router.post(
+@auth_public.post(
     "/password-reset/confirm",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Set a new password",
@@ -378,7 +388,7 @@ async def confirm_password_reset(payload: PasswordResetConfirm, request: Request
 
 # ─── Client portal ───────────────────────────────────────────────────────
 
-portal_router = APIRouter(prefix="/api/v1/public/portal/access", tags=["portal-auth"])
+portal_router = public_router("/api/v1/public/portal/access", tags=["portal-auth"])
 
 
 @portal_router.post(
@@ -448,7 +458,7 @@ def _token_response(tokens: IssuedTokens) -> TokenResponse:
 #: exemption — or, if it should not be exempt, without someone noticing here.
 PUBLIC_AUTH_PATHS: frozenset[str] = frozenset(
     route.path
-    for router in (public_router, portal_router)
+    for router in (auth_public, portal_router)
     for route in router.routes
     if isinstance(route, APIRoute)
 )

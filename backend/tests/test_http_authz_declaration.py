@@ -243,6 +243,13 @@ def test_exempt_paths_cover_health_and_the_authentication_surface() -> None:
         "/api/v1/public/auth/password-reset/confirm",
         "/api/v1/public/portal/access/request",
         "/api/v1/public/portal/access/redeem",
+        # 🔒 Slice F — API §11.1/§11.2. The enquiry form is unauthenticated by
+        # necessity: a prospect has no account and getting one is what the form
+        # exists to start. Bounded instead by tenant-slug resolution, rate
+        # limiting (§14.2), a spam score (FR-M2-008) and explicit consent
+        # (EC-M2-04) — see `routers/public_forms.py`.
+        "/api/v1/public/forms/{tenant_slug}",
+        "/api/v1/public/forms/{tenant_slug}/submit",
     }
 
 

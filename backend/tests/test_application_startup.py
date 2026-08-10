@@ -13,12 +13,14 @@ find its own import-time registrations missing. See `tests/conftest.py`.
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 from app.kernel.authz import REGISTRY
 from app.main import create_app
 from app.platform.http.authz import EXEMPT_PATHS, declared_action, iter_api_routes
-from app.platform.http.pipeline import AuthorizedRoute
+from app.platform.http.pipeline import AuthorizedRoute, PublicRoute
 
 
 @pytest.fixture(scope="module")
@@ -93,4 +95,54 @@ def test_the_authentication_surface_is_the_only_unauthenticated_one(
         "/api/v1/public/auth/password-reset/confirm",
         "/api/v1/public/portal/access/request",
         "/api/v1/public/portal/access/redeem",
+        # 🔒 Slice F — API §11.1/§11.2. The enquiry form is unauthenticated by
+        # necessity: a prospect has no account and getting one is what the form
+        # exists to start. Bounded instead by tenant-slug resolution, rate
+        # limiting (§14.2), a spam score (FR-M2-008) and explicit consent
+        # (EC-M2-04) — see `routers/public_forms.py`.
+        "/api/v1/public/forms/{tenant_slug}",
+        "/api/v1/public/forms/{tenant_slug}/submit",
     }
+
+
+def test_every_exempt_route_needing_a_database_can_get_one(application: object) -> None:
+    """🔒 An exempt route that calls `get_session` must open a transaction.
+
+    **This is the check whose absence let a real defect ship.** `EXEMPT_PATHS`
+    exempts a path from *authorization*, and until Slice F `AuthorizedRoute` was
+    the only class that opened a transaction. So all six `/public/auth`
+    endpoints — register, verify-email, login, refresh and both password-reset
+    halves — sat on a bare `APIRouter`, called `get_session()`, hit its
+    `RuntimeError` and answered 500 for the whole of S1.
+
+    ⚠️ Nothing noticed because the identity tests exercise
+    `platform.identity.service` directly rather than over HTTP, so the routers
+    themselves were never called. `PublicRoute` fixes the defect; this fixes the
+    blind spot, which is the half that stops it recurring the next time somebody
+    adds a public endpoint.
+
+    ⚠️ Source inspection, and only of the endpoint's own body — the same
+    heuristic bargain `tests/test_client_access.py` documents. An endpoint that
+    reaches a session through a helper is invisible here. That is acceptable: the
+    mistake has a consistent shape (a new route on a plain router), and catching
+    the shape beats catching nothing.
+    """
+    stranded: list[str] = []
+
+    for route, _method, label in iter_api_routes(application):  # type: ignore[arg-type]
+        if route.path not in EXEMPT_PATHS:
+            continue
+        try:
+            source = inspect.getsource(route.endpoint)
+        except OSError:  # pragma: no cover — a C-level or generated endpoint
+            continue
+        if "get_session(" not in source and "adopt_tenant_scope(" not in source:
+            continue
+        if not isinstance(route, AuthorizedRoute | PublicRoute):
+            stranded.append(label)
+
+    assert stranded == [], (
+        "these exempt routes ask for a database session but are not on a route "
+        "class that opens a transaction, so every call to them answers 500: "
+        f"{', '.join(sorted(stranded))}. Register them on `public_router()`."
+    )

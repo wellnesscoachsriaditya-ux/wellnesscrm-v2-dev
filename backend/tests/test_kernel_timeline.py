@@ -169,9 +169,20 @@ def test_future_event_types_are_not_offered_as_filters() -> None:
         TimelineEventType.DOCUMENT_UPLOADED,
         TimelineEventType.ASSESSMENT_COMPLETED,
         TimelineEventType.CLIENT_ACTIVITY,
-        TimelineEventType.ENQUIRY_RECEIVED,
     ):
         assert not is_producible(event_type)
+
+
+def test_enquiry_received_became_producible_in_slice_f() -> None:
+    """``ENQUIRY_RECEIVED`` moved out of the future set — FR-M2-005.
+
+    ⚠️ Pinned as its own test rather than by deleting a line from the list above,
+    because the *transition* is what needs guarding. The enum value predates its
+    producer; now that `leads.submit` emits it, a filter offering it returns real
+    rows, and a later refactor that stopped producing it would silently restore
+    the "always empty filter" this suite exists to prevent.
+    """
+    assert is_producible(TimelineEventType.ENQUIRY_RECEIVED)
 
 
 def test_the_system_actor_is_distinguishable() -> None:

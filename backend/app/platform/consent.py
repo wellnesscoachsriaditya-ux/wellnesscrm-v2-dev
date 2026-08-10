@@ -86,6 +86,13 @@ class NoticeInForce:
     locale: str
     purpose_ids: Sequence[uuid.UUID]
     requires_reconsent: bool
+    #: 🔒 The text actually presented. Carried on the snapshot because the public
+    #: enquiry form must *render* it (API §11.1, FR-M2-004), and DPDP evidences
+    #: consent against text the person saw — a form that linked out to a notice
+    #: could not demonstrate they saw it. Added in S2 Slice F; every prior caller
+    #: needed only the identifiers above.
+    title: str = ""
+    body: str = ""
 
 
 # ─── Catalogue reads ─────────────────────────────────────────────────────
@@ -162,6 +169,8 @@ async def notice_in_force(
         locale=notice.locale,
         purpose_ids=tuple(notice.purpose_ids),
         requires_reconsent=notice.requires_reconsent,
+        title=notice.title,
+        body=notice.body,
     )
 
 

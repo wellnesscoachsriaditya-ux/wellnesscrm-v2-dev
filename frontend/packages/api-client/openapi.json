@@ -806,6 +806,481 @@
         "title": "DietaryClass",
         "type": "string"
       },
+      "EnquiryFormPatch": {
+        "description": "A partial edit of the form — API §7.2's PATCH.\n\n⚠️ ``intro_text`` uses the model's own \"was this key present\" information\nrather than a sentinel: ``model_fields_set`` distinguishes \"clear the intro\"\n(sent as ``null``) from \"leave it alone\" (absent). Both arrive as ``None``,\nand conflating them means a practitioner editing only the title silently\nloses their intro text.",
+        "properties": {
+          "intro_text": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intro Text"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "EnquiryFormPatch",
+        "type": "object"
+      },
+      "EnquiryFormResponse": {
+        "description": "The practitioner's own view of their form — API §7.2.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "intro_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intro Text"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "share_url": {
+            "title": "Share Url",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "intro_text",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "share_url"
+        ],
+        "title": "EnquiryFormResponse",
+        "type": "object"
+      },
+      "EnquiryListItemResponse": {
+        "description": "One enquiry as the practitioner sees it — API §7.2.\n\n🔒 Carries the **submitted** values, not the client's current ones (DB §6.2).\nA practitioner triaging an enquiry needs what the prospect actually typed,\nwhich may since have been corrected on the client record.\n\n🔒 ``age_hours`` and ``is_ageing`` are server-computed (Principle 3) — a\nbrowser deriving them would disagree across a timezone or a clock skew, and\nthe number deciding who gets called next would differ per device.",
+        "properties": {
+          "age_hours": {
+            "title": "Age Hours",
+            "type": "number"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_owner_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Owner User Id"
+          },
+          "client_stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientStage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_ageing": {
+            "title": "Is Ageing",
+            "type": "boolean"
+          },
+          "is_duplicate_of_existing": {
+            "title": "Is Duplicate Of Existing",
+            "type": "boolean"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "primary_goal": {
+            "title": "Primary Goal",
+            "type": "string"
+          },
+          "responded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responded At"
+          },
+          "responded_by_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responded By User Id"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LeadSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Detail"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          },
+          "submitted_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted Email"
+          },
+          "submitted_mobile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted Mobile"
+          },
+          "submitted_name": {
+            "title": "Submitted Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "submitted_name",
+          "submitted_mobile",
+          "submitted_email",
+          "primary_goal",
+          "source",
+          "source_detail",
+          "is_duplicate_of_existing",
+          "submitted_at",
+          "responded_at",
+          "responded_by_user_id",
+          "age_hours",
+          "is_ageing",
+          "client_stage",
+          "client_owner_user_id",
+          "owner_name"
+        ],
+        "title": "EnquiryListItemResponse",
+        "type": "object"
+      },
+      "EnquiryListResponse": {
+        "description": "API §5.1's collection envelope.",
+        "properties": {
+          "ageing_after_hours": {
+            "default": 24,
+            "title": "Ageing After Hours",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EnquiryListItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/EnquiryPageInfo"
+          }
+        },
+        "required": [
+          "items",
+          "page"
+        ],
+        "title": "EnquiryListResponse",
+        "type": "object"
+      },
+      "EnquiryPageInfo": {
+        "description": "Where the next page resumes — API §6.1.",
+        "properties": {
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "has_more"
+        ],
+        "title": "EnquiryPageInfo",
+        "type": "object"
+      },
+      "EnquirySubmitRequest": {
+        "description": "API §11.2's request body.\n\n⚠️ Every constraint here is duplicated in ``kernel.leads`` and in the database\nCHECKs, and the redundancy is deliberate: this one produces a field-level 422\nthe form can render inline (EC-M2-01), the kernel's is what any other caller\nwould hit, and the CHECK is what holds if both are bypassed.",
+        "properties": {
+          "captcha_token": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captcha Token"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "consent_granted": {
+            "default": false,
+            "title": "Consent Granted",
+            "type": "boolean"
+          },
+          "consent_notice_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Notice Id"
+          },
+          "elapsed_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Seconds"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "maxLength": 254,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Full Name",
+            "type": "string"
+          },
+          "mobile": {
+            "anyOf": [
+              {
+                "maxLength": 24,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile"
+          },
+          "primary_goal": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Primary Goal",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "source_detail": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Detail"
+          }
+        },
+        "required": [
+          "full_name",
+          "primary_goal"
+        ],
+        "title": "EnquirySubmitRequest",
+        "type": "object"
+      },
+      "EnquirySubmitResponse": {
+        "description": "🔒 API §11.2's 202 — and the whole of what a submitter learns.\n\n⚠️ **No identifiers.** Not the client id, not the submission id, not whether\na record already existed. `message` comes from\n`kernel.leads.acknowledgement()`, which takes no arguments and therefore\ncannot vary on the match (EC-M2-02).",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "submitted": {
+            "default": true,
+            "title": "Submitted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "EnquirySubmitResponse",
+        "type": "object"
+      },
       "GrantRequest": {
         "properties": {
           "user_id": {
@@ -877,6 +1352,20 @@
         },
         "title": "HTTPValidationError",
         "type": "object"
+      },
+      "LeadSource": {
+        "description": "Where an enquiry came from — FR-M2-009, US-M2-04.\n\n⚠️ 🟡 **PROPOSED.** FR-M2-009 requires \"a lead source, either selected by the\nprospect or derived from a link parameter\" and names no vocabulary; DB §5.1\ntypes ``clients.source`` as free text. These members are derived from §3.1's\ncompetitive set and P1's own described channels — Instagram DMs, WhatsApp and\nreferrals — plus the two a form cannot avoid needing.\n\n🔒 **A closed enum here, stored as text.** The column stays ``text`` (DB §5.1)\nbecause a practitioner-entered source on a manual lead is legitimate and a\nPostgreSQL enum would need a migration per channel. The closed set governs\nwhat the *public form* may record — which is the half an attacker controls —\nwhile :func:`normalise_source` keeps a hand-typed source from becoming a\nsecond spelling of an existing one.\n\n⚠️ ``OTHER`` is a real answer, not a fallback for parse failure. US-M2-04 is\n\"which channel produces enquiries\"; a bucket that silently absorbs\nunrecognised values would make that question unanswerable exactly when a new\nchannel started working.",
+        "enum": [
+          "instagram",
+          "whatsapp",
+          "referral",
+          "google",
+          "facebook",
+          "walk_in",
+          "other"
+        ],
+        "title": "LeadSource",
+        "type": "string"
       },
       "LivenessResponse": {
         "description": "Process is alive.",
@@ -1095,6 +1584,77 @@
           "type"
         ],
         "title": "PortalTarget",
+        "type": "object"
+      },
+      "PublicConsentNotice": {
+        "description": "The notice a prospect must agree to — API §11.1, FR-M2-004.\n\n🔒 The **body** is sent, not just a reference. DPDP requires consent against\ntext the person actually saw (NFR-051), and a form that linked to a notice\nelsewhere could not evidence that they saw it.",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "notice_id": {
+            "format": "uuid",
+            "title": "Notice Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "notice_id",
+          "version",
+          "title",
+          "body"
+        ],
+        "title": "PublicConsentNotice",
+        "type": "object"
+      },
+      "PublicFormResponse": {
+        "description": "API §11.1's response.\n\n🔒 **An allowlist, not a projection of the row.** API §11.1: \"never client\ncounts, plan details, or any tenant-internal state\". `tenant_id` is\ndeliberately absent — the submit endpoint re-resolves it from the slug rather\nthan trusting one echoed back, so publishing it would buy nothing and leak an\ninternal identifier.",
+        "properties": {
+          "consent": {
+            "$ref": "#/components/schemas/PublicConsentNotice"
+          },
+          "form_id": {
+            "format": "uuid",
+            "title": "Form Id",
+            "type": "string"
+          },
+          "intro_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intro Text"
+          },
+          "practice_name": {
+            "title": "Practice Name",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "form_id",
+          "practice_name",
+          "title",
+          "intro_text",
+          "consent"
+        ],
+        "title": "PublicFormResponse",
         "type": "object"
       },
       "ReadinessResponse": {
@@ -2869,6 +3429,289 @@
         ]
       }
     },
+    "/api/v1/app/enquiries": {
+      "get": {
+        "description": "Every enquiry, newest first — API §7.2.\n\n⚠️ **Newest first, unlike the needs-response view.** This is the archive a\npractitioner searches (\"did she ever contact us?\"); that one is a work queue\nwhere the oldest is the most urgent. Same rows, opposite ordering, because\nthey answer opposite questions.",
+        "operationId": "enquiriesList",
+        "parameters": [
+          {
+            "description": "FR-M2-009 attribution.",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/LeadSource"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "FR-M2-009 attribution.",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "Opaque, from a previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque, from a previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Adds a COUNT — API §6.1.",
+            "in": "query",
+            "name": "include_total",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Adds a COUNT — API §6.1.",
+              "title": "Include Total",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnquiryListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List enquiries",
+        "tags": [
+          "leads"
+        ]
+      }
+    },
+    "/api/v1/app/enquiries/needs-response": {
+      "get": {
+        "description": "🔒 The work queue — FR-M2-011, AC-M2-005. **Oldest first.**\n\nUS-M2-03 is \"so none are forgotten\", and M2.2 prices a forgotten enquiry at\n₹2,500–4,000/month of recurring revenue. The oldest unanswered enquiry is the\nmost urgent one; a queue that buried it under today's arrivals would be the\nfailure this view exists to prevent.\n\n⚠️ Registered before ``/{submission_id}/respond`` matters not at all —\nFastAPI matches literal segments ahead of parameters regardless of\ndeclaration order. Named because a reader will wonder.",
+        "operationId": "enquiriesNeedsResponse",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_total",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Total",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnquiryListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enquiries awaiting a response",
+        "tags": [
+          "leads"
+        ]
+      }
+    },
+    "/api/v1/app/enquiries/{submission_id}/respond": {
+      "post": {
+        "description": "Clear an enquiry from the needs-response queue — FR-M2-011.\n\n🔒 **The row-level check runs here, not in the module.** ``enquiry.respond``\ncarries no ``owner_or_assigned`` policy because a submission has no\n``owner_user_id`` for one to inspect. So the client behind the enquiry is\nloaded through ``clients.load_for_access`` and authorized explicitly — which\nis what stops a practitioner clearing a colleague's enquiry (AC-M1-006).\n\n⚠️ ``leads`` could not do this itself: R3 forbids it importing ``clients``,\nand the access model belongs to ``clients``. The router is the one layer\npermitted to see both.\n\n🔒 Idempotent — a second call keeps the original responder and timestamp.",
+        "operationId": "enquiriesMarkResponded",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Submission Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mark an enquiry as answered",
+        "tags": [
+          "leads"
+        ]
+      }
+    },
+    "/api/v1/app/enquiry-forms": {
+      "get": {
+        "description": "The practitioner's own form — API §7.2, FR-M2-001.\n\n⚠️ **A list, though MVP has exactly one.** API §7.2 names the endpoint\n``GET /app/enquiry-forms`` and FR-M2-012 makes several per tenant a Phase 2\nfeature. Returning a list now means the frontend's type does not change when\nthe second form arrives — a bare object would make that a breaking change to\nthe generated client.\n\n🔒 Creates the form on first read if the tenant has none. See\n``leads.ensure_form``: doing it here rather than at registration keeps the\nidentity path from importing a domain module.",
+        "operationId": "enquiryFormsList",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EnquiryFormResponse"
+                  },
+                  "title": "Response Enquiryformslist",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "The tenant's enquiry form",
+        "tags": [
+          "leads"
+        ]
+      }
+    },
+    "/api/v1/app/enquiry-forms/{form_id}": {
+      "patch": {
+        "description": "Change the form's heading, introduction, or whether it accepts enquiries.\n\n🔒 **Deactivating is how a practitioner closes their books** — EC-M2-07's\nother half. The form 404s publicly while every submission it ever took stays\nintact; migration 0015 revokes DELETE so there is no way to do otherwise.\n\n⚠️ No ``If-Match``. A form has one editor in the launch persona's practice and\nthe fields are independent — a lost update here costs a re-typed sentence,\nwhere on a client record it would cost clinical data. ``PATCH /app/clients``\nrequires a precondition for that reason; this deliberately does not.",
+        "operationId": "enquiryFormsUpdate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "form_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Form Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnquiryFormPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnquiryFormResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit the enquiry form",
+        "tags": [
+          "leads"
+        ]
+      }
+    },
     "/api/v1/app/tags": {
       "get": {
         "description": "Every live tag, alphabetical and case-insensitively ordered.",
@@ -3221,6 +4064,106 @@
         "summary": "Confirm an email address",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/public/forms/{tenant_slug}": {
+      "get": {
+        "description": "The form a shareable link resolves to — FR-M2-001, API §11.1.\n\n🔒 **404 for unknown, inactive and suspended alike** (EC-M2-07). API §11.1 is\nexplicit that a suspended tenant returns 404 \"with a neutral message — never\n'this practitioner hasn't paid'\". Distinguishing the cases would publish a\nfact about someone's business that nobody asked us to publish.\n\n⚠️ Runs with **no tenant scope**. Resolving the slug is what establishes the\ntenant, so the read happens under migration 0015's ``enquiry_forms__public_read``\npolicy — the only tenant-less read in the codebase, and one whose row API §11.1\ncalls \"effectively public information\".",
+        "operationId": "publicEnquiryForm",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_slug",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Tenant Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicFormResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The public enquiry form",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/api/v1/public/forms/{tenant_slug}/submit": {
+      "post": {
+        "description": "Accept an enquiry — FR-M2-005, API §11.2.\n\n🔒 **202 with an identical body in every accepted case.** New client, matched\nclient (EC-M2-02), or silently-dropped spam (EC-M2-03) — one response. The\ntwo refusals that *are* visible are the ones the submitter can act on: a 403\nfor declined consent (EC-M2-04) and a 422 for a malformed mobile (EC-M2-01).\n\n🔒 **Never metered** (EC-M2-06, FR-M1-003). A tenant at their client limit\nstill accepts enquiries; the limit binds at conversion to `active`.",
+        "operationId": "publicEnquirySubmit",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_slug",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Tenant Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnquirySubmitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnquirySubmitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit an enquiry",
+        "tags": [
+          "public"
         ]
       }
     },

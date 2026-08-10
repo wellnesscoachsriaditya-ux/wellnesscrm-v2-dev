@@ -206,6 +206,11 @@ _PRODUCIBLE: frozenset[TimelineEventType] = frozenset(
         TimelineEventType.ACCESS_CHANGED,
         TimelineEventType.CLIENT_ARCHIVED,
         TimelineEventType.CLIENT_RESTORED,
+        # 🔒 S2 Slice F — the public enquiry form's subscriber. AC-M1-004 and J1
+        # both require an enquiry to land on the client's timeline, which is why
+        # the slice plan puts D before F: the subscriber must exist before lead
+        # capture writes through it.
+        TimelineEventType.ENQUIRY_RECEIVED,
     }
 )
 

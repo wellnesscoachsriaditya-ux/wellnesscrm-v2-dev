@@ -80,6 +80,17 @@ EXEMPT_PATHS: frozenset[str] = frozenset(
         "/api/v1/public/auth/password-reset/confirm",
         "/api/v1/public/portal/access/request",
         "/api/v1/public/portal/access/redeem",
+        # 🔒 S2 Slice F — the public enquiry form (API §11.1/§11.2, Arch §15.3).
+        # No actor exists: a prospect is a stranger by definition, and requiring
+        # one would make FR-M2-002's "usable without an account" unachievable.
+        #
+        # What protects them instead, each named at its own call site:
+        # rate limiting per IP (API §14.2), spam scoring before any row is
+        # created (FR-M2-008, EC-M2-03), consent as a precondition (EC-M2-04),
+        # and a tenant scope resolved server-side from the slug — never from the
+        # request body (`adopt_tenant_scope`).
+        "/api/v1/public/forms/{tenant_slug}",
+        "/api/v1/public/forms/{tenant_slug}/submit",
     }
 )
 

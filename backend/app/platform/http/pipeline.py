@@ -70,10 +70,15 @@ from app.kernel.errors import (
     AuthorizationError,
     NotFoundError,
 )
-from app.kernel.tenancy import TenantScope, assert_realm_permits, resolve_scope
+from app.kernel.tenancy import (
+    ANONYMOUS_SCOPE,
+    TenantScope,
+    assert_realm_permits,
+    resolve_scope,
+)
 from app.platform.audit import record_out_of_band, write_entry
 from app.platform.config import get_settings
-from app.platform.db import transaction
+from app.platform.db import set_tenant_scope, transaction
 from app.platform.http.authz import EXEMPT_PATHS, declared_action, iter_api_routes
 from app.platform.logging import get_logger
 
@@ -84,6 +89,14 @@ logger = get_logger(__name__)
 #: exists so that if it ever *is* reached, `can()` denies it and the attempt is
 #: auditable under a name rather than under `None`.
 UNDECLARED_ACTION = "route.undeclared"
+
+#: The name a failure on the unauthenticated surface is recorded under.
+#:
+#: 🔒 Deliberately *not* a registered :class:`~app.kernel.authz.Action`. There is
+#: nothing to authorize on a public route, and registering a name would put an
+#: entry in the registry that ``can()`` could be asked about. This is a label for
+#: the audit row only, so failures on ``/public`` are greppable as one thing.
+PUBLIC_ACTION = "route.public"
 
 
 # ─── Step 2 seam — authentication (Slice B) ──────────────────────────────
@@ -177,8 +190,9 @@ def get_session(request: Request) -> AsyncSession:
     if not isinstance(session, AsyncSession):
         raise RuntimeError(
             "No database session on this request. A route needing one must be "
-            "registered on `AuthorizedRoute` (see `realm_router`), which opens "
-            "the transaction the whole request shares."
+            "registered on a route class that opens the transaction the whole "
+            "request shares: `realm_router()` for authorized routes, or "
+            "`public_router()` for a path in EXEMPT_PATHS."
         )
     return session
 
@@ -340,6 +354,104 @@ class AuthorizedRoute(APIRoute):
         return pipeline
 
 
+class PublicRoute(APIRoute):
+    """🔒 A route on the unauthenticated surface that still needs a database.
+
+    **The defect this fixes.** ``EXEMPT_PATHS`` exempts a path from
+    *authorization*, and :class:`AuthorizedRoute` is the only class that opens a
+    transaction. So an exempt route calling :func:`get_session` raised
+    ``RuntimeError`` and answered 500 — which is what ``/public/auth/register``,
+    ``login``, ``verify-email``, ``refresh`` and both password-reset endpoints
+    have done since S1. Nothing caught it because the identity tests exercise
+    ``platform.identity.service`` directly rather than over HTTP, so the routers
+    themselves were never called.
+
+    **Why a second class rather than a flag on the first.**
+    :class:`AuthorizedRoute` denies *before* opening a connection, and that order
+    is deliberate — a denied request must not consume pool capacity sized for
+    legitimate work. A flag would put a conditional in front of the one check the
+    authorization model rests on. A separate class states the exemption in the
+    type, and :func:`verify_route_authorization` still aborts startup if a route
+    on this class is missing from ``EXEMPT_PATHS``.
+
+    🔒 **Anonymous scope, always.** The transaction opens with
+    :data:`~app.kernel.tenancy.ANONYMOUS_SCOPE`, so ``app.tenant_id`` is empty
+    and every RLS policy comparing ``tenant_id = current_tenant_id()`` matches
+    nothing. A public route therefore sees no tenant rows at all — unless a
+    policy explicitly admits a tenant-less read (migration 0015's
+    ``enquiry_forms__public_read`` is the only one in the codebase), or the
+    endpoint adopts a scope it resolved server-side via
+    :func:`adopt_tenant_scope`.
+
+    ⚠️ **No authorization and no success audit.** There is no actor to authorize
+    and none to attribute a row to. Failures *are* recorded: a burst of them on
+    the public surface is exactly the signal worth keeping (FR-M0-033).
+    """
+
+    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
+        run_endpoint = super().get_route_handler()
+
+        async def pipeline(request: Request) -> Response:
+            try:
+                async with get_transaction_provider()(ANONYMOUS_SCOPE) as session:
+                    setattr(request.state, _STATE_SESSION, session)
+                    return await run_endpoint(request)
+            except Exception as exc:
+                await _record_failure(
+                    request,
+                    exc=exc,
+                    action=None,
+                    action_name=PUBLIC_ACTION,
+                    resource_type="public",
+                )
+                raise
+
+        return pipeline
+
+
+async def adopt_tenant_scope(request: Request, *, tenant_id: uuid.UUID) -> None:
+    """🔒 Narrow a public request's transaction to one tenant, mid-transaction.
+
+    **The only sanctioned way a ``/public`` endpoint writes tenant-scoped data**,
+    and it exists for one caller: ``POST /public/forms/{tenant_slug}/submit``.
+    That endpoint holds no token, so :func:`resolve_scope` cannot help — the
+    tenant is named by the slug in the path, which the endpoint has already
+    resolved against ``tenants``.
+
+    🔒 **The uuid must come from a server-side lookup, never from the request.**
+    ``kernel.tenancy.resolve_scope`` states the rule this depends on: a
+    caller-supplied tenant identifier is a tenant-switching vulnerability wearing
+    a convenience feature's clothes. A *slug* is caller-supplied; the uuid passed
+    here must be what ``SELECT ... WHERE slug = :slug`` returned. Passing one
+    parsed from a request body would be that vulnerability, and no path in this
+    codebase does.
+
+    ⚠️ **Narrowing only, and only from nothing.** :class:`PublicRoute` starts the
+    transaction at ``ANONYMOUS_SCOPE``, so this moves ``app.tenant_id`` from
+    empty to one value. It cannot move a request *between* tenants: an authorized
+    route never calls it, and no caller has reason to call it twice.
+
+    ⚠️ ``SET LOCAL`` is transaction-scoped, so the scope lasts exactly as long as
+    the request's transaction and is discarded at commit. That property is
+    DB §2.3's launch gate, verified at startup by ``verify_pooler_isolation``.
+    """
+    await set_tenant_scope(get_session(request), tenant_id=tenant_id)
+
+
+def public_router(prefix: str, **kwargs: Any) -> APIRouter:
+    """Build a router for unauthenticated routes that need a transaction.
+
+    🔒 Every path registered here must also appear in ``EXEMPT_PATHS``, or
+    :func:`verify_route_authorization` aborts startup. That check is what keeps
+    this from becoming a quiet way to skip authorization.
+    """
+    if "route_class" in kwargs:
+        raise ValueError(
+            "public_router() sets route_class=PublicRoute and does not accept an override."
+        )
+    return APIRouter(prefix=prefix, route_class=PublicRoute, **kwargs)
+
+
 def realm_router(prefix: str, **kwargs: Any) -> APIRouter:
     """Build a router whose every route runs the pipeline.
 
@@ -379,30 +491,55 @@ class UnenforcedRouteError(RuntimeError):
 def verify_route_authorization(app: FastAPI) -> None:
     """🔒 Abort startup unless every route is declared *and* enforced.
 
-    Two questions, because passing one and failing the other is worse than
-    failing both:
+    Three questions, because passing one and failing another is worse than
+    failing all of them:
 
     1. Does every non-exempt route declare a registered action? (kernel's
        :func:`~app.kernel.authz.assert_all_routes_declared`)
     2. Is every such route on the class that actually runs the check?
+    3. 🔒 Is every route that opted *out* — by joining :func:`public_router` —
+       actually named in ``EXEMPT_PATHS``? Without this, :class:`PublicRoute`
+       would be a way to skip both the check and the declaration silently.
 
     Raises:
         UndeclaredActionError: On a missing or unregistered declaration.
-        UnenforcedRouteError: On a declared route that bypasses the pipeline.
+        UnenforcedRouteError: On a declared route that bypasses the pipeline, or
+            a public route with no exemption on record.
     """
     declarations: list[tuple[str, str | None]] = []
     exempt_labels: list[str] = []
     unenforced: list[str] = []
+    unexempted_public: list[str] = []
 
     for route, _method, label in iter_api_routes(app):
         if route.path in EXEMPT_PATHS:
             exempt_labels.append(label)
             continue
 
+        # 🔒 The reverse check: a route that opted out of authorization by
+        # joining `public_router()` but was never added to `EXEMPT_PATHS`.
+        # Without this, `PublicRoute` would be a way to skip the check *and* the
+        # declaration silently — the exemption has to be visible in the one list
+        # a reviewer reads, not inferable from a router constructor.
+        if isinstance(route, PublicRoute):
+            unexempted_public.append(label)
+            continue
+
         action = declared_action(route.endpoint)
         declarations.append((label, action.name if action is not None else None))
         if not isinstance(route, AuthorizedRoute):
             unenforced.append(label)
+
+    if unexempted_public:
+        raise UnenforcedRouteError(
+            "Routes are registered on `PublicRoute` but are not in EXEMPT_PATHS:\n"
+            + "\n".join(f"  - {label}" for label in sorted(unexempted_public))
+            + "\n\n`public_router()` skips authorization entirely. That is only "
+            "legitimate for a path listed in `EXEMPT_PATHS`, where the exemption "
+            "is a decision someone made and a reviewer can see.\n\n"
+            "Either add the path to EXEMPT_PATHS, or register the route on "
+            "`realm_router()` so it is authorized."
+        )
 
     assert_all_routes_declared(declarations, exempt=exempt_labels)
 

@@ -2,6 +2,7 @@ import { defineIa } from '@wellnesscrm/ia'
 import { ClientCreate } from '../screens/ClientCreate'
 import { ClientDetail } from '../screens/ClientDetail'
 import { ClientList } from '../screens/ClientList'
+import { Leads } from '../screens/Leads'
 import { placeholder } from '../screens/Placeholder'
 import {
   appointmentsIcon,
@@ -70,9 +71,11 @@ export const ia = defineIa({
       id: 'leads',
       path: '/leads',
       label: 'Leads',
-      permission: 'clients.read',
+      // 🔒 Mirrors `enquiry.list` — the backend action the screen's reads
+      // declare. The menu is a courtesy (NFR-032); the API is what refuses.
+      permission: 'enquiry.list',
       nav: { order: 3, icon: leadsIcon },
-      view: placeholder('S5', 'Enquiries from the public form, with their source attribution.'),
+      view: Leads,
     },
 
     // ─── M4 Nutrition Engine / M5 AI Plan Drafting ────────────────────────

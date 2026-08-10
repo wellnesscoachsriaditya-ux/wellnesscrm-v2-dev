@@ -18,6 +18,7 @@ Four groups, each with a different reason to exist:
 
 from __future__ import annotations
 
+import dataclasses
 import uuid
 from datetime import date
 from typing import get_args
@@ -28,9 +29,11 @@ from app.kernel.clients import (
     SELECTABLE_STAGES,
     ClientDirectory,
     ClientIdentity,
+    ClientIntake,
     ClientStage,
     ContactDetails,
     DietaryClass,
+    LeadIntake,
     SelectableStage,
     age_in_years,
     assert_not_archived,
@@ -502,9 +505,62 @@ def test_the_port_declares_no_write_method() -> None:
     it does not own — R6 with extra steps, and *invisible to the boundary
     checker* because the call goes through a protocol rather than an import.
     This test is the only thing that would catch it.
+
+    ⚠️ The list is pinned rather than pattern-matched on names. "Does this method
+    write" is not answerable from a name — a reviewer adding one has to come here
+    and say why it does not, which is the whole point of the friction. Slice F
+    added two, both reads:
+
+    * ``find_many`` — the bulk form of ``find``, so a module rendering a list of
+      rows that each name a client does not issue one query per row. Without it
+      the N+1 fix a developer reaches for is joining ``clients`` directly, which
+      *is* the R6 violation.
+    * ``visible_client_ids`` — returns a ``Select`` of ids, never rows. It exists
+      so AC-M1-006's scoping rule has one definition (the ``clients`` module's)
+      that another module can embed as a subquery, instead of reimplementing the
+      predicate and drifting from it.
     """
     surface = {name for name in vars(ClientDirectory) if not name.startswith("_")}
-    assert surface == {"find", "find_by_mobile", "count_active"}, (
+    assert surface == {
+        "find",
+        "find_by_mobile",
+        "count_active",
+        "find_many",
+        "visible_client_ids",
+    }, (
         "ClientDirectory has gained a method. If it writes, it violates DB §5 — "
         "every write to `clients` belongs in the clients module's service."
+    )
+
+
+def test_the_intake_port_can_only_produce_a_lead() -> None:
+    """🔒 FR-M2-005 / FR-M1-003 — the write port's blast radius, pinned.
+
+    ``ClientIntake`` is the one sanctioned way another module causes a ``clients``
+    row (Slice F). What keeps it from being a hole in DB §5 is that it is narrow,
+    and "narrow" is a property that erodes by accretion:
+
+    * **One method.** A second one is a second capability to justify.
+    * **No ``stage`` on the payload.** The implementation hardcodes ``lead``, so
+      the public enquiry path cannot reach the metered ``active`` stage — which
+      would put an unauthenticated endpoint on the billing surface (EC-M2-06).
+    * **No ``owner_user_id``.** A prospect cannot choose a practitioner; the
+      implementation resolves the tenant's account owner.
+    """
+    surface = {name for name in vars(ClientIntake) if not name.startswith("_")}
+    assert surface == {"create_lead"}, (
+        "ClientIntake has gained a method. It is the only write seam into "
+        "`clients` from another module; every addition widens what the public "
+        "enquiry path can do."
+    )
+
+    payload_fields = {field.name for field in dataclasses.fields(LeadIntake)}
+    assert "stage" not in payload_fields, (
+        "LeadIntake has gained a `stage` field. An enquiry always produces a "
+        "lead (FR-M2-005); a settable stage would let the unauthenticated public "
+        "form create a metered `active` client (M1.5, EC-M2-06)."
+    )
+    assert "owner_user_id" not in payload_fields, (
+        "LeadIntake has gained an `owner_user_id`. A prospect cannot name their "
+        "practitioner — ownership is resolved server-side to the account owner."
     )

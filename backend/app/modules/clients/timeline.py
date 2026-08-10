@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.kernel.clients import ClientArchived, ClientRestored, ClientStageChanged
 from app.kernel.events import subscribe
+from app.kernel.leads import EnquiryReceived
 from app.kernel.timeline import (
     ClientAccessChanged,
     ClientNoteAdded,
@@ -237,6 +238,42 @@ async def on_access_changed(event: ClientAccessChanged, session: AsyncSession, /
     )
 
 
+async def on_enquiry_received(event: EnquiryReceived, session: AsyncSession, /) -> None:
+    """FR-M2-005, AC-M1-004, J1 — an enquiry lands on the client's timeline.
+
+    🔒 **Recorded for a matched client too** (EC-M2-02), not only a new one. A
+    returning prospect's second enquiry is the event a practitioner most needs to
+    see: without a row here, a repeat enquiry would append silently to a record
+    whose timeline never changed, and US-M2-03's "so none are forgotten" would
+    fail for exactly the people already known to the practice.
+
+    🔒 ``SYSTEM``, never a practitioner. A prospect submitted this; nobody in the
+    tenant acted. Attributing it to the owning practitioner would put their name
+    against a decision they did not make — the misreading ``actor_type`` exists to
+    prevent. ``ck_timeline_events__system_has_no_actor`` enforces the NULL actor
+    at the table.
+
+    ⚠️ The summary is the fixed "Enquiry received" label. The submitted goal is
+    the prospect's own free text and never reaches this row (NFR-033) — the
+    practitioner opens the enquiry to read it.
+
+    ⚠️ ``source_record_id`` is the **submission** id, not the client's. The
+    timeline deep-links to the enquiry that caused the entry, which is what makes
+    a repeat enquiry distinguishable from the first one in the UI.
+    """
+    await record(
+        session,
+        tenant_id=event.tenant_id,
+        client_id=event.client_id,
+        event_type=TimelineEventType.ENQUIRY_RECEIVED,
+        summary=summarise(TimelineEventType.ENQUIRY_RECEIVED),
+        occurred_at=event.received_at,
+        actor_type=TimelineActorType.SYSTEM,
+        actor_id=None,
+        source_record_id=event.submission_id,
+    )
+
+
 def register_subscribers() -> None:
     """Wire the DDR-06 subscribers.
 
@@ -256,6 +293,10 @@ def register_subscribers() -> None:
     subscribe(ClientTagsChanged, transactional=on_tags_changed)
     subscribe(ClientOwnershipChanged, transactional=on_ownership_changed)
     subscribe(ClientAccessChanged, transactional=on_access_changed)
+    # 🔒 Slice F. The `leads` module publishes this; `clients` subscribes.
+    # Neither imports the other (R3) — the event class lives in the kernel,
+    # which is the layer both may depend on.
+    subscribe(EnquiryReceived, transactional=on_enquiry_received)
 
 
 # ─── Reading (FR-M1-018, ADR-A05) ────────────────────────────────────────
