@@ -349,12 +349,8 @@ def test_the_database_bounds_match_the_kernel(migration_source: str) -> None:
         MIN_WEIGHT_KG,
     )
 
-    weight = re.search(
-        r"weight_kg\s*>=\s*(\d+)\s*AND\s*weight_kg\s*<=\s*(\d+)", migration_source
-    )
-    height = re.search(
-        r"height_cm\s*>=\s*(\d+)\s*AND\s*height_cm\s*<=\s*(\d+)", migration_source
-    )
+    weight = re.search(r"weight_kg\s*>=\s*(\d+)\s*AND\s*weight_kg\s*<=\s*(\d+)", migration_source)
+    height = re.search(r"height_cm\s*>=\s*(\d+)\s*AND\s*height_cm\s*<=\s*(\d+)", migration_source)
     assert weight is not None and height is not None, "the range CHECKs have moved"
 
     assert (int(weight.group(1)), int(weight.group(2))) == (
@@ -386,9 +382,7 @@ def test_one_document_row_per_file(migration_source: str) -> None:
 def test_a_definition_version_is_unique_per_tenant(migration_source: str) -> None:
     """⚠️ ``tenant_id`` is in the key so a tenant's future custom v1 (FR-M3-010)
     cannot collide with the platform's ``nutrition_core`` v1."""
-    key = re.search(
-        r'UniqueConstraint\(\s*"code",\s*"version",\s*"tenant_id"', migration_source
-    )
+    key = re.search(r'UniqueConstraint\(\s*"code",\s*"version",\s*"tenant_id"', migration_source)
     assert key is not None, (
         "the definition key no longer includes tenant_id; a tenant authoring its "
         "own v1 would collide with the platform definition."

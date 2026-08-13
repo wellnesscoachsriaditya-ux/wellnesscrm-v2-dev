@@ -105,7 +105,7 @@ async def _seed_definition(
             "INSERT INTO assessment_definitions "
             "  (id, tenant_id, code, version, title, status, published_at, "
             "   schema, calculation_bindings) "
-            "VALUES (:id, :tenant, :code, 1, :title, :status, "
+            "VALUES (:id, :tenant, :code, 1, :title, CAST(:status AS definition_status), "
             "   CASE WHEN CAST(:status AS text) = 'published' THEN now() END, "
             "   CAST(:schema AS jsonb), CAST(:bindings AS jsonb))"
         ),
