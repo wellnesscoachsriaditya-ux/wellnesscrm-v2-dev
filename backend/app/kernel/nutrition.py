@@ -15,8 +15,8 @@ import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
-from enum import Enum
-from typing import Any, Final, TypedDict
+from enum import Enum, StrEnum
+from typing import Any, Final, Literal, TypedDict
 from uuid import UUID
 
 from app.kernel.errors import ConflictError, DomainRuleError
@@ -40,6 +40,52 @@ class RenderStatus(str, Enum):
     pending = "pending"
     ready = "ready"
     failed = "failed"
+
+
+class MealSlotType(StrEnum):
+    """The meal slots a plan day is divided into — FR-M4-025.
+
+    🟡 **The vocabulary is PROPOSED and unconfirmed.** FR-M4-025 marks these seven
+    as a proposal, and Validation Gate G1 — the three practitioner sessions that
+    would settle them — has not been run.
+
+    ⚠️ **Deliberately not a PostgreSQL enum yet.** ``plan_slots.slot_type`` and
+    ``template_slots.slot_type`` stay ``text`` until the vocabulary is confirmed,
+    and the database type is created in the slice that also needs it for
+    ``foods.meal_suitability`` (DB §8.3). The asymmetry is why: ``ALTER TYPE …
+    ADD VALUE`` is cheap, but *removing* a value means rewriting the type and
+    every column using it — the same argument migration 0010 makes for
+    ``ClientStage.ARCHIVED``. Validating here costs nothing and commits nothing.
+
+    🔒 **This is a structural type, not a display name.** Renaming a slot
+    (FR-M4-025) sets ``plan_slots.custom_label``; it does not need a new member.
+    :attr:`CUSTOM` covers a slot a practitioner adds that is none of the seven.
+    """
+
+    EARLY_MORNING = "early_morning"
+    BREAKFAST = "breakfast"
+    MID_MORNING = "mid_morning"
+    LUNCH = "lunch"
+    EVENING_SNACK = "evening_snack"
+    DINNER = "dinner"
+    BEDTIME = "bedtime"
+    CUSTOM = "custom"
+
+
+#: 🟡 The slots a new plan day is created with, in order — FR-M4-025's "default".
+#:
+#: ⚠️ ``CUSTOM`` is absent on purpose: it is what a practitioner *adds*, not
+#: something to hand them seven times. A caller wanting a bare plan passes an
+#: empty sequence rather than relying on this being short.
+DEFAULT_SLOT_SEQUENCE: Final[tuple[MealSlotType, ...]] = (
+    MealSlotType.EARLY_MORNING,
+    MealSlotType.BREAKFAST,
+    MealSlotType.MID_MORNING,
+    MealSlotType.LUNCH,
+    MealSlotType.EVENING_SNACK,
+    MealSlotType.DINNER,
+    MealSlotType.BEDTIME,
+)
 
 
 class MacroTotals(TypedDict):
@@ -115,6 +161,108 @@ class NutritionBudget(TypedDict):
     locked_slot_count: int
     is_within_tolerance: bool
     tolerance_pct: Decimal
+
+
+#: 🔒 API §8.7 — severity decides whether a rule informs or blocks. Soft rules
+#: inform and **never** block: practitioner judgement always prevails (EC-M4-05).
+#: Hard rules return 422 and reject the write, and arrive with the
+#: ``dietary_rules`` engine — DB §8.15's schema is a two-column stub today, so
+#: nothing in this module can evaluate one yet.
+WarningSeverity = Literal["soft", "hard"]
+
+
+class WarningScope(TypedDict, total=False):
+    """Where a warning applies, so the UI can point at it rather than at the plan."""
+
+    type: Literal["plan", "day", "slot", "item"]
+    day_number: int
+    slot_id: str
+    item_id: str
+
+
+class PlanWarning(TypedDict):
+    """One soft finding about a plan — API §8.7's shape exactly.
+
+    ⚠️ ``message`` is written for a practitioner to read (NFR-063). ``rule_code``
+    is the stable identifier the UI branches on; the message may be reworded
+    freely, the code may not.
+    """
+
+    rule_code: str
+    severity: WarningSeverity
+    message: str
+    scope: WarningScope
+
+
+def budget_warnings(budget: NutritionBudget) -> list[PlanWarning]:
+    """🔒 The soft warnings derivable from the budget alone — API §8.7.
+
+    Three findings, all **soft**, all non-blocking:
+
+    * ``energy_below_target`` / ``energy_above_target`` — the plan misses the
+      energy target by more than the tolerance. Reported, never refused: a
+      practitioner may have a clinical reason, and EC-M4-05 says their judgement
+      prevails.
+    * 🔒 ``locked_exceeds_target`` — the locked items *alone* overshoot the
+      target, so ``remaining_available`` is negative before anything unlocked is
+      counted. API §8.4 calls this out specifically as a legitimate state the API
+      reports and never blocks.
+
+    ⚠️ **Nothing here reads ``dietary_rules``.** Allergen and dietary-class
+    enforcement (the *hard* half of API §8.7) needs DB §8.15's schema, which is
+    currently a two-column stub. Returning an empty list for those is honest;
+    inventing a check that only looks like enforcement would be worse.
+
+    Args:
+        budget: The computed budget for the scope being reported on.
+
+    Returns:
+        Zero to two warnings, ordered most-specific first. An empty list means
+        the plan is inside tolerance and its locked items fit — not that no
+        clinical rule applies.
+    """
+    warnings: list[PlanWarning] = []
+    scope: WarningScope = {"type": "plan"}
+
+    # 🔒 Checked before the tolerance test. A plan whose locked items alone blow
+    # the target is a different conversation from one that is merely 200 kcal
+    # light, and collapsing them would hide the constraint the practitioner set.
+    if budget["locked_consumed"]["energy_kcal"] > budget["target"]["energy_kcal"] > 0:
+        overshoot = budget["locked_consumed"]["energy_kcal"] - budget["target"]["energy_kcal"]
+        warnings.append(
+            {
+                "rule_code": "locked_exceeds_target",
+                "severity": "soft",
+                "message": (
+                    f"Locked items alone are {_trim(overshoot)} kcal over the target. "
+                    "Unlock an item to give the recalculation room to work."
+                ),
+                "scope": scope,
+            }
+        )
+
+    if budget["target"]["energy_kcal"] > 0 and not budget["is_within_tolerance"]:
+        remaining = budget["remaining_available"]["energy_kcal"]
+        if remaining > 0:
+            warnings.append(
+                {
+                    "rule_code": "energy_below_target",
+                    "severity": "soft",
+                    "message": f"Daily energy is {_trim(remaining)} kcal below the target.",
+                    "scope": scope,
+                }
+            )
+        elif remaining < 0:
+            warnings.append(
+                {
+                    "rule_code": "energy_above_target",
+                    "severity": "soft",
+                    "message": f"Daily energy is {_trim(-remaining)} kcal above the target.",
+                    "scope": scope,
+                }
+            )
+
+    return warnings
 
 
 @dataclass(frozen=True, slots=True)

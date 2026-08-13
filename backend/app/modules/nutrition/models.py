@@ -365,6 +365,8 @@ class DietPlan(Base):
     )
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    __table_args__ = (Index("ix_diet_plans__client", "tenant_id", "client_id"),)
+
 
 class DietPlanVersion(Base):
     __tablename__ = "diet_plan_versions"
@@ -426,6 +428,8 @@ class PlanDay(Base):
     day_number: Mapped[int] = mapped_column(nullable=False)
     label: Mapped[str] = mapped_column(Text, nullable=False)
 
+    __table_args__ = (Index("ix_plan_days__version", "tenant_id", "plan_version_id", "day_number"),)
+
 
 class PlanSlot(Base):
     __tablename__ = "plan_slots"
@@ -444,6 +448,20 @@ class PlanSlot(Base):
     target_time: Mapped[str | None] = mapped_column(Text)
     sort_order: Mapped[int] = mapped_column(nullable=False)
     is_locked: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
+
+    __table_args__ = (
+        Index("ix_plan_slots__day", "tenant_id", "plan_day_id", "sort_order"),
+        # ⚠️ ``INITIALLY DEFERRED``, unlike ``uq_template_items_order``. A reorder
+        # expressed as two UPDATEs collides transiently, and reordering is a
+        # first-class operation here (FR-M4-025).
+        UniqueConstraint(
+            "plan_day_id",
+            "sort_order",
+            name="uq_plan_slots_order",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+    )
 
 
 class PlanItem(Base):
@@ -471,6 +489,17 @@ class PlanItem(Base):
     is_locked: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
     resolved_grams: Mapped[Decimal | None] = mapped_column(Numeric)
     sort_order: Mapped[int] = mapped_column(nullable=False)
+
+    __table_args__ = (
+        Index("ix_plan_items__slot", "tenant_id", "plan_slot_id", "sort_order"),
+        UniqueConstraint(
+            "plan_slot_id",
+            "sort_order",
+            name="uq_plan_items_order",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+    )
 
 
 class PlanItemAlternative(Base):

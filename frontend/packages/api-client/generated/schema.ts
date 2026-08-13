@@ -662,6 +662,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/app/clients/{client_id}/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a client's diet plans
+         * @description Every plan for one client — API §8.1.
+         */
+        get: operations["planList"];
+        put?: never;
+        /**
+         * Create a diet plan
+         * @description Create a plan and its first draft version — API §8.2, FR-M4-032.
+         *
+         *     🔒 Both, atomically. A plan with no version is not a state a practitioner can
+         *     use, so the API never produces one. A second draft on the same plan is
+         *     refused by ``uq_diet_plan_versions__one_draft`` with a 409.
+         */
+        post: operations["planCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/app/clients/{client_id}/restore": {
         parameters: {
             query?: never;
@@ -993,7 +1021,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/app/nutrition/plans/{plan_id}/versions/{version_id}/issue": {
+    "/api/v1/app/plan-days/{day_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename a day */
+        patch: operations["planDayUpdate"];
+        trace?: never;
+    };
+    "/api/v1/app/plan-items": {
         parameters: {
             query?: never;
             header?: never;
@@ -1003,10 +1048,192 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Issue Plan
-         * @description Issue a draft plan, generating a snapshot and PDF.
+         * Add a food to a slot
+         * @description FR-M4-024 — the plan's actual content.
          */
-        post: operations["issueDietPlan"];
+        post: operations["planItemAdd"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/plan-items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Take an item out of a slot
+         * @description 🔒 Refused at the database for a non-draft version — see :func:`delete_slot`.
+         */
+        delete: operations["planItemRemove"];
+        options?: never;
+        head?: never;
+        /** Change a quantity, measure or note */
+        patch: operations["planItemUpdate"];
+        trace?: never;
+    };
+    "/api/v1/app/plan-slots/{slot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a slot and its items
+         * @description 🔒 Refused at the database for a non-draft version.
+         *
+         *     ``plan_slots__delete_draft_only`` (migration 0020) is a ``RESTRICTIVE``
+         *     policy, so the row is invisible to a ``DELETE`` unless its version is a
+         *     draft — independently of the service's own ``assert_draft``.
+         */
+        delete: operations["planSlotRemove"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename, retime or reorder a slot
+         * @description FR-M4-025 — add, rename, remove and reorder.
+         */
+        patch: operations["planSlotUpdate"];
+        trace?: never;
+    };
+    "/api/v1/app/plan-versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a plan version with its nutrition and budget
+         * @description 🔒 API §8.3 — every nutrition figure and ``resolved_grams`` server-computed.
+         *
+         *     The client never converts a portion or sums a nutrient. A mismatch between
+         *     what is displayed and what is stored would be a clinical defect, not a
+         *     presentation bug (NFR-072).
+         */
+        get: operations["planVersionRead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a draft's metadata and targets
+         * @description Title, goal, validity, notes and targets — API §8.3.
+         */
+        patch: operations["planVersionUpdate"];
+        trace?: never;
+    };
+    "/api/v1/app/plan-versions/{version_id}/days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a day to a draft
+         * @description FR-M4-026 — a plan grows a day at a time.
+         */
+        post: operations["planDayAdd"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/plan-versions/{version_id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discard a draft
+         * @description 🔒 A state, not a delete. DDR-11 keeps the record of what was tried.
+         */
+        post: operations["planVersionDiscard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/plan-versions/{version_id}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a draft plan version
+         * @description 🔒 The only path from ``draft`` to ``issued`` — API §8.6.
+         *
+         *     ⚠️ The snapshot this freezes is still Slice 1.3's placeholder rather than the
+         *     resolved plan; rewriting it against the resolver is its own slice. The route
+         *     is moved here from the old ``/app/nutrition/plans/...`` prefix so that every
+         *     plan operation sits under the paths API §8.1 specifies.
+         */
+        post: operations["planVersionIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/plan-versions/{version_id}/slots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a meal slot to a day
+         * @description FR-M4-025 — practitioners add, rename, remove and reorder slots.
+         */
+        post: operations["planSlotAdd"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a plan and its version history
+         * @description 🔒 AC-M4-008 — a revision is issued while the prior version stays retrievable.
+         */
+        get: operations["planRead"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1910,6 +2137,35 @@ export interface components {
              */
             user_id: string;
         };
+        /** DayCreateRequest */
+        DayCreateRequest: {
+            /** Label */
+            label?: string | null;
+            /** Slot Types */
+            slot_types?: components["schemas"]["MealSlotType"][] | null;
+        };
+        /** DayPatch */
+        DayPatch: {
+            /** Label */
+            label: string;
+        };
+        /** DayResponse */
+        DayResponse: {
+            /** Day Number */
+            day_number: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Plan Version Id
+             * Format: uuid
+             */
+            plan_version_id: string;
+        };
         /**
          * DefinitionResponse
          * @description The structure an administration was captured under — FR-M3-003.
@@ -2295,6 +2551,94 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** ItemCreateRequest */
+        ItemCreateRequest: {
+            /** Client Note */
+            client_note?: string | null;
+            /** Food Id */
+            food_id?: string | null;
+            /**
+             * Item Type
+             * @default food
+             */
+            item_type: string;
+            /** Meal Id */
+            meal_id?: string | null;
+            /**
+             * Measure Unit Id
+             * Format: uuid
+             */
+            measure_unit_id: string;
+            /** Notes */
+            notes?: string | null;
+            /** Quantity */
+            quantity: number | string;
+            /** Recipe Id */
+            recipe_id?: string | null;
+            /**
+             * Slot Id
+             * Format: uuid
+             */
+            slot_id: string;
+        };
+        /**
+         * ItemPatch
+         * @description ⚠️ No ``food_id``, and that is the point.
+         *
+         *     Swapping the food under a fixed item id would be a substitution wearing an
+         *     edit's clothes. The practitioner removes the item and adds the one they
+         *     meant, which lands in the audit log as two decisions rather than one silent
+         *     one — the same argument API §8.5 makes about recalculation never
+         *     substituting a food.
+         */
+        ItemPatch: {
+            /** Client Note */
+            client_note?: string | null;
+            /** Measure Unit Id */
+            measure_unit_id?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Quantity */
+            quantity?: number | string | null;
+            /** Sort Order */
+            sort_order?: number | null;
+        };
+        /** ItemResponse */
+        ItemResponse: {
+            /** Client Note */
+            client_note: string | null;
+            /** Food Id */
+            food_id: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Locked */
+            is_locked: boolean;
+            /** Item Type */
+            item_type: string;
+            /** Meal Id */
+            meal_id: string | null;
+            /**
+             * Measure Unit Id
+             * Format: uuid
+             */
+            measure_unit_id: string;
+            /** Notes */
+            notes: string | null;
+            /**
+             * Plan Slot Id
+             * Format: uuid
+             */
+            plan_slot_id: string;
+            /** Quantity */
+            quantity: string;
+            /** Recipe Id */
+            recipe_id: string | null;
+            /** Sort Order */
+            sort_order: number;
+        };
         /**
          * LeadSource
          * @description Where an enquiry came from — FR-M2-009, US-M2-04.
@@ -2341,6 +2685,41 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** MacroTotalsResponse */
+        MacroTotalsResponse: {
+            /** Carbs G */
+            carbs_g: string;
+            /** Energy Kcal */
+            energy_kcal: string;
+            /** Fat G */
+            fat_g: string;
+            /** Fibre G */
+            fibre_g: string;
+            /** Protein G */
+            protein_g: string;
+        };
+        /**
+         * MealSlotType
+         * @description The meal slots a plan day is divided into — FR-M4-025.
+         *
+         *     🟡 **The vocabulary is PROPOSED and unconfirmed.** FR-M4-025 marks these seven
+         *     as a proposal, and Validation Gate G1 — the three practitioner sessions that
+         *     would settle them — has not been run.
+         *
+         *     ⚠️ **Deliberately not a PostgreSQL enum yet.** ``plan_slots.slot_type`` and
+         *     ``template_slots.slot_type`` stay ``text`` until the vocabulary is confirmed,
+         *     and the database type is created in the slice that also needs it for
+         *     ``foods.meal_suitability`` (DB §8.3). The asymmetry is why: ``ALTER TYPE …
+         *     ADD VALUE`` is cheap, but *removing* a value means rewriting the type and
+         *     every column using it — the same argument migration 0010 makes for
+         *     ``ClientStage.ARCHIVED``. Validating here costs nothing and commits nothing.
+         *
+         *     🔒 **This is a structural type, not a display name.** Renaming a slot
+         *     (FR-M4-025) sets ``plan_slots.custom_label``; it does not need a new member.
+         *     :attr:`CUSTOM` covers a slot a practitioner adds that is none of the seven.
+         * @enum {string}
+         */
+        MealSlotType: "early_morning" | "breakfast" | "mid_morning" | "lunch" | "evening_snack" | "dinner" | "bedtime" | "custom";
         /**
          * MeasurementResponse
          * @description One dated measurement, with what is derived from it — FR-M3-012.
@@ -2438,6 +2817,24 @@ export interface components {
             body: string;
         };
         /**
+         * NutritionBudgetResponse
+         * @description 🔒 ADR-A07 / API §8.4 — locking made observable.
+         */
+        NutritionBudgetResponse: {
+            /** Is Within Tolerance */
+            is_within_tolerance: boolean;
+            locked_consumed: components["schemas"]["MacroTotalsResponse"];
+            /** Locked Item Count */
+            locked_item_count: number;
+            /** Locked Slot Count */
+            locked_slot_count: number;
+            remaining_available: components["schemas"]["MacroTotalsResponse"];
+            target: components["schemas"]["MacroTotalsResponse"];
+            /** Tolerance Pct */
+            tolerance_pct: string;
+            unlocked_current: components["schemas"]["MacroTotalsResponse"];
+        };
+        /**
          * NutritionProfileResponse
          * @description The typed projection — DDR-08.
          *
@@ -2488,6 +2885,272 @@ export interface components {
              * Format: email
              */
             email: string;
+        };
+        /** PlanCreateRequest */
+        PlanCreateRequest: {
+            /**
+             * Day Count
+             * @default 1
+             */
+            day_count: number;
+            /** Goal Type */
+            goal_type?: string | null;
+            /** Slot Types */
+            slot_types?: components["schemas"]["MealSlotType"][] | null;
+            /**
+             * Source
+             * @default blank
+             */
+            source: string;
+            /** Source Plan Version Id */
+            source_plan_version_id?: string | null;
+            /** Target Carbs G */
+            target_carbs_g?: number | string | null;
+            /** Target Energy Kcal */
+            target_energy_kcal?: number | string | null;
+            /** Target Fat G */
+            target_fat_g?: number | string | null;
+            /** Target Protein G */
+            target_protein_g?: number | string | null;
+            /** Title */
+            title: string;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+        };
+        /**
+         * PlanCreateResponse
+         * @description 🔒 API §8.2 — a plan and its first draft, never one without the other.
+         */
+        PlanCreateResponse: {
+            draft_version: components["schemas"]["PlanVersionSummary"];
+            plan: components["schemas"]["PlanResponse"];
+        };
+        /** PlanDayResponse */
+        PlanDayResponse: {
+            /** Day Number */
+            day_number: number;
+            day_totals: components["schemas"]["MacroTotalsResponse"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /** Slots */
+            slots: components["schemas"]["PlanSlotResponse"][];
+        };
+        /**
+         * PlanDetailResponse
+         * @description 🔒 AC-M4-008 — prior versions remain retrievable and clearly dated.
+         */
+        PlanDetailResponse: {
+            plan: components["schemas"]["PlanResponse"];
+            /** Versions */
+            versions: components["schemas"]["PlanVersionSummary"][];
+        };
+        /** PlanItemResponse */
+        PlanItemResponse: {
+            /** Alternatives */
+            alternatives?: {
+                [key: string]: string;
+            }[];
+            /** Client Note */
+            client_note: string | null;
+            /** Display Name */
+            display_name: string;
+            /** Food Id */
+            food_id: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Locked */
+            is_locked: boolean;
+            /** Item Is Locked */
+            item_is_locked: boolean;
+            /** Item Type */
+            item_type: string;
+            /** Meal Id */
+            meal_id: string | null;
+            /** Measure Display */
+            measure_display: string;
+            /** Measure Unit Code */
+            measure_unit_code: string;
+            /**
+             * Measure Unit Id
+             * Format: uuid
+             */
+            measure_unit_id: string;
+            /** Notes */
+            notes: string | null;
+            nutrition: components["schemas"]["MacroTotalsResponse"];
+            /** Quantity */
+            quantity: string;
+            /** Recipe Id */
+            recipe_id: string | null;
+            /** Resolved Grams */
+            resolved_grams: string | null;
+            /** Sort Order */
+            sort_order: number;
+        };
+        /** PlanResponse */
+        PlanResponse: {
+            /** Archived At */
+            archived_at: string | null;
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /**
+             * Created By User Id
+             * Format: uuid
+             */
+            created_by_user_id: string;
+            /** Current Version Id */
+            current_version_id: string | null;
+            /** Goal Type */
+            goal_type: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /** PlanSlotResponse */
+        PlanSlotResponse: {
+            /** Custom Label */
+            custom_label: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Locked */
+            is_locked: boolean;
+            /** Items */
+            items: components["schemas"]["PlanItemResponse"][];
+            slot_totals: components["schemas"]["MacroTotalsResponse"];
+            /** Slot Type */
+            slot_type: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Target Time */
+            target_time: string | null;
+        };
+        /**
+         * PlanState
+         * @enum {string}
+         */
+        PlanState: "draft" | "issued" | "superseded" | "discarded";
+        /**
+         * PlanSummaryResponse
+         * @description A plan in a list, with the version a practitioner means by "the plan".
+         */
+        PlanSummaryResponse: {
+            plan: components["schemas"]["PlanResponse"];
+            version: components["schemas"]["PlanVersionSummary"] | null;
+        };
+        /** PlanVersionPatch */
+        PlanVersionPatch: {
+            /** Goal Type */
+            goal_type?: string | null;
+            /** Practitioner Notes */
+            practitioner_notes?: string | null;
+            /** Target Carbs G */
+            target_carbs_g?: number | string | null;
+            /** Target Energy Kcal */
+            target_energy_kcal?: number | string | null;
+            /** Target Fat G */
+            target_fat_g?: number | string | null;
+            /** Target Protein G */
+            target_protein_g?: number | string | null;
+            /** Title */
+            title?: string | null;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+        };
+        /**
+         * PlanVersionResponse
+         * @description API §8.3's contract, in full.
+         */
+        PlanVersionResponse: {
+            /** Days */
+            days: components["schemas"]["PlanDayResponse"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            nutrition_budget: components["schemas"]["NutritionBudgetResponse"];
+            /** Origin */
+            origin: string;
+            /**
+             * Plan Id
+             * Format: uuid
+             */
+            plan_id: string;
+            plan_totals: components["schemas"]["MacroTotalsResponse"];
+            /** Practitioner Notes */
+            practitioner_notes: string | null;
+            /** Row Version */
+            row_version: number;
+            state: components["schemas"]["PlanState"];
+            /** Supplements */
+            supplements?: {
+                [key: string]: string;
+            }[];
+            targets: components["schemas"]["MacroTotalsResponse"];
+            /** Valid From */
+            valid_from: string | null;
+            /** Valid To */
+            valid_to: string | null;
+            /** Version Number */
+            version_number: number;
+            /** Warnings */
+            warnings: components["schemas"]["PlanWarningResponse"][];
+        };
+        /** PlanVersionSummary */
+        PlanVersionSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Issued At */
+            issued_at: string | null;
+            /** Origin */
+            origin: string;
+            /** Row Version */
+            row_version: number;
+            state: components["schemas"]["PlanState"];
+            /** Valid From */
+            valid_from: string | null;
+            /** Valid To */
+            valid_to: string | null;
+            /** Version Number */
+            version_number: number;
+        };
+        /** PlanWarningResponse */
+        PlanWarningResponse: {
+            /** Message */
+            message: string;
+            /** Rule Code */
+            rule_code: string;
+            /** Scope */
+            scope: {
+                [key: string]: string | number;
+            };
+            /** Severity */
+            severity: string;
         };
         /** PortalAccessRequest */
         PortalAccessRequest: {
@@ -2743,6 +3406,52 @@ export interface components {
          * @enum {string}
          */
         SexType: "male" | "female" | "other";
+        /** SlotCreateRequest */
+        SlotCreateRequest: {
+            /** Custom Label */
+            custom_label?: string | null;
+            /**
+             * Day Id
+             * Format: uuid
+             */
+            day_id: string;
+            slot_type: components["schemas"]["MealSlotType"];
+            /** Target Time */
+            target_time?: string | null;
+        };
+        /** SlotPatch */
+        SlotPatch: {
+            /** Custom Label */
+            custom_label?: string | null;
+            slot_type?: components["schemas"]["MealSlotType"] | null;
+            /** Sort Order */
+            sort_order?: number | null;
+            /** Target Time */
+            target_time?: string | null;
+        };
+        /** SlotResponse */
+        SlotResponse: {
+            /** Custom Label */
+            custom_label: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Locked */
+            is_locked: boolean;
+            /**
+             * Plan Day Id
+             * Format: uuid
+             */
+            plan_day_id: string;
+            /** Slot Type */
+            slot_type: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Target Time */
+            target_time: string | null;
+        };
         /**
          * StageChangeRequest
          * @description `POST /app/clients/{id}/stage` — API §7.1.
@@ -4024,6 +4733,72 @@ export interface operations {
             };
         };
     };
+    planList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanSummaryResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     clientsRestore: {
         parameters: {
             query?: never;
@@ -4468,12 +5243,219 @@ export interface operations {
             };
         };
     };
-    issueDietPlan: {
+    planDayUpdate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                day_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planItemAdd: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planItemRemove: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planItemUpdate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planSlotRemove: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                slot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planSlotUpdate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                slot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlotPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planVersionRead: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                plan_id: string;
                 version_id: string;
             };
             cookie?: never;
@@ -4486,7 +5468,217 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PlanVersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planVersionUpdate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanVersionPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planDayAdd: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planVersionDiscard: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planVersionIssue: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planSlotAdd: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlotCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDetailResponse"];
                 };
             };
             /** @description Validation Error */

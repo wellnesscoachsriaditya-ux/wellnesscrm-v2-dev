@@ -62,7 +62,12 @@ from app.platform.http.routers.discovery import router as discovery_router
 from app.platform.http.routers.enquiries import form_router as enquiry_form_router
 from app.platform.http.routers.enquiries import router as enquiries_router
 from app.platform.http.routers.nutrition import router as nutrition_router
-from app.platform.http.routers.nutrition_plans import router as nutrition_plans_router
+from app.platform.http.routers.nutrition_plan_items import day_router as plan_day_router
+from app.platform.http.routers.nutrition_plan_items import item_router as plan_item_router
+from app.platform.http.routers.nutrition_plan_items import slot_router as plan_slot_router
+from app.platform.http.routers.nutrition_plans import plan_read_router
+from app.platform.http.routers.nutrition_plans import plan_router as client_plans_router
+from app.platform.http.routers.nutrition_plans import version_router as plan_version_router
 from app.platform.http.routers.public_forms import router as public_forms_router
 from app.platform.http.routers.timeline import router as timeline_router
 from app.platform.identity.authentication import resolve_actor as authenticate
@@ -277,7 +282,22 @@ def create_app() -> FastAPI:
     # client (AC-M1-006) rather than merely against the action.
     app.include_router(clinical_router)
     app.include_router(nutrition_router)
-    app.include_router(nutrition_plans_router)
+
+    # 🔒 M4 — plan authoring. Six routers rather than one because API §8.1
+    # addresses a plan's contents at their own top-level paths
+    # (`/app/plan-items/{id}`) rather than nested under the version, so they
+    # cannot share a prefix.
+    #
+    # ⚠️ `client_plans_router` shares the `/app/clients` prefix with four earlier
+    # routers and collides with none of them: every route it declares carries a
+    # further `/plans` segment. Same arrangement as `collaboration` and
+    # `timeline`.
+    app.include_router(client_plans_router)
+    app.include_router(plan_read_router)
+    app.include_router(plan_version_router)
+    app.include_router(plan_day_router)
+    app.include_router(plan_slot_router)
+    app.include_router(plan_item_router)
 
     # Note: Portal (clients querying their own plans, logging metrics) will use a
     # separate realm and router hierarchy in M6.

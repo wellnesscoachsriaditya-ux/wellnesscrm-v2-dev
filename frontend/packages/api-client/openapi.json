@@ -1179,6 +1179,83 @@
         "title": "CurrentSessionResponse",
         "type": "object"
       },
+      "DayCreateRequest": {
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "slot_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MealSlotType"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot Types"
+          }
+        },
+        "title": "DayCreateRequest",
+        "type": "object"
+      },
+      "DayPatch": {
+        "properties": {
+          "label": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "DayPatch",
+        "type": "object"
+      },
+      "DayResponse": {
+        "properties": {
+          "day_number": {
+            "title": "Day Number",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "plan_version_id": {
+            "format": "uuid",
+            "title": "Plan Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "plan_version_id",
+          "day_number",
+          "label"
+        ],
+        "title": "DayResponse",
+        "type": "object"
+      },
       "DefinitionResponse": {
         "description": "The structure an administration was captured under — FR-M3-003.",
         "properties": {
@@ -2036,6 +2113,283 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "ItemCreateRequest": {
+        "properties": {
+          "client_note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Note"
+          },
+          "food_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Food Id"
+          },
+          "item_type": {
+            "default": "food",
+            "title": "Item Type",
+            "type": "string"
+          },
+          "meal_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meal Id"
+          },
+          "measure_unit_id": {
+            "format": "uuid",
+            "title": "Measure Unit Id",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "recipe_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Id"
+          },
+          "slot_id": {
+            "format": "uuid",
+            "title": "Slot Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slot_id",
+          "quantity",
+          "measure_unit_id"
+        ],
+        "title": "ItemCreateRequest",
+        "type": "object"
+      },
+      "ItemPatch": {
+        "description": "⚠️ No ``food_id``, and that is the point.\n\nSwapping the food under a fixed item id would be a substitution wearing an\nedit's clothes. The practitioner removes the item and adds the one they\nmeant, which lands in the audit log as two decisions rather than one silent\none — the same argument API §8.5 makes about recalculation never\nsubstituting a food.",
+        "properties": {
+          "client_note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Note"
+          },
+          "measure_unit_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure Unit Id"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          }
+        },
+        "title": "ItemPatch",
+        "type": "object"
+      },
+      "ItemResponse": {
+        "properties": {
+          "client_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Note"
+          },
+          "food_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Food Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_locked": {
+            "title": "Is Locked",
+            "type": "boolean"
+          },
+          "item_type": {
+            "title": "Item Type",
+            "type": "string"
+          },
+          "meal_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meal Id"
+          },
+          "measure_unit_id": {
+            "format": "uuid",
+            "title": "Measure Unit Id",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "plan_slot_id": {
+            "format": "uuid",
+            "title": "Plan Slot Id",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "string"
+          },
+          "recipe_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Id"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "plan_slot_id",
+          "item_type",
+          "food_id",
+          "recipe_id",
+          "meal_id",
+          "quantity",
+          "measure_unit_id",
+          "notes",
+          "client_note",
+          "is_locked",
+          "sort_order"
+        ],
+        "title": "ItemResponse",
+        "type": "object"
+      },
       "LeadSource": {
         "description": "Where an enquiry came from — FR-M2-009, US-M2-04.\n\n⚠️ 🟡 **PROPOSED.** FR-M2-009 requires \"a lead source, either selected by the\nprospect or derived from a link parameter\" and names no vocabulary; DB §5.1\ntypes ``clients.source`` as free text. These members are derived from §3.1's\ncompetitive set and P1's own described channels — Instagram DMs, WhatsApp and\nreferrals — plus the two a form cannot avoid needing.\n\n🔒 **A closed enum here, stored as text.** The column stays ``text`` (DB §5.1)\nbecause a practitioner-entered source on a manual lead is legitimate and a\nPostgreSQL enum would need a migration per channel. The closed set governs\nwhat the *public form* may record — which is the half an attacker controls —\nwhile :func:`normalise_source` keeps a hand-typed source from becoming a\nsecond spelling of an existing one.\n\n⚠️ ``OTHER`` is a real answer, not a fallback for parse failure. US-M2-04 is\n\"which channel produces enquiries\"; a bucket that silently absorbs\nunrecognised values would make that question unanswerable exactly when a new\nchannel started working.",
         "enum": [
@@ -2084,6 +2438,54 @@
         ],
         "title": "LoginRequest",
         "type": "object"
+      },
+      "MacroTotalsResponse": {
+        "properties": {
+          "carbs_g": {
+            "title": "Carbs G",
+            "type": "string"
+          },
+          "energy_kcal": {
+            "title": "Energy Kcal",
+            "type": "string"
+          },
+          "fat_g": {
+            "title": "Fat G",
+            "type": "string"
+          },
+          "fibre_g": {
+            "title": "Fibre G",
+            "type": "string"
+          },
+          "protein_g": {
+            "title": "Protein G",
+            "type": "string"
+          }
+        },
+        "required": [
+          "energy_kcal",
+          "protein_g",
+          "carbs_g",
+          "fat_g",
+          "fibre_g"
+        ],
+        "title": "MacroTotalsResponse",
+        "type": "object"
+      },
+      "MealSlotType": {
+        "description": "The meal slots a plan day is divided into — FR-M4-025.\n\n🟡 **The vocabulary is PROPOSED and unconfirmed.** FR-M4-025 marks these seven\nas a proposal, and Validation Gate G1 — the three practitioner sessions that\nwould settle them — has not been run.\n\n⚠️ **Deliberately not a PostgreSQL enum yet.** ``plan_slots.slot_type`` and\n``template_slots.slot_type`` stay ``text`` until the vocabulary is confirmed,\nand the database type is created in the slice that also needs it for\n``foods.meal_suitability`` (DB §8.3). The asymmetry is why: ``ALTER TYPE …\nADD VALUE`` is cheap, but *removing* a value means rewriting the type and\nevery column using it — the same argument migration 0010 makes for\n``ClientStage.ARCHIVED``. Validating here costs nothing and commits nothing.\n\n🔒 **This is a structural type, not a display name.** Renaming a slot\n(FR-M4-025) sets ``plan_slots.custom_label``; it does not need a new member.\n:attr:`CUSTOM` covers a slot a practitioner adds that is none of the seven.",
+        "enum": [
+          "early_morning",
+          "breakfast",
+          "mid_morning",
+          "lunch",
+          "evening_snack",
+          "dinner",
+          "bedtime",
+          "custom"
+        ],
+        "title": "MealSlotType",
+        "type": "string"
       },
       "MeasurementResponse": {
         "description": "One dated measurement, with what is derived from it — FR-M3-012.\n\n🔒 ``bmi`` and ``waist_hip_ratio`` are **computed on read and never stored**.\nA corrected weight corrects them everywhere at once.\n\n⚠️ 🔒 **No band, no label, no colour.** OD-08 is unresolved — Indian BMI\ncut-offs differ from WHO — and the implementation plan's DoD forbids\ndisplaying a clinical threshold without a citation. A number is a fact;\n\"overweight\" is a judgement we are not yet entitled to publish.",
@@ -2286,6 +2688,51 @@
         "title": "NoteWriteRequest",
         "type": "object"
       },
+      "NutritionBudgetResponse": {
+        "description": "🔒 ADR-A07 / API §8.4 — locking made observable.",
+        "properties": {
+          "is_within_tolerance": {
+            "title": "Is Within Tolerance",
+            "type": "boolean"
+          },
+          "locked_consumed": {
+            "$ref": "#/components/schemas/MacroTotalsResponse"
+          },
+          "locked_item_count": {
+            "title": "Locked Item Count",
+            "type": "integer"
+          },
+          "locked_slot_count": {
+            "title": "Locked Slot Count",
+            "type": "integer"
+          },
+          "remaining_available": {
+            "$ref": "#/components/schemas/MacroTotalsResponse"
+          },
+          "target": {
+            "$ref": "#/components/schemas/MacroTotalsResponse"
+          },
+          "tolerance_pct": {
+            "title": "Tolerance Pct",
+            "type": "string"
+          },
+          "unlocked_current": {
+            "$ref": "#/components/schemas/MacroTotalsResponse"
+          }
+        },
+        "required": [
+          "target",
+          "locked_consumed",
+          "unlocked_current",
+          "remaining_available",
+          "locked_item_count",
+          "locked_slot_count",
+          "is_within_tolerance",
+          "tolerance_pct"
+        ],
+        "title": "NutritionBudgetResponse",
+        "type": "object"
+      },
       "NutritionProfileResponse": {
         "description": "The typed projection — DDR-08.\n\n🔒 What `nutrition` and `ai_drafting` will read (through a kernel port, not\nthis endpoint). Exposed to the practitioner UI so a coach can see what the\nassessment actually produced — AC-M3-002's \"the result remains usable for\nplanning\" is a question about *this*, not about section counts.",
         "properties": {
@@ -2485,6 +2932,886 @@
           "email"
         ],
         "title": "PasswordResetRequest",
+        "type": "object"
+      },
+      "PlanCreateRequest": {
+        "properties": {
+          "day_count": {
+            "default": 1,
+            "maximum": 7.0,
+            "minimum": 1.0,
+            "title": "Day Count",
+            "type": "integer"
+          },
+          "goal_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Type"
+          },
+          "slot_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MealSlotType"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot Types"
+          },
+          "source": {
+            "default": "blank",
+            "title": "Source",
+            "type": "string"
+          },
+          "source_plan_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Plan Version Id"
+          },
+          "target_carbs_g": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Carbs G"
+          },
+          "target_energy_kcal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Energy Kcal"
+          },
+          "target_fat_g": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Fat G"
+          },
+          "target_protein_g": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Protein G"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid To"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "PlanCreateRequest",
+        "type": "object"
+      },
+      "PlanCreateResponse": {
+        "description": "🔒 API §8.2 — a plan and its first draft, never one without the other.",
+        "properties": {
+          "draft_version": {
+            "$ref": "#/components/schemas/PlanVersionSummary"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/PlanResponse"
+          }
+        },
+        "required": [
+          "plan",
+          "draft_version"
+        ],
+        "title": "PlanCreateResponse",
+        "type": "object"
+      },
+      "PlanDayResponse": {
+        "properties": {
+          "day_number": {
+            "title": "Day Number",
+            "type": "integer"
+          },
+          "day_totals": {
+            "$ref": "#/components/schemas/MacroTotalsResponse"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/PlanSlotResponse"
+            },
+            "title": "Slots",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "day_number",
+          "label",
+          "slots",
+          "day_totals"
+        ],
+        "title": "PlanDayResponse",
+        "type": "object"
+      },
+      "PlanDetailResponse": {
+        "description": "🔒 AC-M4-008 — prior versions remain retrievable and clearly dated.",
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/PlanResponse"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/PlanVersionSummary"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "plan",
+          "versions"
+        ],
+        "title": "PlanDetailResponse",
+        "type": "object"
+      },
+      "PlanItemResponse": {
+        "properties": {
+          "alternatives": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Alternatives",
+            "type": "array"
+          },
+          "client_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Note"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "food_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Food Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_locked": {
+            "title": "Is Locked",
+            "type": "boolean"
+          },
+          "item_is_locked": {
+            "title": "Item Is Locked",
+            "type": "boolean"
+          },
+          "item_type": {
+            "title": "Item Type",
+            "type": "string"
+          },
+          "meal_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meal Id"
+          },
+          "measure_display": {
+            "title": "Measure Display",
+            "type": "string"
+          },
+          "measure_unit_code": {
+            "title": "Measure Unit Code",
+            "type": "string"
+          },
+          "measure_unit_id": {
+            "format": "uuid",
+            "title": "Measure Unit Id",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "nutrition": {
+            "$ref": "#/components/schemas/MacroTotalsResponse"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "string"
+          },
+          "recipe_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Id"
+          },
+          "resolved_grams": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Grams"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "item_type",
+          "food_id",
+          "recipe_id",
+          "meal_id",
+          "display_name",
+          "quantity",
+          "measure_unit_id",
+          "measure_unit_code",
+          "measure_display",
+          "resolved_grams",
+          "nutrition",
+          "is_locked",
+          "item_is_locked",
+          "notes",
+          "client_note",
+          "sort_order"
+        ],
+        "title": "PlanItemResponse",
+        "type": "object"
+      },
+      "PlanResponse": {
+        "properties": {
+          "archived_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "client_id": {
+            "format": "uuid",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "created_by_user_id": {
+            "format": "uuid",
+            "title": "Created By User Id",
+            "type": "string"
+          },
+          "current_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version Id"
+          },
+          "goal_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Type"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "title",
+          "goal_type",
+          "created_by_user_id",
+          "current_version_id",
+          "archived_at"
+        ],
+        "title": "PlanResponse",
+        "type": "object"
+      },
+      "PlanSlotResponse": {
+        "properties": {
+          "custom_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Label"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_locked": {
+            "title": "Is Locked",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlanItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "slot_totals": {
+            "$ref": "#/components/schemas/MacroTotalsResponse"
+          },
+          "slot_type": {
+            "title": "Slot Type",
+            "type": "string"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "target_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Time"
+          }
+        },
+        "required": [
+          "id",
+          "slot_type",
+          "custom_label",
+          "target_time",
+          "sort_order",
+          "is_locked",
+          "items",
+          "slot_totals"
+        ],
+        "title": "PlanSlotResponse",
+        "type": "object"
+      },
+      "PlanState": {
+        "enum": [
+          "draft",
+          "issued",
+          "superseded",
+          "discarded"
+        ],
+        "title": "PlanState",
+        "type": "string"
+      },
+      "PlanSummaryResponse": {
+        "description": "A plan in a list, with the version a practitioner means by \"the plan\".",
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/PlanResponse"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanVersionSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "plan",
+          "version"
+        ],
+        "title": "PlanSummaryResponse",
+        "type": "object"
+      },
+      "PlanVersionPatch": {
+        "properties": {
+          "goal_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Type"
+          },
+          "practitioner_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practitioner Notes"
+          },
+          "target_carbs_g": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Carbs G"
+          },
+          "target_energy_kcal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Energy Kcal"
+          },
+          "target_fat_g": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Fat G"
+          },
+          "target_protein_g": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Protein G"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid To"
+          }
+        },
+        "title": "PlanVersionPatch",
+        "type": "object"
+      },
+      "PlanVersionResponse": {
+        "description": "API §8.3's contract, in full.",
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/PlanDayResponse"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "nutrition_budget": {
+            "$ref": "#/components/schemas/NutritionBudgetResponse"
+          },
+          "origin": {
+            "title": "Origin",
+            "type": "string"
+          },
+          "plan_id": {
+            "format": "uuid",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "plan_totals": {
+            "$ref": "#/components/schemas/MacroTotalsResponse"
+          },
+          "practitioner_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practitioner Notes"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/PlanState"
+          },
+          "supplements": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Supplements",
+            "type": "array"
+          },
+          "targets": {
+            "$ref": "#/components/schemas/MacroTotalsResponse"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid To"
+          },
+          "version_number": {
+            "title": "Version Number",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/PlanWarningResponse"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "plan_id",
+          "version_number",
+          "state",
+          "origin",
+          "row_version",
+          "valid_from",
+          "valid_to",
+          "targets",
+          "nutrition_budget",
+          "days",
+          "plan_totals",
+          "warnings",
+          "practitioner_notes"
+        ],
+        "title": "PlanVersionResponse",
+        "type": "object"
+      },
+      "PlanVersionSummary": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "issued_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issued At"
+          },
+          "origin": {
+            "title": "Origin",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/PlanState"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid To"
+          },
+          "version_number": {
+            "title": "Version Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version_number",
+          "state",
+          "origin",
+          "row_version",
+          "issued_at",
+          "valid_from",
+          "valid_to"
+        ],
+        "title": "PlanVersionSummary",
+        "type": "object"
+      },
+      "PlanWarningResponse": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "rule_code": {
+            "title": "Rule Code",
+            "type": "string"
+          },
+          "scope": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Scope",
+            "type": "object"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_code",
+          "severity",
+          "message",
+          "scope"
+        ],
+        "title": "PlanWarningResponse",
         "type": "object"
       },
       "PortalAccessRequest": {
@@ -2974,6 +4301,159 @@
         ],
         "title": "SexType",
         "type": "string"
+      },
+      "SlotCreateRequest": {
+        "properties": {
+          "custom_label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Label"
+          },
+          "day_id": {
+            "format": "uuid",
+            "title": "Day Id",
+            "type": "string"
+          },
+          "slot_type": {
+            "$ref": "#/components/schemas/MealSlotType"
+          },
+          "target_time": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Time"
+          }
+        },
+        "required": [
+          "day_id",
+          "slot_type"
+        ],
+        "title": "SlotCreateRequest",
+        "type": "object"
+      },
+      "SlotPatch": {
+        "properties": {
+          "custom_label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Label"
+          },
+          "slot_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MealSlotType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "target_time": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Time"
+          }
+        },
+        "title": "SlotPatch",
+        "type": "object"
+      },
+      "SlotResponse": {
+        "properties": {
+          "custom_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Label"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_locked": {
+            "title": "Is Locked",
+            "type": "boolean"
+          },
+          "plan_day_id": {
+            "format": "uuid",
+            "title": "Plan Day Id",
+            "type": "string"
+          },
+          "slot_type": {
+            "title": "Slot Type",
+            "type": "string"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "target_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Time"
+          }
+        },
+        "required": [
+          "id",
+          "plan_day_id",
+          "slot_type",
+          "custom_label",
+          "target_time",
+          "sort_order",
+          "is_locked"
+        ],
+        "title": "SlotResponse",
+        "type": "object"
       },
       "StageChangeRequest": {
         "description": "`POST /app/clients/{id}/stage` — API §7.1.",
@@ -5131,6 +6611,106 @@
         ]
       }
     },
+    "/api/v1/app/clients/{client_id}/plans": {
+      "get": {
+        "description": "Every plan for one client — API §8.1.",
+        "operationId": "planList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlanSummaryResponse"
+                  },
+                  "title": "Response Planlist",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List a client's diet plans",
+        "tags": [
+          "nutrition-plans"
+        ]
+      },
+      "post": {
+        "description": "Create a plan and its first draft version — API §8.2, FR-M4-032.\n\n🔒 Both, atomically. A plan with no version is not a state a practitioner can\nuse, so the API never produces one. A second draft on the same plan is\nrefused by ``uq_diet_plan_versions__one_draft`` with a 409.",
+        "operationId": "planCreate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanCreateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a diet plan",
+        "tags": [
+          "nutrition-plans"
+        ]
+      }
+    },
     "/api/v1/app/clients/{client_id}/restore": {
       "post": {
         "description": "Bring an archived client back — EC-M1-02, AC-M1-007.\n\n🔒 Returns them to the stage they were archived at. A returning client is\nreactivated in place; there is never a second record.\n\n🔒 Returns **402** when the restored stage is ``active`` and the plan is at\nits ceiling (EC-M1-06) — archiving frees a slot, so restoring takes one back.",
@@ -5854,7 +7434,7 @@
         },
         "summary": "Search Foods",
         "tags": [
-          "nutrition"
+          "nutrition-catalogue"
         ]
       },
       "post": {
@@ -5894,42 +7474,57 @@
         },
         "summary": "Create Custom Food",
         "tags": [
-          "nutrition"
+          "nutrition-catalogue"
         ]
       }
     },
-    "/api/v1/app/nutrition/plans/{plan_id}/versions/{version_id}/issue": {
-      "post": {
-        "description": "Issue a draft plan, generating a snapshot and PDF.",
-        "operationId": "issueDietPlan",
+    "/api/v1/app/plan-days/{day_id}": {
+      "patch": {
+        "operationId": "planDayUpdate",
         "parameters": [
           {
             "in": "path",
-            "name": "plan_id",
+            "name": "day_id",
             "required": true,
             "schema": {
               "format": "uuid",
-              "title": "Plan Id",
+              "title": "Day Id",
               "type": "string"
             }
           },
           {
-            "in": "path",
-            "name": "version_id",
-            "required": true,
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
             "schema": {
-              "format": "uuid",
-              "title": "Version Id",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayPatch"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Issuedietplan"
+                  "$ref": "#/components/schemas/DayResponse"
                 }
               }
             },
@@ -5946,9 +7541,730 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Issue Plan",
+        "summary": "Rename a day",
         "tags": [
-          "nutrition_plans"
+          "nutrition-plans"
+        ]
+      }
+    },
+    "/api/v1/app/plan-items": {
+      "post": {
+        "description": "FR-M4-024 — the plan's actual content.",
+        "operationId": "planItemAdd",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add a food to a slot",
+        "tags": [
+          "nutrition-plans"
+        ]
+      }
+    },
+    "/api/v1/app/plan-items/{item_id}": {
+      "delete": {
+        "description": "🔒 Refused at the database for a non-draft version — see :func:`delete_slot`.",
+        "operationId": "planItemRemove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Take an item out of a slot",
+        "tags": [
+          "nutrition-plans"
+        ]
+      },
+      "patch": {
+        "operationId": "planItemUpdate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change a quantity, measure or note",
+        "tags": [
+          "nutrition-plans"
+        ]
+      }
+    },
+    "/api/v1/app/plan-slots/{slot_id}": {
+      "delete": {
+        "description": "🔒 Refused at the database for a non-draft version.\n\n``plan_slots__delete_draft_only`` (migration 0020) is a ``RESTRICTIVE``\npolicy, so the row is invisible to a ``DELETE`` unless its version is a\ndraft — independently of the service's own ``assert_draft``.",
+        "operationId": "planSlotRemove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slot_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Slot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove a slot and its items",
+        "tags": [
+          "nutrition-plans"
+        ]
+      },
+      "patch": {
+        "description": "FR-M4-025 — add, rename, remove and reorder.",
+        "operationId": "planSlotUpdate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slot_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Slot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlotPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlotResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename, retime or reorder a slot",
+        "tags": [
+          "nutrition-plans"
+        ]
+      }
+    },
+    "/api/v1/app/plan-versions/{version_id}": {
+      "get": {
+        "description": "🔒 API §8.3 — every nutrition figure and ``resolved_grams`` server-computed.\n\nThe client never converts a portion or sums a nutrient. A mismatch between\nwhat is displayed and what is stored would be a clinical defect, not a\npresentation bug (NFR-072).",
+        "operationId": "planVersionRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanVersionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read a plan version with its nutrition and budget",
+        "tags": [
+          "nutrition-plans"
+        ]
+      },
+      "patch": {
+        "description": "Title, goal, validity, notes and targets — API §8.3.",
+        "operationId": "planVersionUpdate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanVersionPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanVersionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit a draft's metadata and targets",
+        "tags": [
+          "nutrition-plans"
+        ]
+      }
+    },
+    "/api/v1/app/plan-versions/{version_id}/days": {
+      "post": {
+        "description": "FR-M4-026 — a plan grows a day at a time.",
+        "operationId": "planDayAdd",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add a day to a draft",
+        "tags": [
+          "nutrition-plans"
+        ]
+      }
+    },
+    "/api/v1/app/plan-versions/{version_id}/discard": {
+      "post": {
+        "description": "🔒 A state, not a delete. DDR-11 keeps the record of what was tried.",
+        "operationId": "planVersionDiscard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanVersionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discard a draft",
+        "tags": [
+          "nutrition-plans"
+        ]
+      }
+    },
+    "/api/v1/app/plan-versions/{version_id}/issue": {
+      "post": {
+        "description": "🔒 The only path from ``draft`` to ``issued`` — API §8.6.\n\n⚠️ The snapshot this freezes is still Slice 1.3's placeholder rather than the\nresolved plan; rewriting it against the resolver is its own slice. The route\nis moved here from the old ``/app/nutrition/plans/...`` prefix so that every\nplan operation sits under the paths API §8.1 specifies.",
+        "operationId": "planVersionIssue",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Planversionissue",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Issue a draft plan version",
+        "tags": [
+          "nutrition-plans"
+        ]
+      }
+    },
+    "/api/v1/app/plan-versions/{version_id}/slots": {
+      "post": {
+        "description": "FR-M4-025 — practitioners add, rename, remove and reorder slots.",
+        "operationId": "planSlotAdd",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlotCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlotResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add a meal slot to a day",
+        "tags": [
+          "nutrition-plans"
+        ]
+      }
+    },
+    "/api/v1/app/plans/{plan_id}": {
+      "get": {
+        "description": "🔒 AC-M4-008 — a revision is issued while the prior version stays retrievable.",
+        "operationId": "planRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read a plan and its version history",
+        "tags": [
+          "nutrition-plans"
         ]
       }
     },

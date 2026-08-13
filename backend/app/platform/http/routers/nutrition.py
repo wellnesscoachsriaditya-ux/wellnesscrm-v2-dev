@@ -32,7 +32,7 @@ from app.modules.nutrition import (
 from app.platform.http.authz import requires
 from app.platform.http.pipeline import get_session, realm_router
 
-router = realm_router("/api/v1/app/nutrition", tags=["nutrition"])
+router = realm_router("/api/v1/app/nutrition", tags=["nutrition-catalogue"])
 
 
 class FoodItemResponse(BaseModel):
