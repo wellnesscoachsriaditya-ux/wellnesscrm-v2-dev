@@ -332,4 +332,24 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise NotImplementedError("Downgrade not supported")
+    """Drop everything this revision created."""
+    op.drop_table("food_search_misses")
+    op.drop_table("nutrition_targets")
+    op.drop_table("meal_items")
+    op.drop_table("meals")
+    op.drop_table("dietary_rules")
+    op.drop_table("supplements")
+    op.drop_table("recipe_items")
+    op.drop_table("recipes")
+    op.drop_table("food_portions")
+    op.drop_table("food_nutrients")
+    op.drop_table("food_aliases")
+
+    op.drop_index("ix_foods_search_vector", table_name="foods")
+    op.drop_table("foods")
+
+    op.drop_table("nutrients")
+    op.drop_table("measure_units")
+    op.drop_table("food_categories")
+
+    sa.Enum(name="dietary_classification").drop(op.get_bind(), checkfirst=False)
