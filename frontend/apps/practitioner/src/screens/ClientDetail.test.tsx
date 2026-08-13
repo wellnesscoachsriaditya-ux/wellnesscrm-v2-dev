@@ -109,6 +109,10 @@ function stubRoutes(...routes: Route[]) {
     if (url.includes('/timeline')) return jsonResponse({ items: [], page: { has_more: false } })
     if (url.includes('/tags')) return jsonResponse([])
     if (url.includes('/access')) return jsonResponse([])
+    if (url.includes('/assessments')) return jsonResponse([])
+    if (url.includes('/measurements')) return jsonResponse([])
+    if (url.includes('/consultation-notes')) return jsonResponse([])
+    if (url.includes('/documents')) return jsonResponse([])
     if (url.includes('/auth/me')) return jsonResponse(SESSION)
     return undefined
   }

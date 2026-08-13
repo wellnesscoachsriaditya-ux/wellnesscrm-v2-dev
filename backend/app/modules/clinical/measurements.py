@@ -246,3 +246,28 @@ async def height_for(
             .limit(1)
         )
     ).scalar_one_or_none()
+
+
+async def latest_derived(
+    session: AsyncSession, *, tenant_id: uuid.UUID, client_id: uuid.UUID
+) -> DerivedMetrics:
+    """The client's current BMI and WHR — FR-M3-012, EC-M3-05.
+
+    🔒 **"Current" means newest by display precedence, not merely newest.** If a
+    client self-reported a weight on the same day the practitioner measured one,
+    the figure returned here must be the one the trend chart shows — otherwise the
+    number beside a completed assessment disagrees with the number on the chart
+    below it, and neither is obviously wrong.
+
+    ⚠️ Lives here rather than in the router because it is a measurement rule, not
+    an HTTP shape: the practitioner realm and the client portal (S6) both need
+    this same figure, and a copy in each would drift. All-``None`` when the client
+    has no measurements — a real state for a client added by hand.
+    """
+    rows = preferred_per_date(await history(session, tenant_id=tenant_id, client_id=client_id))
+    if not rows:
+        return DerivedMetrics(bmi=None, waist_hip_ratio=None)
+    return with_derived(
+        rows[0],
+        fallback_height_cm=await height_for(session, tenant_id=tenant_id, client_id=client_id),
+    )

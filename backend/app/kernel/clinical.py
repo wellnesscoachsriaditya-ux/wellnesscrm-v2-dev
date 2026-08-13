@@ -532,7 +532,15 @@ def validate_answers(
         # than rejected: a client with a stale form open would otherwise be
         # unable to save anything at all (EC-M3-03).
         declared = fields.get(field_id)
-        if declared is None or value is None:
+        # 🔒 A blank value is the *absence* of an answer, not a wrong one, so it
+        # is never type-checked. Two reasons, and both are bugs if this reads
+        # ``value is None`` instead. On a partial save, clearing a field back to
+        # "" must not raise "choose one of the offered Diet" — FR-M3-005 lets a
+        # client retype. On submit, the required check below already owns blanks;
+        # without this the same field is reported twice, once as an invalid
+        # choice and once as missing, and the form shows a required question two
+        # contradictory complaints about one empty box.
+        if declared is None or _is_blank(value):
             continue
         issues.extend(_check_value(declared, value))
 
@@ -802,7 +810,13 @@ def validate_document_type(document_type: str) -> str:
             "That document type is too long.",
             action="Use a short label, such as 'lab report'.",
         )
-    if not all(part.isalnum() for part in normalised.split("_") if part):
+    # 🔒 ``parts`` must be non-empty *and* all alphanumeric. Checking only the
+    # second half is a vacuous truth: ``"___"`` normalises to separators alone, so
+    # the generator yields nothing and ``all()`` of nothing is ``True``. That let a
+    # label with no alphanumeric content through the guard whose whole job is to
+    # require some, and stored a document nobody can identify by type.
+    parts = [part for part in normalised.split("_") if part]
+    if not parts or not all(part.isalnum() for part in parts):
         raise ValidationError(
             "A document type may only contain letters, numbers and spaces.",
             action="Use a short label, such as 'lab report'.",

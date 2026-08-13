@@ -12,25 +12,50 @@
 
 import { ErrorState, PageHeader, Spinner } from '@wellnesscrm/design-system'
 import { useIaLocation } from '@wellnesscrm/ia'
-import { ClientAccessPanel } from '../components/clients/ClientAccessPanel'
-import type { GrantView } from '../components/clients/ClientAccessPanel'
+import { ClientAccessPanel, type GrantView } from '../components/clients/ClientAccessPanel'
 import { ClientLifecyclePanel } from '../components/clients/ClientLifecyclePanel'
-import { ClientNotesPanel } from '../components/clients/ClientNotesPanel'
-import type { NoteView } from '../components/clients/ClientNotesPanel'
+import { ClientNotesPanel, type NoteView } from '../components/clients/ClientNotesPanel'
 import { ClientSummary } from '../components/clients/ClientSummary'
-import { ClientTagsPanel } from '../components/clients/ClientTagsPanel'
-import type { TagView } from '../components/clients/ClientTagsPanel'
-import { ClientTimelinePanel } from '../components/clients/ClientTimelinePanel'
-import type { TimelineEntryView } from '../components/clients/ClientTimelinePanel'
+import { ClientTagsPanel, type TagView } from '../components/clients/ClientTagsPanel'
+import { ClientTimelinePanel, type TimelineEntryView } from '../components/clients/ClientTimelinePanel'
 import { EntitlementNotice } from '../components/clients/EntitlementNotice'
-import type { StageValue } from '../components/clients/stages'
+import { EnquiryFormPanel } from '../components/clients/EnquiryFormPanel'
+import {
+  ClinicalAssessmentPanel,
+  type AssessmentView,
+} from '../components/clients/ClinicalAssessmentPanel'
+import {
+  ClinicalMeasurementPanel,
+  type MeasurementView,
+} from '../components/clients/ClinicalMeasurementPanel'
+import {
+  ClinicalConsultationNotesPanel,
+  type ConsultationNoteView,
+} from '../components/clients/ClinicalConsultationNotesPanel'
+import {
+  ClinicalDocumentsPanel,
+  type ClientDocumentView,
+} from '../components/clients/ClinicalDocumentsPanel'
 import { useClientDetail } from '../features/clients/useClientDetail'
 import { useCollaboration } from '../features/clients/useCollaboration'
 import { useTimeline } from '../features/clients/useTimeline'
+import {
+  useAssessments,
+  useMeasurements,
+  useConsultationNotes,
+  useDocuments,
+} from '../features/clients/useClinical'
+import { useCurrentSession } from '../features/session/useCurrentSession'
 import type { Grant, Note, Tag } from '../features/clients/collaborationApi'
 import type { TimelineEntry, TimelineEventType } from '../features/clients/timelineApi'
+import type {
+  AssessmentSummary,
+  MeasurementResponse,
+  ConsultationNoteResponse,
+  ClientDocumentResponse,
+} from '../features/clients/clinicalApi'
 import type { SelectableStage } from '../features/clients/api'
-import { useCurrentSession } from '../features/session/useCurrentSession'
+import type { StageValue } from '../components/clients/stages'
 
 /**
  * Project the wire shapes onto what the components render.
@@ -70,8 +95,62 @@ function toTimelineView(entry: TimelineEntry): TimelineEntryView {
     eventType: entry.event_type,
     occurredAt: entry.occurred_at,
     summary: entry.summary,
-    actorType: entry.actor_type,
+    actorType: entry.actor_type as 'practitioner' | 'client' | 'system',
     actorId: entry.actor_id,
+  }
+}
+
+function toAssessmentView(a: AssessmentSummary): AssessmentView {
+  return {
+    id: a.id,
+    definitionCode: a.definition_code,
+    definitionVersion: a.definition_version,
+    status: a.status as 'in_progress' | 'completed',
+    completedBy: a.completed_by ?? null,
+    startedAt: a.started_at,
+    completedAt: a.completed_at ?? null,
+  }
+}
+
+function toMeasurementView(m: MeasurementResponse): MeasurementView {
+  return {
+    id: m.id,
+    measuredOn: m.measured_on,
+    weightKg: m.weight_kg !== null && m.weight_kg !== undefined ? String(m.weight_kg) : null,
+    heightCm: m.height_cm !== null && m.height_cm !== undefined ? String(m.height_cm) : null,
+    waistCm: m.waist_cm !== null && m.waist_cm !== undefined ? String(m.waist_cm) : null,
+    hipCm: m.hip_cm !== null && m.hip_cm !== undefined ? String(m.hip_cm) : null,
+    bodyFatPct: m.body_fat_pct !== null && m.body_fat_pct !== undefined ? String(m.body_fat_pct) : null,
+    bmi: (m as any).bmi !== null && (m as any).bmi !== undefined ? String((m as any).bmi) : null,
+    waistHipRatio: (m as any).waist_hip_ratio !== null && (m as any).waist_hip_ratio !== undefined ? String((m as any).waist_hip_ratio) : null,
+    source: (m as any).source as 'practitioner' | 'client' | 'device',
+    isFlaggedImplausible: (m as any).is_flagged_implausible ?? false,
+    notes: (m as any).notes ?? null,
+    createdAt: m.measured_on, // using measured_on for createdAt if not available
+  }
+}
+
+function toConsultationNoteView(n: ConsultationNoteResponse): ConsultationNoteView {
+  return {
+    id: n.id,
+    noteDate: n.note_date,
+    body: n.body,
+    authorUserId: n.author_user_id,
+    createdAt: n.created_at,
+    updatedAt: n.updated_at,
+  }
+}
+
+function toClientDocumentView(d: ClientDocumentResponse): ClientDocumentView {
+  return {
+    id: d.id,
+    fileId: d.file_id,
+    documentType: d.document_type,
+    documentDate: d.document_date ?? null,
+    uploadedBy: d.uploaded_by as 'practitioner' | 'client' | 'system',
+    description: d.description ?? null,
+    createdAt: d.created_at,
+    archivedAt: d.archived_at ?? null,
   }
 }
 
@@ -112,6 +191,12 @@ export function ClientDetail() {
   // client record, which this hook does not own. See `useClientDetail.refresh`.
   const collaboration = useCollaboration(clientId, refresh)
   const timeline = useTimeline(clientId)
+  
+  const assessmentsData = useAssessments(clientId)
+  const measurementsData = useMeasurements(clientId)
+  const consultationNotesData = useConsultationNotes(clientId)
+  const documentsData = useDocuments(clientId)
+  
   const { session } = useCurrentSession()
 
   if (loading) {
@@ -189,6 +274,38 @@ export function ClientDetail() {
         loading={collaboration.loading}
         onToggle={(tagId, attached) => void collaboration.toggleTag(tagId, attached)}
         onCreate={(name, colour) => void collaboration.createAndAttachTag(name, colour)}
+      />
+
+      <ClinicalAssessmentPanel
+        assessments={assessmentsData.assessments.map(toAssessmentView)}
+        loading={assessmentsData.loading}
+        error={assessmentsData.error}
+      />
+
+      <ClinicalMeasurementPanel
+        measurements={measurementsData.measurements.map(toMeasurementView)}
+        loading={measurementsData.loading}
+        error={measurementsData.error}
+        busy={measurementsData.busy}
+        onAdd={(body) => void measurementsData.addMeasurement(body)}
+      />
+
+      <ClinicalConsultationNotesPanel
+        notes={consultationNotesData.notes.map(toConsultationNoteView)}
+        currentUserId={session?.user_id ?? ''}
+        isOwner={session?.role === 'owner'}
+        loading={consultationNotesData.loading}
+        error={consultationNotesData.error}
+        busy={consultationNotesData.busy}
+        onAdd={(date, body) => void consultationNotesData.addNote(date, body)}
+        onEdit={(id, body) => void consultationNotesData.editNote(id, body)}
+        onArchive={(id) => void consultationNotesData.archiveNote(id)}
+      />
+
+      <ClinicalDocumentsPanel
+        documents={documentsData.documents.map(toClientDocumentView)}
+        loading={documentsData.loading}
+        error={documentsData.error}
       />
 
       {/* 🔒 FR-M1-007 / FR-M3-020. `currentUserId` is what makes the edit
