@@ -11,6 +11,7 @@ from app.kernel.events import publish
 from app.kernel.nutrition import (
     PlanState,
     RenderStatus,
+    snapshot_content_hash,
 )
 from app.modules.nutrition.events import PlanVersionIssued
 from app.modules.nutrition.models import DietPlan, DietPlanVersion, PlanSnapshot
@@ -64,11 +65,15 @@ async def issue_plan_version(
     # Generate snapshot (denormalized JSON representing the plan in full)
     snapshot_doc = {"title": "Diet Plan", "version_number": version.version_number, "days": []}
 
+    # 🔒 DDR-12 — hashed here, from the document that is about to be persisted,
+    # so the stored hash can never describe a different document than the one
+    # stored beside it. The portal's cache validity rests on that being true.
     snapshot = PlanSnapshot(
         tenant_id=tenant_id,
         plan_version_id=version_id,
         document=snapshot_doc,
         document_schema_version=1,
+        content_hash=snapshot_content_hash(snapshot_doc),
         pdf_status=RenderStatus.pending,
     )
     session.add(snapshot)

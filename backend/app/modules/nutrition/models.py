@@ -510,9 +510,17 @@ class PlanSnapshot(Base):
     )
     document: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     document_schema_version: Mapped[int] = mapped_column(nullable=False)
+    #: 🔒 DDR-12 — SHA-256 over the canonical document. The client portal compares
+    #: it to decide whether its cached copy is still the plan that was issued
+    #: (FR-M7-011, EC-M7-03). Computed by ``kernel.nutrition.snapshot_content_hash``,
+    #: never by a caller, so two writers cannot disagree about what a plan hashes to.
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
     pdf_file_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("files.id"))
     pdf_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     pdf_status: Mapped[RenderStatus | None] = mapped_column(pg_enum(RenderStatus, "render_status"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()"), nullable=False
+    )
 
 
 class PlanSupplement(Base):
@@ -536,4 +544,8 @@ class PlanSupplement(Base):
     timing: Mapped[str | None] = mapped_column(Text)
     duration_days: Mapped[int | None] = mapped_column(Integer)
     notes: Mapped[str | None] = mapped_column(Text)
+    #: 🔒 DB §8.10 — the practitioner has fixed this supplement. Recalculation and
+    #: AI drafting exclude it from their mutable set, the same way they do a
+    #: locked item or a locked slot.
+    is_locked: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
     sort_order: Mapped[int] = mapped_column(nullable=False)
