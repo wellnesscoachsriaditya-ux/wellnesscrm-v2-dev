@@ -57,8 +57,7 @@ async def _seed_tenant_with_user(
     """Create a tenant and user, returning the user_id."""
     await connection.execute(  # type: ignore[union-attr]
         text(
-            "INSERT INTO tenants (id, name, slug, status) "
-            "VALUES (:id, :name, :slug, 'active')"
+            "INSERT INTO tenants (id, name, slug, status) " "VALUES (:id, :name, :slug, 'active')"
         ),
         {"id": tenant_id, "name": f"Clinical {tenant_id}", "slug": f"clin-{tenant_id}"},
     )
@@ -107,7 +106,7 @@ async def _seed_definition(
             "  (id, tenant_id, code, version, title, status, published_at, "
             "   schema, calculation_bindings) "
             "VALUES (:id, :tenant, :code, 1, :title, :status, "
-            "   CASE WHEN :status = 'published' THEN now() END, "
+            "   CASE WHEN CAST(:status AS text) = 'published' THEN now() END, "
             "   CAST(:schema AS jsonb), CAST(:bindings AS jsonb))"
         ),
         {
@@ -239,8 +238,10 @@ async def clinical_tenants(
                     )
                 # Platform definitions (tenant_id IS NULL) seeded by this test:
                 await conn.execute(
-                    text(f"DELETE FROM assessment_definitions WHERE tenant_id IS NULL "
-                         f"AND code LIKE 'test_%'")
+                    text(
+                        "DELETE FROM assessment_definitions WHERE tenant_id IS NULL "
+                        "AND code LIKE 'test_%'"
+                    )
                 )
                 await conn.execute(text("DELETE FROM tenants WHERE id = :id"), {"id": tid})
 
@@ -403,7 +404,7 @@ async def test_the_application_cannot_delete_a_definition(
 
 
 async def test_the_application_can_publish_a_definition(
-    migrator_engine: AsyncEngine, clinical_tenants: tuple
+    migrator_engine: AsyncEngine, app_engine: AsyncEngine, clinical_tenants: tuple
 ) -> None:
     """⚠️ The lifecycle columns must remain updatable — that is how publishing
     works.  Over-revoking would freeze every definition as a permanent draft.
@@ -417,7 +418,7 @@ async def test_the_application_can_publish_a_definition(
         draft_id = await _seed_definition(conn, tenant_id=tenant_a, status="draft")
 
     try:
-        async with migrator_engine.begin() as conn:
+        async with app_engine.begin() as conn:
             await scope_to(conn, tenant_a)
             # The app-user level grant allows UPDATE on (status, published_at)
             await conn.execute(
@@ -493,9 +494,7 @@ async def test_clinical_responses_are_isolated(
     assert count == 0
 
 
-async def test_measurements_are_isolated(
-    app_engine: AsyncEngine, seeded_clinical: dict
-) -> None:
+async def test_measurements_are_isolated(app_engine: AsyncEngine, seeded_clinical: dict) -> None:
     """Tenant B sees none of tenant A's measurements."""
     async with app_engine.connect() as conn:
         await scope_to(conn, seeded_clinical["tenant_b"])
@@ -534,9 +533,7 @@ async def test_measurement_privilege_is_absent(
     "table",
     ["assessment_responses", "client_nutrition_profile", "consultation_notes", "client_documents"],
 )
-async def test_clinical_record_delete_is_absent(
-    migrator_engine: AsyncEngine, table: str
-) -> None:
+async def test_clinical_record_delete_is_absent(migrator_engine: AsyncEngine, table: str) -> None:
     """DELETE is revoked on every clinical record table."""
     async with migrator_engine.connect() as conn:
         held = (
@@ -544,9 +541,9 @@ async def test_clinical_record_delete_is_absent(
                 text(f"SELECT has_table_privilege('app_user', '{table}', 'DELETE')"),
             )
         ).scalar()
-    assert held is False, (
-        f"app_user still holds DELETE on {table}. Migration 0016 must revoke it."
-    )
+    assert held is False, f"app_user still holds DELETE on {table}. Migration 0016 must revoke it."
+
+
 """
 Description: Integration test for the clinical workspace proving grants, policies and
 constraints against a live PostgreSQL. Asserts append-only measurements, definition
