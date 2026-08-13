@@ -348,4 +348,3 @@ async def test_superseding_previous_version(
             await session.execute(select(DietPlanVersion).where(DietPlanVersion.id == v2_id))
         ).scalar_one()
         assert v2.state == PlanState.issued
-

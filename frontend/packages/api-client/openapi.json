@@ -5898,6 +5898,60 @@
         ]
       }
     },
+    "/api/v1/app/nutrition/plans/{plan_id}/versions/{version_id}/issue": {
+      "post": {
+        "description": "Issue a draft plan, generating a snapshot and PDF.",
+        "operationId": "issueDietPlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Issuedietplan"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Issue Plan",
+        "tags": [
+          "nutrition_plans"
+        ]
+      }
+    },
     "/api/v1/app/tags": {
       "get": {
         "description": "Every live tag, alphabetical and case-insensitively ordered.",
