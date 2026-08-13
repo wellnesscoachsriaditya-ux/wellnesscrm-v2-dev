@@ -19,7 +19,6 @@ import { ClientSummary } from '../components/clients/ClientSummary'
 import { ClientTagsPanel, type TagView } from '../components/clients/ClientTagsPanel'
 import { ClientTimelinePanel, type TimelineEntryView } from '../components/clients/ClientTimelinePanel'
 import { EntitlementNotice } from '../components/clients/EntitlementNotice'
-import { EnquiryFormPanel } from '../components/clients/EnquiryFormPanel'
 import {
   ClinicalAssessmentPanel,
   type AssessmentView,
@@ -95,7 +94,7 @@ function toTimelineView(entry: TimelineEntry): TimelineEntryView {
     eventType: entry.event_type,
     occurredAt: entry.occurred_at,
     summary: entry.summary,
-    actorType: entry.actor_type as 'practitioner' | 'client' | 'system',
+    actorType: entry.actor_type,
     actorId: entry.actor_id,
   }
 }
@@ -105,7 +104,7 @@ function toAssessmentView(a: AssessmentSummary): AssessmentView {
     id: a.id,
     definitionCode: a.definition_code,
     definitionVersion: a.definition_version,
-    status: a.status as 'in_progress' | 'completed',
+    status: a.status,
     completedBy: a.completed_by ?? null,
     startedAt: a.started_at,
     completedAt: a.completed_at ?? null,
@@ -121,11 +120,11 @@ function toMeasurementView(m: MeasurementResponse): MeasurementView {
     waistCm: m.waist_cm !== null && m.waist_cm !== undefined ? String(m.waist_cm) : null,
     hipCm: m.hip_cm !== null && m.hip_cm !== undefined ? String(m.hip_cm) : null,
     bodyFatPct: m.body_fat_pct !== null && m.body_fat_pct !== undefined ? String(m.body_fat_pct) : null,
-    bmi: (m as any).bmi !== null && (m as any).bmi !== undefined ? String((m as any).bmi) : null,
-    waistHipRatio: (m as any).waist_hip_ratio !== null && (m as any).waist_hip_ratio !== undefined ? String((m as any).waist_hip_ratio) : null,
-    source: (m as any).source as 'practitioner' | 'client' | 'device',
-    isFlaggedImplausible: (m as any).is_flagged_implausible ?? false,
-    notes: (m as any).notes ?? null,
+    bmi: m.bmi !== null && m.bmi !== undefined ? String(m.bmi) : null,
+    waistHipRatio: m.waist_hip_ratio !== null && m.waist_hip_ratio !== undefined ? String(m.waist_hip_ratio) : null,
+    source: m.source,
+    isFlaggedImplausible: m.is_flagged_implausible ?? false,
+    notes: m.notes ?? null,
     createdAt: m.measured_on, // using measured_on for createdAt if not available
   }
 }

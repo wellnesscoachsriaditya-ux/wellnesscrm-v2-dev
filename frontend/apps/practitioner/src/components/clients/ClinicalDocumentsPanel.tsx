@@ -7,17 +7,13 @@
  * download action which will fetch a signed URL (ADR-12).
  */
 
-import { useState, useRef } from 'react'
 import {
   Badge,
   Button,
   Card,
   CardBody,
   CardHeader,
-  ConfirmDialog,
   EmptyState,
-  FormField,
-  Input,
   Spinner,
   Table,
   TableHead,
@@ -61,7 +57,6 @@ export function ClinicalDocumentsPanel({
   documents,
   loading = false,
   error = null,
-  busy = false,
 }: ClinicalDocumentsPanelProps) {
   // ⏳ Uploading is deferred to S3 Slice A where the file upload hook and signed URL flow exist.
   // This panel renders the list.

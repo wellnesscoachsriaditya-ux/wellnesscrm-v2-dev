@@ -108,7 +108,7 @@ async def _seed_definition(
             "   schema, calculation_bindings) "
             "VALUES (:id, :tenant, :code, 1, :title, :status, "
             "   CASE WHEN :status = 'published' THEN now() END, "
-            "   :schema, :bindings)"
+            "   CAST(:schema AS jsonb), CAST(:bindings AS jsonb))"
         ),
         {
             "id": definition_id,
@@ -357,7 +357,7 @@ async def test_the_application_cannot_rewrite_a_definition_schema(
         with pytest.raises((ProgrammingError, DBAPIError)) as raised:
             await conn.execute(
                 text(
-                    "UPDATE assessment_definitions SET schema = :schema "
+                    "UPDATE assessment_definitions SET schema = CAST(:schema AS jsonb) "
                     "WHERE id = :id"
                 ),
                 {
@@ -377,7 +377,7 @@ async def test_the_application_cannot_rewrite_definition_bindings(
         with pytest.raises((ProgrammingError, DBAPIError)) as raised:
             await conn.execute(
                 text(
-                    "UPDATE assessment_definitions SET calculation_bindings = :b "
+                    "UPDATE assessment_definitions SET calculation_bindings = CAST(:b AS jsonb) "
                     "WHERE id = :id"
                 ),
                 {

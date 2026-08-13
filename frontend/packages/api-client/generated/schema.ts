@@ -4,55 +4,7 @@
  */
 
 export interface paths {
-    "/api/v1/public/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Liveness probe
-         * @description Return 200 if the process is running.
-         *
-         *     🔒 Deliberately does nothing else. A liveness probe that touches the
-         *     database will fail during a transient database blip and cause the platform
-         *     to restart a perfectly healthy process — turning a brief outage into a
-         *     longer one.
-         */
-        get: operations["healthLiveness"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/health/ready": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Readiness probe
-         * @description Report whether the application can serve traffic.
-         *
-         *     Returns 503 when a *required* dependency is unavailable, so the platform
-         *     withholds traffic rather than serving errors.
-         */
-        get: operations["healthReadiness"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/auth/register": {
+    "/api/v1/app/auth/logout": {
         parameters: {
             query?: never;
             header?: never;
@@ -62,172 +14,15 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Register a practice
-         * @description Create a tenant and its owner (FR-M0-001).
+         * Sign out
+         * @description Revoke the current session (NFR-042).
          *
-         *     🔒 201 with the same body whether the address was free or already taken. The
-         *     difference is which email the address receives — confirmation, or a "someone
-         *     tried to register with your address" notice (API §2.2).
+         *     🔒 Authorized, unlike the other authentication routes: this acts on an
+         *     existing session, so it needs to know whose. The session id comes from the
+         *     verified token, never from the request body — accepting one would let any
+         *     authenticated caller log out any other.
          */
-        post: operations["authRegister"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/auth/verify-email": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Confirm an email address
-         * @description Redeem a verification token and sign the user in (FR-M0-002).
-         */
-        post: operations["authVerifyEmail"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Sign in
-         * @description 🔒 One error for every failure mode (NFR-043).
-         */
-        post: operations["authLogin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/auth/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Rotate the session
-         * @description 🔒 DDR-05 — rotate, and revoke the family on reuse.
-         *
-         *     Public because a caller with an expired access token must still be able to
-         *     renew; the refresh token is the credential being presented.
-         */
-        post: operations["authRefresh"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/auth/password-reset/request": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Request a password reset
-         * @description 🔒 202 with an identical body whether or not the address is known.
-         */
-        post: operations["authPasswordResetRequest"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/auth/password-reset/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Set a new password
-         * @description 🔒 Revokes every session for the account (NFR-042).
-         */
-        post: operations["authPasswordResetConfirm"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/portal/access/request": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Request a portal link
-         * @description 🔒 Self-service link re-request (EC-M7-01).
-         *
-         *     ⚠️ **On the critical path, not an error path.** With a 15–30 minute expiry, a
-         *     client opening a WhatsApp message an hour later *will* need a new link, and
-         *     this must never require the practitioner.
-         *
-         *     🔒 Always 202 with an identical body. Anything else makes this a
-         *     client-enumeration oracle against a practitioner's client list.
-         *
-         *     ⚠️ Issuing requires resolving an identifier to a client, which is the
-         *     `clients` module's data (S2). Until that module exists this endpoint
-         *     correctly acknowledges and sends nothing — the privacy-preserving response is
-         *     identical to the one it will give for an unknown identifier afterwards.
-         */
-        post: operations["portalAccessRequest"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/portal/access/redeem": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Redeem a portal link
-         * @description Exchange a magic link for a client session (FR-M0-005).
-         *
-         *     🔒 Single use and expiry are enforced by the redeeming UPDATE (DDR-04), so
-         *     two taps on the same link cannot both open a session.
-         */
-        post: operations["portalAccessRedeem"];
+        post: operations["authLogout"];
         delete?: never;
         options?: never;
         head?: never;
@@ -256,31 +51,6 @@ export interface paths {
         get: operations["authCurrentSession"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/auth/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Sign out
-         * @description Revoke the current session (NFR-042).
-         *
-         *     🔒 Authorized, unlike the other authentication routes: this acts on an
-         *     existing session, so it needs to know whose. The session id comes from the
-         *     verified token, never from the request body — accepting one would let any
-         *     authenticated caller log out any other.
-         */
-        post: operations["authLogout"];
         delete?: never;
         options?: never;
         head?: never;
@@ -330,6 +100,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/app/clients/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reassign several clients to one practitioner
+         * @description Hand a departing practitioner's caseload over — EC-M1-04.
+         *
+         *     🔒 Owner-only, and **all or nothing**: one transaction, so a failure partway
+         *     rolls the whole batch back. A half-completed handover would split a caseload
+         *     between two practitioners with no record of the intent, and the practitioner
+         *     could not tell whether re-running it was safe.
+         *
+         *     ⚠️ ``moved`` may be lower than the number submitted — clients already owned
+         *     by the target are skipped, which in an overlapping selection is correct
+         *     rather than an error.
+         *
+         *     ⚠️ Registered *before* ``/{client_id}`` matters not at all here, because
+         *     FastAPI matches literal path segments ahead of parameters regardless of
+         *     declaration order across routers. Named anyway because a reader will wonder.
+         */
+        post: operations["clientsBulkReassign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/sort-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The orderings the list supports
+         * @description The sort vocabulary, so the UI does not hardcode it.
+         *
+         *     🔒 Every value here is index-backed (migration 0013). Serving the list from
+         *     the server is what keeps a dropdown from offering an ordering the database
+         *     would have to sort in memory — API §6.3's allowlist, expressed as data.
+         */
+        get: operations["clientsSortOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/app/clients/{client_id}": {
         parameters: {
             query?: never;
@@ -362,7 +189,39 @@ export interface paths {
         patch: operations["clientsUpdate"];
         trace?: never;
     };
-    "/api/v1/app/clients/{client_id}/stage": {
+    "/api/v1/app/clients/{client_id}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who can see this client
+         * @description Grants on this client — EC-M0-04.
+         *
+         *     ``include_revoked`` surfaces the history EC-M1-04 requires be retained. Off
+         *     by default: a list mixing live and revoked rows invites a caller to forget
+         *     the difference.
+         */
+        get: operations["clientAccessList"];
+        put?: never;
+        /**
+         * Grant a colleague access to this client
+         * @description Share a client with a colleague — EC-M0-04.
+         *
+         *     🔒 Owner-only, twice over: the action's role gate and the check inside
+         *     ``assignments.grant_access``. Deliberately redundant, because a future route
+         *     that forgot the declaration would otherwise widen access silently.
+         */
+        post: operations["clientAccessGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/access/{user_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -371,20 +230,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        post?: never;
         /**
-         * Change a client's lifecycle stage
-         * @description Move a client between stages — ADR-A06, FR-M1-015.
+         * Remove a colleague's access
+         * @description Withdraw access — EC-M1-04.
          *
-         *     🔒 Returns **402** with the limit, the usage, the plan and the upgrade path
-         *     when the move enters ``active`` at the plan's ceiling (FR-M1-002). The error
-         *     envelope carries everything the UI needs to explain the refusal, so there is
-         *     no second request to make.
-         *
-         *     🔒 AC-M1-003 — converting a lead keeps the record, its identifier and all its
-         *     prior history, because this changes a column rather than moving a row.
+         *     🔒 Stamps ``revoked_at`` rather than deleting: "who could see this client
+         *     last March" is a question a DPDP access request can ask, and a deleted row
+         *     cannot answer it.
          */
-        post: operations["clientsChangeStage"];
-        delete?: never;
+        delete: operations["clientAccessRevoke"];
         options?: never;
         head?: never;
         patch?: never;
@@ -417,7 +272,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/app/clients/{client_id}/restore": {
+    "/api/v1/app/clients/{client_id}/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every assessment for a client
+         * @description Newest first — FR-M3-007, AC-M3-007.
+         *
+         *     🔒 Includes in-progress administrations: EC-M3-01 requires the practitioner
+         *     to see completion status, which means seeing the unfinished row rather than
+         *     inferring it from an absence.
+         */
+        get: operations["assessmentList"];
+        put?: never;
+        /**
+         * Start or resume an assessment
+         * @description Resume the open assessment, or begin one — FR-M3-004/005/007.
+         *
+         *     🔒 **Resume is the default.** A client who leaves and returns gets their
+         *     answers back (AC-M3-001); a *new* administration is deliberate, because
+         *     FR-M3-007 keeps each one separately and an accidental one fragments the
+         *     history.
+         *
+         *     ⚠️ ``restart=true`` is how a repeat assessment is taken. It leaves any open
+         *     response untouched rather than closing it — an abandoned draft is evidence of
+         *     an abandonment (EC-M3-01), not something to tidy away.
+         */
+        post: operations["assessmentStartOrResume"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/assessments/{response_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One administration, under its own version
+         * @description FR-M3-003, FR-M3-008, AC-M3-003.
+         *
+         *     🔒 **Returns the definition the response was captured under**, not the
+         *     current one. That pairing is the whole of AC-M3-003: publish v2, and a v1
+         *     response still renders correctly because its structure travels with it.
+         */
+        get: operations["assessmentRead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Save progress
+         * @description Continuous save — FR-M3-005, AC-M3-001.
+         *
+         *     ⚠️ **Validation issues do not block the write.** They come back so the form
+         *     can show them; only submit refuses. A save that rejected a half-typed number
+         *     would lose the section around it.
+         */
+        patch: operations["assessmentSaveProgress"];
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/assessments/{response_id}/complete": {
         parameters: {
             query?: never;
             header?: never;
@@ -427,16 +351,197 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Restore an archived client
-         * @description Bring an archived client back — EC-M1-02, AC-M1-007.
+         * Complete an assessment
+         * @description Finish, project and record — FR-M3-004, DDR-08, API §7.3.
          *
-         *     🔒 Returns them to the stage they were archived at. A returning client is
-         *     reactivated in place; there is never a second record.
+         *     🔒 Three writes in one transaction: the completion, the DDR-08 projection
+         *     into ``client_nutrition_profile``, and a ``measurements`` row for the weight
+         *     the form captured. The timeline entry follows from the published event.
          *
-         *     🔒 Returns **402** when the restored stage is ``active`` and the plan is at
-         *     its ceiling (EC-M1-06) — archiving frees a slot, so restoring takes one back.
+         *     🔒 **Clinical sections are not required** (FR-M3-006, AC-M3-002). A refusal
+         *     here names the *non-clinical* fields that are missing, and nothing else.
+         *
+         *     ⚠️ ``derived`` is read back **after** the submit rather than computed from the
+         *     request: the weight became a `measurements` row inside
+         *     ``submit_response``, and deriving from the answer document instead would
+         *     produce a BMI that disagreed with the trend chart's first point.
          */
-        post: operations["clientsRestore"];
+        post: operations["assessmentComplete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/consultation-notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A client's consultation notes
+         * @description Newest first — FR-M3-018.
+         */
+        get: operations["consultationNoteList"];
+        put?: never;
+        /**
+         * Record a consultation note
+         * @description FR-M3-018.
+         */
+        post: operations["consultationNoteCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/consultation-notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a consultation note
+         * @description 🔒 Author-only, including against the owner — FR-M3-020.
+         *
+         *     The edit is recorded in the audit log by the pipeline, which is the other
+         *     half of FR-M3-020.
+         */
+        patch: operations["consultationNoteEdit"];
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/consultation-notes/{note_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a consultation note
+         * @description Author, or the owner on their behalf. Never deleted — the grant revokes it.
+         */
+        post: operations["consultationNoteArchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A client's documents
+         * @description Newest report first — FR-M3-024.
+         */
+        get: operations["clientDocumentList"];
+        put?: never;
+        /**
+         * Attach an uploaded document
+         * @description FR-M3-024.
+         */
+        post: operations["clientDocumentAttach"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/documents/{document_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a document
+         * @description Detach from the active list. The bytes go with erasure, not with this.
+         */
+        post: operations["clientDocumentArchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/documents/{document_id}/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A short-lived URL for a document
+         * @description FR-M3-026, FR-M0-038, NFR-035.
+         *
+         *     🔒 **Its own audited action**, not part of `read`. A signed URL outlives the
+         *     request and leaks through logs, history and screenshots, so "who obtained the
+         *     bytes of this lab report" has to be answerable separately from "who listed
+         *     the documents".
+         *
+         *     ⚠️ ``authorize_download`` is passed in rather than imported by the module
+         *     (R5) — the port is ``kernel.storage.DownloadAuthorizer`` and this router is
+         *     the entry point permitted to supply it.
+         */
+        get: operations["clientDocumentUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A client's measurement trend
+         * @description Newest first — FR-M3-014, AC-M3-004.
+         *
+         *     ⚠️ **Every row by default, including same-date duplicates.** EC-M3-05 keeps
+         *     both a practitioner's and a client's value for one date; ``preferred_only``
+         *     applies the display rule without deleting anything, which is what a chart
+         *     wants and an audit does not.
+         */
+        get: operations["measurementList"];
+        put?: never;
+        /**
+         * Record a measurement
+         * @description FR-M3-011, FR-M3-013, EC-M3-02.
+         *
+         *     🔒 An implausible value comes back as a 422 carrying
+         *     ``details.requires_confirmation``; the UI confirms and resends with
+         *     ``confirm_implausible``. The row is then stored **and flagged**, because a
+         *     real 180 kg client exists and refusing to record them is useless exactly when
+         *     the record matters most.
+         */
+        post: operations["measurementRecord"];
         delete?: never;
         options?: never;
         head?: never;
@@ -507,6 +612,110 @@ export interface paths {
         patch: operations["clientNotesUpdate"];
         trace?: never;
     };
+    "/api/v1/app/clients/{client_id}/nutrition-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The typed projection of the latest assessment
+         * @description DDR-08's read side — what planning will actually use.
+         *
+         *     ⚠️ ``null`` when no assessment has been completed. That is a real state, not
+         *     an error: a client added by hand has no profile until somebody fills the form
+         *     in, and a 404 would make "not yet assessed" indistinguishable from "no such
+         *     client".
+         */
+        get: operations["nutritionProfileRead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reassign the owning practitioner
+         * @description Move a client to a different owning practitioner — EC-M1-04.
+         *
+         *     ⚠️ **One client at a time.** EC-M1-04 describes reassigning a departing
+         *     practitioner's caseload in bulk; that needs a selection UI and an answer for
+         *     what happens when 40 of 50 succeed. Slice E owns it, alongside the list that
+         *     would drive the selection.
+         */
+        post: operations["clientOwnerReassign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore an archived client
+         * @description Bring an archived client back — EC-M1-02, AC-M1-007.
+         *
+         *     🔒 Returns them to the stage they were archived at. A returning client is
+         *     reactivated in place; there is never a second record.
+         *
+         *     🔒 Returns **402** when the restored stage is ``active`` and the plan is at
+         *     its ceiling (EC-M1-06) — archiving frees a slot, so restoring takes one back.
+         */
+        post: operations["clientsRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change a client's lifecycle stage
+         * @description Move a client between stages — ADR-A06, FR-M1-015.
+         *
+         *     🔒 Returns **402** with the limit, the usage, the plan and the upgrade path
+         *     when the move enters ``active`` at the plan's ceiling (FR-M1-002). The error
+         *     envelope carries everything the UI needs to explain the refusal, so there is
+         *     no second request to make.
+         *
+         *     🔒 AC-M1-003 — converting a lead keeps the record, its identifier and all its
+         *     prior history, because this changes a column rather than moving a row.
+         */
+        post: operations["clientsChangeStage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/app/clients/{client_id}/tags": {
         parameters: {
             query?: never;
@@ -551,139 +760,6 @@ export interface paths {
          *     than deleted precisely because *it* records a decision.
          */
         delete: operations["clientTagsDetach"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/clients/{client_id}/access": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Who can see this client
-         * @description Grants on this client — EC-M0-04.
-         *
-         *     ``include_revoked`` surfaces the history EC-M1-04 requires be retained. Off
-         *     by default: a list mixing live and revoked rows invites a caller to forget
-         *     the difference.
-         */
-        get: operations["clientAccessList"];
-        put?: never;
-        /**
-         * Grant a colleague access to this client
-         * @description Share a client with a colleague — EC-M0-04.
-         *
-         *     🔒 Owner-only, twice over: the action's role gate and the check inside
-         *     ``assignments.grant_access``. Deliberately redundant, because a future route
-         *     that forgot the declaration would otherwise widen access silently.
-         */
-        post: operations["clientAccessGrant"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/clients/{client_id}/access/{user_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Remove a colleague's access
-         * @description Withdraw access — EC-M1-04.
-         *
-         *     🔒 Stamps ``revoked_at`` rather than deleting: "who could see this client
-         *     last March" is a question a DPDP access request can ask, and a deleted row
-         *     cannot answer it.
-         */
-        delete: operations["clientAccessRevoke"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/clients/{client_id}/owner": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reassign the owning practitioner
-         * @description Move a client to a different owning practitioner — EC-M1-04.
-         *
-         *     ⚠️ **One client at a time.** EC-M1-04 describes reassigning a departing
-         *     practitioner's caseload in bulk; that needs a selection UI and an answer for
-         *     what happens when 40 of 50 succeed. Slice E owns it, alongside the list that
-         *     would drive the selection.
-         */
-        post: operations["clientOwnerReassign"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/tags": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List the tenant's tags
-         * @description Every live tag, alphabetical and case-insensitively ordered.
-         */
-        get: operations["tagsList"];
-        put?: never;
-        /**
-         * Create a tag
-         * @description Define a tag — FR-M1-008.
-         *
-         *     🔒 Refuses a duplicate case-insensitively: a practitioner with "PCOS" who
-         *     types "pcos" means the tag they already have, and a second one would split
-         *     their caseload across two labels that look identical in a filter.
-         */
-        post: operations["tagsCreate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/tags/{tag_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Retire a tag
-         * @description Retire a tag — a soft delete.
-         *
-         *     ⚠️ Leaves its applications in place, so a tag retired by mistake can be
-         *     brought back with its clients intact. The name is released for reuse, because
-         *     ``uq_tags__tenant_name`` is partial on the archive flag.
-         */
-        delete: operations["tagsArchive"];
         options?: never;
         head?: never;
         patch?: never;
@@ -742,63 +818,6 @@ export interface paths {
         get: operations["clientTimelineFilters"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/clients/sort-options": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * The orderings the list supports
-         * @description The sort vocabulary, so the UI does not hardcode it.
-         *
-         *     🔒 Every value here is index-backed (migration 0013). Serving the list from
-         *     the server is what keeps a dropdown from offering an ordering the database
-         *     would have to sort in memory — API §6.3's allowlist, expressed as data.
-         */
-        get: operations["clientsSortOptions"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/clients/reassign": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reassign several clients to one practitioner
-         * @description Hand a departing practitioner's caseload over — EC-M1-04.
-         *
-         *     🔒 Owner-only, and **all or nothing**: one transaction, so a failure partway
-         *     rolls the whole batch back. A half-completed handover would split a caseload
-         *     between two practitioners with no record of the intent, and the practitioner
-         *     could not tell whether re-running it was safe.
-         *
-         *     ⚠️ ``moved`` may be lower than the number submitted — clients already owned
-         *     by the target are skipped, which in an overlapping selection is correct
-         *     rather than an error.
-         *
-         *     ⚠️ Registered *before* ``/{client_id}`` matters not at all here, because
-         *     FastAPI matches literal path segments ahead of parameters regardless of
-         *     declaration order across routers. Named anyway because a reader will wonder.
-         */
-        post: operations["clientsBulkReassign"];
         delete?: never;
         options?: never;
         head?: never;
@@ -950,6 +969,185 @@ export interface paths {
         patch: operations["enquiryFormsUpdate"];
         trace?: never;
     };
+    "/api/v1/app/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tenant's tags
+         * @description Every live tag, alphabetical and case-insensitively ordered.
+         */
+        get: operations["tagsList"];
+        put?: never;
+        /**
+         * Create a tag
+         * @description Define a tag — FR-M1-008.
+         *
+         *     🔒 Refuses a duplicate case-insensitively: a practitioner with "PCOS" who
+         *     types "pcos" means the tag they already have, and a second one would split
+         *     their caseload across two labels that look identical in a filter.
+         */
+        post: operations["tagsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Retire a tag
+         * @description Retire a tag — a soft delete.
+         *
+         *     ⚠️ Leaves its applications in place, so a tag retired by mistake can be
+         *     brought back with its clients intact. The name is released for reuse, because
+         *     ``uq_tags__tenant_name`` is partial on the archive flag.
+         */
+        delete: operations["tagsArchive"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in
+         * @description 🔒 One error for every failure mode (NFR-043).
+         */
+        post: operations["authLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a new password
+         * @description 🔒 Revokes every session for the account (NFR-042).
+         */
+        post: operations["authPasswordResetConfirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/password-reset/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a password reset
+         * @description 🔒 202 with an identical body whether or not the address is known.
+         */
+        post: operations["authPasswordResetRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate the session
+         * @description 🔒 DDR-05 — rotate, and revoke the family on reuse.
+         *
+         *     Public because a caller with an expired access token must still be able to
+         *     renew; the refresh token is the credential being presented.
+         */
+        post: operations["authRefresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register a practice
+         * @description Create a tenant and its owner (FR-M0-001).
+         *
+         *     🔒 201 with the same body whether the address was free or already taken. The
+         *     difference is which email the address receives — confirmation, or a "someone
+         *     tried to register with your address" notice (API §2.2).
+         */
+        post: operations["authRegister"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm an email address
+         * @description Redeem a verification token and sign the user in (FR-M0-002).
+         */
+        post: operations["authVerifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/forms/{tenant_slug}": {
         parameters: {
             query?: never;
@@ -1008,7 +1206,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/app/clients/{client_id}/assessments": {
+    "/api/v1/public/health": {
         parameters: {
             query?: never;
             header?: never;
@@ -1016,36 +1214,24 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Every assessment for a client
-         * @description Newest first — FR-M3-007, AC-M3-007.
+         * Liveness probe
+         * @description Return 200 if the process is running.
          *
-         *     🔒 Includes in-progress administrations: EC-M3-01 requires the practitioner
-         *     to see completion status, which means seeing the unfinished row rather than
-         *     inferring it from an absence.
+         *     🔒 Deliberately does nothing else. A liveness probe that touches the
+         *     database will fail during a transient database blip and cause the platform
+         *     to restart a perfectly healthy process — turning a brief outage into a
+         *     longer one.
          */
-        get: operations["assessmentList"];
+        get: operations["healthLiveness"];
         put?: never;
-        /**
-         * Start or resume an assessment
-         * @description Resume the open assessment, or begin one — FR-M3-004/005/007.
-         *
-         *     🔒 **Resume is the default.** A client who leaves and returns gets their
-         *     answers back (AC-M3-001); a *new* administration is deliberate, because
-         *     FR-M3-007 keeps each one separately and an accidental one fragments the
-         *     history.
-         *
-         *     ⚠️ ``restart=true`` is how a repeat assessment is taken. It leaves any open
-         *     response untouched rather than closing it — an abandoned draft is evidence of
-         *     an abandonment (EC-M3-01), not something to tidy away.
-         */
-        post: operations["assessmentStartOrResume"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/app/clients/{client_id}/assessments/{response_id}": {
+    "/api/v1/public/health/ready": {
         parameters: {
             query?: never;
             header?: never;
@@ -1053,31 +1239,22 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * One administration, under its own version
-         * @description FR-M3-003, FR-M3-008, AC-M3-003.
+         * Readiness probe
+         * @description Report whether the application can serve traffic.
          *
-         *     🔒 **Returns the definition the response was captured under**, not the
-         *     current one. That pairing is the whole of AC-M3-003: publish v2, and a v1
-         *     response still renders correctly because its structure travels with it.
+         *     Returns 503 when a *required* dependency is unavailable, so the platform
+         *     withholds traffic rather than serving errors.
          */
-        get: operations["assessmentRead"];
+        get: operations["healthReadiness"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /**
-         * Save progress
-         * @description Continuous save — FR-M3-005, AC-M3-001.
-         *
-         *     ⚠️ **Validation issues do not block the write.** They come back so the form
-         *     can show them; only submit refuses. A save that rejected a half-typed number
-         *     would lose the section around it.
-         */
-        patch: operations["assessmentSaveProgress"];
+        patch?: never;
         trace?: never;
     };
-    "/api/v1/app/clients/{client_id}/assessments/{response_id}/complete": {
+    "/api/v1/public/portal/access/redeem": {
         parameters: {
             query?: never;
             header?: never;
@@ -1087,136 +1264,20 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Complete an assessment
-         * @description Finish, project and record — FR-M3-004, DDR-08, API §7.3.
+         * Redeem a portal link
+         * @description Exchange a magic link for a client session (FR-M0-005).
          *
-         *     🔒 Three writes in one transaction: the completion, the DDR-08 projection
-         *     into ``client_nutrition_profile``, and a ``measurements`` row for the weight
-         *     the form captured. The timeline entry follows from the published event.
-         *
-         *     🔒 **Clinical sections are not required** (FR-M3-006, AC-M3-002). A refusal
-         *     here names the *non-clinical* fields that are missing, and nothing else.
-         *
-         *     ⚠️ ``derived`` is read back **after** the submit rather than computed from the
-         *     request: the weight became a `measurements` row inside
-         *     ``submit_response``, and deriving from the answer document instead would
-         *     produce a BMI that disagreed with the trend chart's first point.
+         *     🔒 Single use and expiry are enforced by the redeeming UPDATE (DDR-04), so
+         *     two taps on the same link cannot both open a session.
          */
-        post: operations["assessmentComplete"];
+        post: operations["portalAccessRedeem"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/app/clients/{client_id}/nutrition-profile": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * The typed projection of the latest assessment
-         * @description DDR-08's read side — what planning will actually use.
-         *
-         *     ⚠️ ``null`` when no assessment has been completed. That is a real state, not
-         *     an error: a client added by hand has no profile until somebody fills the form
-         *     in, and a 404 would make "not yet assessed" indistinguishable from "no such
-         *     client".
-         */
-        get: operations["nutritionProfileRead"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/clients/{client_id}/measurements": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * A client's measurement trend
-         * @description Newest first — FR-M3-014, AC-M3-004.
-         *
-         *     ⚠️ **Every row by default, including same-date duplicates.** EC-M3-05 keeps
-         *     both a practitioner's and a client's value for one date; ``preferred_only``
-         *     applies the display rule without deleting anything, which is what a chart
-         *     wants and an audit does not.
-         */
-        get: operations["measurementList"];
-        put?: never;
-        /**
-         * Record a measurement
-         * @description FR-M3-011, FR-M3-013, EC-M3-02.
-         *
-         *     🔒 An implausible value comes back as a 422 carrying
-         *     ``details.requires_confirmation``; the UI confirms and resends with
-         *     ``confirm_implausible``. The row is then stored **and flagged**, because a
-         *     real 180 kg client exists and refusing to record them is useless exactly when
-         *     the record matters most.
-         */
-        post: operations["measurementRecord"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/clients/{client_id}/consultation-notes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * A client's consultation notes
-         * @description Newest first — FR-M3-018.
-         */
-        get: operations["consultationNoteList"];
-        put?: never;
-        /**
-         * Record a consultation note
-         * @description FR-M3-018.
-         */
-        post: operations["consultationNoteCreate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/clients/{client_id}/consultation-notes/{note_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Edit a consultation note
-         * @description 🔒 Author-only, including against the owner — FR-M3-020.
-         *
-         *     The edit is recorded in the audit log by the pipeline, which is the other
-         *     half of FR-M3-020.
-         */
-        patch: operations["consultationNoteEdit"];
-        trace?: never;
-    };
-    "/api/v1/app/clients/{client_id}/consultation-notes/{note_id}/archive": {
+    "/api/v1/public/portal/access/request": {
         parameters: {
             query?: never;
             header?: never;
@@ -1226,83 +1287,22 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Archive a consultation note
-         * @description Author, or the owner on their behalf. Never deleted — the grant revokes it.
-         */
-        post: operations["consultationNoteArchive"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/clients/{client_id}/documents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * A client's documents
-         * @description Newest report first — FR-M3-024.
-         */
-        get: operations["clientDocumentList"];
-        put?: never;
-        /**
-         * Attach an uploaded document
-         * @description FR-M3-024.
-         */
-        post: operations["clientDocumentAttach"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/clients/{client_id}/documents/{document_id}/url": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * A short-lived URL for a document
-         * @description FR-M3-026, FR-M0-038, NFR-035.
+         * Request a portal link
+         * @description 🔒 Self-service link re-request (EC-M7-01).
          *
-         *     🔒 **Its own audited action**, not part of `read`. A signed URL outlives the
-         *     request and leaks through logs, history and screenshots, so "who obtained the
-         *     bytes of this lab report" has to be answerable separately from "who listed
-         *     the documents".
+         *     ⚠️ **On the critical path, not an error path.** With a 15–30 minute expiry, a
+         *     client opening a WhatsApp message an hour later *will* need a new link, and
+         *     this must never require the practitioner.
          *
-         *     ⚠️ ``authorize_download`` is passed in rather than imported by the module
-         *     (R5) — the port is ``kernel.storage.DownloadAuthorizer`` and this router is
-         *     the entry point permitted to supply it.
+         *     🔒 Always 202 with an identical body. Anything else makes this a
+         *     client-enumeration oracle against a practitioner's client list.
+         *
+         *     ⚠️ Issuing requires resolving an identifier to a client, which is the
+         *     `clients` module's data (S2). Until that module exists this endpoint
+         *     correctly acknowledges and sends nothing — the privacy-preserving response is
+         *     identical to the one it will give for an unknown identifier afterwards.
          */
-        get: operations["clientDocumentUrl"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/app/clients/{client_id}/documents/{document_id}/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Archive a document
-         * @description Detach from the active list. The bytes go with erasure, not with this.
-         */
-        post: operations["clientDocumentArchive"];
+        post: operations["portalAccessRequest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1379,8 +1379,8 @@ export interface components {
          */
         AssessmentCompletionResponse: {
             assessment: components["schemas"]["AssessmentResponseBody"];
-            nutrition_profile: components["schemas"]["NutritionProfileResponse"] | null;
             derived: components["schemas"]["DerivedMetricsResponse"];
+            nutrition_profile: components["schemas"]["NutritionProfileResponse"] | null;
         };
         /**
          * AssessmentResponseBody
@@ -1391,32 +1391,32 @@ export interface components {
          *     planning" is decided by the projection, not by how many boxes were filled.
          */
         AssessmentResponseBody: {
+            /** Answers */
+            answers: Record<string, never>;
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /** Completed At */
+            completed_at: string | null;
+            completed_by: components["schemas"]["ActorType"] | null;
+            /** Completed Sections */
+            completed_sections: string[];
+            /** Completion Percent */
+            completion_percent: string;
+            definition: components["schemas"]["DefinitionResponse"];
             /**
              * Id
              * Format: uuid
              */
             id: string;
             /**
-             * Client Id
-             * Format: uuid
-             */
-            client_id: string;
-            definition: components["schemas"]["DefinitionResponse"];
-            /** Answers */
-            answers: Record<string, never>;
-            status: components["schemas"]["ResponseStatus"];
-            /** Completed Sections */
-            completed_sections: string[];
-            completed_by: components["schemas"]["ActorType"] | null;
-            /** Completion Percent */
-            completion_percent: string;
-            /**
              * Started At
              * Format: date-time
              */
             started_at: string;
-            /** Completed At */
-            completed_at: string | null;
+            status: components["schemas"]["ResponseStatus"];
             /**
              * Updated At
              * Format: date-time
@@ -1432,24 +1432,24 @@ export interface components {
          *     that is rendered as five rows.
          */
         AssessmentSummary: {
+            /** Completed At */
+            completed_at: string | null;
+            completed_by: components["schemas"]["ActorType"] | null;
+            /** Definition Code */
+            definition_code: string;
+            /** Definition Version */
+            definition_version: number;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** Definition Code */
-            definition_code: string;
-            /** Definition Version */
-            definition_version: number;
-            status: components["schemas"]["ResponseStatus"];
-            completed_by: components["schemas"]["ActorType"] | null;
             /**
              * Started At
              * Format: date-time
              */
             started_at: string;
-            /** Completed At */
-            completed_at: string | null;
+            status: components["schemas"]["ResponseStatus"];
         };
         /**
          * AttachDocumentRequest
@@ -1460,17 +1460,17 @@ export interface components {
          *     any bytes moved, which is the only moment refusing is free.
          */
         AttachDocumentRequest: {
+            /** Description */
+            description?: string | null;
+            /** Document Date */
+            document_date?: string | null;
+            /** Document Type */
+            document_type: string;
             /**
              * File Id
              * Format: uuid
              */
             file_id: string;
-            /** Document Type */
-            document_type: string;
-            /** Document Date */
-            document_date?: string | null;
-            /** Description */
-            description?: string | null;
         };
         /**
          * BulkReassignRequest
@@ -1508,70 +1508,70 @@ export interface components {
          *     NFR-011 budgets the whole interaction at three steps.
          */
         ClientCreateRequest: {
+            /** City */
+            city?: string | null;
+            /** Date Of Birth */
+            date_of_birth?: string | null;
+            dietary_class?: components["schemas"]["DietaryClass"] | null;
+            /** Email */
+            email?: string | null;
             /** Full Name */
             full_name: string;
             /** Mobile */
             mobile?: string | null;
-            /** Email */
-            email?: string | null;
+            /** Owner User Id */
+            owner_user_id?: string | null;
+            /**
+             * Preferred Language
+             * @default en
+             */
+            preferred_language: string;
+            sex?: components["schemas"]["SexType"] | null;
+            /** Source */
+            source?: string | null;
+            /** Source Detail */
+            source_detail?: string | null;
             /**
              * Stage
              * @default lead
              * @enum {string}
              */
             stage: "lead" | "contacted" | "consultation_scheduled" | "active" | "paused" | "churned";
-            /** Date Of Birth */
-            date_of_birth?: string | null;
-            sex?: components["schemas"]["SexType"] | null;
-            /** City */
-            city?: string | null;
-            /**
-             * Preferred Language
-             * @default en
-             */
-            preferred_language: string;
-            /** Source */
-            source?: string | null;
-            /** Source Detail */
-            source_detail?: string | null;
-            dietary_class?: components["schemas"]["DietaryClass"] | null;
-            /** Owner User Id */
-            owner_user_id?: string | null;
         };
         /**
          * ClientDocumentResponse
          * @description A document's metadata. The bytes are fetched separately (FR-M0-038).
          */
         ClientDocumentResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
+            /** Archived At */
+            archived_at: string | null;
             /**
              * Client Id
              * Format: uuid
              */
             client_id: string;
             /**
-             * File Id
-             * Format: uuid
-             */
-            file_id: string;
-            /** Document Type */
-            document_type: string;
-            /** Document Date */
-            document_date: string | null;
-            uploaded_by: components["schemas"]["ActorType"];
-            /** Description */
-            description: string | null;
-            /** Archived At */
-            archived_at: string | null;
-            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Description */
+            description: string | null;
+            /** Document Date */
+            document_date: string | null;
+            /** Document Type */
+            document_type: string;
+            /**
+             * File Id
+             * Format: uuid
+             */
+            file_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            uploaded_by: components["schemas"]["ActorType"];
         };
         /**
          * ClientListItemResponse
@@ -1588,37 +1588,37 @@ export interface components {
          *     a field that is permanently ``false`` would be worse than its absence.
          */
         ClientListItemResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Full Name */
-            full_name: string;
-            stage: components["schemas"]["ClientStage"];
-            /** Mobile */
-            mobile: string | null;
-            /** Email */
-            email: string | null;
-            /** City */
-            city: string | null;
-            dietary_class: components["schemas"]["DietaryClass"] | null;
-            /**
-             * Owner User Id
-             * Format: uuid
-             */
-            owner_user_id: string;
-            /** Owner Name */
-            owner_name: string | null;
-            /** Tags */
-            tags: components["schemas"]["ClientTagSummary"][];
             /** Archived At */
             archived_at: string | null;
+            /** City */
+            city: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            dietary_class: components["schemas"]["DietaryClass"] | null;
+            /** Email */
+            email: string | null;
+            /** Full Name */
+            full_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Mobile */
+            mobile: string | null;
+            /** Owner Name */
+            owner_name: string | null;
+            /**
+             * Owner User Id
+             * Format: uuid
+             */
+            owner_user_id: string;
+            stage: components["schemas"]["ClientStage"];
+            /** Tags */
+            tags: components["schemas"]["ClientTagSummary"][];
             /**
              * Updated At
              * Format: date-time
@@ -1639,10 +1639,10 @@ export interface components {
          * @description Where the next page resumes — API §6.1.
          */
         ClientPageInfo: {
-            /** Next Cursor */
-            next_cursor?: string | null;
             /** Has More */
             has_more: boolean;
+            /** Next Cursor */
+            next_cursor?: string | null;
             /** Total */
             total?: number | null;
         };
@@ -1655,66 +1655,66 @@ export interface components {
          *     ``model_fields_set`` rather than treating ``None`` as "unchanged".
          */
         ClientPatch: {
+            /** City */
+            city?: string | null;
+            /** Date Of Birth */
+            date_of_birth?: string | null;
+            dietary_class?: components["schemas"]["DietaryClass"] | null;
+            /** Email */
+            email?: string | null;
             /** Full Name */
             full_name?: string | null;
             /** Mobile */
             mobile?: string | null;
-            /** Email */
-            email?: string | null;
-            /** Date Of Birth */
-            date_of_birth?: string | null;
-            sex?: components["schemas"]["SexType"] | null;
-            /** City */
-            city?: string | null;
             /** Preferred Language */
             preferred_language?: string | null;
-            dietary_class?: components["schemas"]["DietaryClass"] | null;
+            sex?: components["schemas"]["SexType"] | null;
         };
         /**
          * ClientResponse
          * @description One client, as the practitioner realm sees it — API §7.1.
          */
         ClientResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Full Name */
-            full_name: string;
-            stage: components["schemas"]["ClientStage"];
-            /** Mobile */
-            mobile: string | null;
-            /** Email */
-            email: string | null;
-            /** Date Of Birth */
-            date_of_birth: string | null;
-            sex: components["schemas"]["SexType"] | null;
-            /** City */
-            city: string | null;
-            /** Preferred Language */
-            preferred_language: string;
-            /** Source */
-            source: string | null;
-            /** Source Detail */
-            source_detail: string | null;
-            /**
-             * Owner User Id
-             * Format: uuid
-             */
-            owner_user_id: string;
-            dietary_class: components["schemas"]["DietaryClass"] | null;
-            /** Is Minor */
-            is_minor: boolean | null;
             /** Activated At */
             activated_at: string | null;
             /** Archived At */
             archived_at: string | null;
+            /** City */
+            city: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Date Of Birth */
+            date_of_birth: string | null;
+            dietary_class: components["schemas"]["DietaryClass"] | null;
+            /** Email */
+            email: string | null;
+            /** Full Name */
+            full_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Minor */
+            is_minor: boolean | null;
+            /** Mobile */
+            mobile: string | null;
+            /**
+             * Owner User Id
+             * Format: uuid
+             */
+            owner_user_id: string;
+            /** Preferred Language */
+            preferred_language: string;
+            sex: components["schemas"]["SexType"] | null;
+            /** Source */
+            source: string | null;
+            /** Source Detail */
+            source_detail: string | null;
+            stage: components["schemas"]["ClientStage"];
             /**
              * Updated At
              * Format: date-time
@@ -1751,9 +1751,9 @@ export interface components {
          *     reach a dropdown as ``undefined`` instead of failing the build.
          */
         ClientSortOption: {
-            value: components["schemas"]["ClientSort"];
             /** Label */
             label: string;
+            value: components["schemas"]["ClientSort"];
         };
         /**
          * ClientStage
@@ -1776,6 +1776,8 @@ export interface components {
          *     than matching the prose.
          */
         ClientTagSummary: {
+            /** Colour */
+            colour: string;
             /**
              * Id
              * Format: uuid
@@ -1783,8 +1785,6 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            /** Colour */
-            colour: string;
         };
         /**
          * ConsultationNoteResponse
@@ -1796,35 +1796,35 @@ export interface components {
          *     condition somebody could get wrong (FR-M3-021, AC-M3-006).
          */
         ConsultationNoteResponse: {
+            /** Archived At */
+            archived_at: string | null;
             /**
-             * Id
+             * Author User Id
              * Format: uuid
              */
-            id: string;
+            author_user_id: string;
+            /** Body */
+            body: string;
             /**
              * Client Id
              * Format: uuid
              */
             client_id: string;
             /**
-             * Note Date
-             * Format: date
-             */
-            note_date: string;
-            /** Body */
-            body: string;
-            /**
-             * Author User Id
-             * Format: uuid
-             */
-            author_user_id: string;
-            /** Archived At */
-            archived_at: string | null;
-            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Note Date
+             * Format: date
+             */
+            note_date: string;
             /**
              * Updated At
              * Format: date-time
@@ -1843,42 +1843,44 @@ export interface components {
          *     (FR-M0-017) — neither needs a name.
          */
         CurrentSessionResponse: {
-            /**
-             * User Id
-             * Format: uuid
-             */
-            user_id: string;
+            role: components["schemas"]["UserRole"];
             /**
              * Tenant Id
              * Format: uuid
              */
             tenant_id: string;
-            role: components["schemas"]["UserRole"];
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
         };
         /**
          * DefinitionResponse
          * @description The structure an administration was captured under — FR-M3-003.
          */
         DefinitionResponse: {
+            /** Code */
+            code: string;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** Code */
-            code: string;
-            /** Version */
-            version: number;
-            /** Title */
-            title: string;
             /** Sections */
             sections: components["schemas"]["SectionResponse"][];
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
         };
         /**
          * DependencyStatus
          * @description State of one dependency.
          */
         DependencyStatus: {
+            /** Detail */
+            detail?: string | null;
             /** Name */
             name: string;
             /**
@@ -1886,8 +1888,6 @@ export interface components {
              * @enum {string}
              */
             status: "ok" | "degraded" | "unavailable" | "not_configured";
-            /** Detail */
-            detail?: string | null;
         };
         /**
          * DerivedMetricsResponse
@@ -1912,12 +1912,12 @@ export interface components {
             bmi_band?: null;
             /** Bmi Band Source */
             bmi_band_source?: null;
-            /** Waist Hip Ratio */
-            waist_hip_ratio: string | null;
-            /** Estimated Energy Kcal */
-            estimated_energy_kcal?: null;
             /** Calculation Method */
             calculation_method?: null;
+            /** Estimated Energy Kcal */
+            estimated_energy_kcal?: null;
+            /** Waist Hip Ratio */
+            waist_hip_ratio: string | null;
         };
         /**
          * DietaryClass
@@ -1959,12 +1959,12 @@ export interface components {
          *     loses their intro text.
          */
         EnquiryFormPatch: {
-            /** Title */
-            title?: string | null;
             /** Intro Text */
             intro_text?: string | null;
             /** Is Active */
             is_active?: boolean | null;
+            /** Title */
+            title?: string | null;
         };
         /**
          * EnquiryFormResponse
@@ -1972,30 +1972,30 @@ export interface components {
          */
         EnquiryFormResponse: {
             /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Slug */
-            slug: string;
-            /** Title */
-            title: string;
-            /** Intro Text */
-            intro_text: string | null;
-            /** Is Active */
-            is_active: boolean;
-            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
             /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Intro Text */
+            intro_text: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Share Url */
+            share_url: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /**
              * Updated At
              * Format: date-time
              */
             updated_at: string;
-            /** Share Url */
-            share_url: string;
         };
         /**
          * EnquiryListItemResponse
@@ -2010,68 +2010,68 @@ export interface components {
          *     the number deciding who gets called next would differ per device.
          */
         EnquiryListItemResponse: {
+            /** Age Hours */
+            age_hours: number;
+            /** Client Id */
+            client_id: string | null;
+            /** Client Owner User Id */
+            client_owner_user_id: string | null;
+            client_stage: components["schemas"]["ClientStage"] | null;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** Client Id */
-            client_id: string | null;
-            /** Submitted Name */
-            submitted_name: string;
-            /** Submitted Mobile */
-            submitted_mobile: string | null;
-            /** Submitted Email */
-            submitted_email: string | null;
+            /** Is Ageing */
+            is_ageing: boolean;
+            /** Is Duplicate Of Existing */
+            is_duplicate_of_existing: boolean;
+            /** Owner Name */
+            owner_name: string | null;
             /** Primary Goal */
             primary_goal: string;
+            /** Responded At */
+            responded_at: string | null;
+            /** Responded By User Id */
+            responded_by_user_id: string | null;
             source: components["schemas"]["LeadSource"] | null;
             /** Source Detail */
             source_detail: string | null;
-            /** Is Duplicate Of Existing */
-            is_duplicate_of_existing: boolean;
             /**
              * Submitted At
              * Format: date-time
              */
             submitted_at: string;
-            /** Responded At */
-            responded_at: string | null;
-            /** Responded By User Id */
-            responded_by_user_id: string | null;
-            /** Age Hours */
-            age_hours: number;
-            /** Is Ageing */
-            is_ageing: boolean;
-            client_stage: components["schemas"]["ClientStage"] | null;
-            /** Client Owner User Id */
-            client_owner_user_id: string | null;
-            /** Owner Name */
-            owner_name: string | null;
+            /** Submitted Email */
+            submitted_email: string | null;
+            /** Submitted Mobile */
+            submitted_mobile: string | null;
+            /** Submitted Name */
+            submitted_name: string;
         };
         /**
          * EnquiryListResponse
          * @description API §5.1's collection envelope.
          */
         EnquiryListResponse: {
-            /** Items */
-            items: components["schemas"]["EnquiryListItemResponse"][];
-            page: components["schemas"]["EnquiryPageInfo"];
             /**
              * Ageing After Hours
              * @default 24
              */
             ageing_after_hours: number;
+            /** Items */
+            items: components["schemas"]["EnquiryListItemResponse"][];
+            page: components["schemas"]["EnquiryPageInfo"];
         };
         /**
          * EnquiryPageInfo
          * @description Where the next page resumes — API §6.1.
          */
         EnquiryPageInfo: {
-            /** Next Cursor */
-            next_cursor?: string | null;
             /** Has More */
             has_more: boolean;
+            /** Next Cursor */
+            next_cursor?: string | null;
             /** Total */
             total?: number | null;
         };
@@ -2085,18 +2085,10 @@ export interface components {
          *     would hit, and the CHECK is what holds if both are bypassed.
          */
         EnquirySubmitRequest: {
-            /** Full Name */
-            full_name: string;
-            /** Primary Goal */
-            primary_goal: string;
-            /** Mobile */
-            mobile?: string | null;
-            /** Email */
-            email?: string | null;
-            /** Source */
-            source?: string | null;
-            /** Source Detail */
-            source_detail?: string | null;
+            /** Captcha Token */
+            captcha_token?: string | null;
+            /** Company */
+            company?: string | null;
             /**
              * Consent Granted
              * @default false
@@ -2104,12 +2096,20 @@ export interface components {
             consent_granted: boolean;
             /** Consent Notice Id */
             consent_notice_id?: string | null;
-            /** Company */
-            company?: string | null;
             /** Elapsed Seconds */
             elapsed_seconds?: number | null;
-            /** Captcha Token */
-            captcha_token?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Full Name */
+            full_name: string;
+            /** Mobile */
+            mobile?: string | null;
+            /** Primary Goal */
+            primary_goal: string;
+            /** Source */
+            source?: string | null;
+            /** Source Detail */
+            source_detail?: string | null;
         };
         /**
          * EnquirySubmitResponse
@@ -2121,13 +2121,13 @@ export interface components {
          *     cannot vary on the match (EC-M2-02).
          */
         EnquirySubmitResponse: {
+            /** Message */
+            message: string;
             /**
              * Submitted
              * @default true
              */
             submitted: boolean;
-            /** Message */
-            message: string;
         };
         /**
          * FieldResponse
@@ -2138,21 +2138,21 @@ export interface components {
          *     endpoint returns, and no release is needed on either side.
          */
         FieldResponse: {
-            /** Id */
-            id: string;
-            type: components["schemas"]["FieldType"];
-            /** Label */
-            label: string;
-            /** Required */
-            required: boolean;
-            /** Options */
-            options: string[];
-            /** Min Value */
-            min_value: string | null;
-            /** Max Value */
-            max_value: string | null;
             /** Help Text */
             help_text: string | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Max Value */
+            max_value: string | null;
+            /** Min Value */
+            min_value: string | null;
+            /** Options */
+            options: string[];
+            /** Required */
+            required: boolean;
+            type: components["schemas"]["FieldType"];
         };
         /**
          * FieldType
@@ -2198,24 +2198,24 @@ export interface components {
          */
         GrantResponse: {
             /**
-             * User Id
-             * Format: uuid
+             * Granted At
+             * Format: date-time
              */
-            user_id: string;
+            granted_at: string;
             /**
              * Granted By User Id
              * Format: uuid
              */
             granted_by_user_id: string;
-            /**
-             * Granted At
-             * Format: date-time
-             */
-            granted_at: string;
-            /** Revoked At */
-            revoked_at: string | null;
             /** Is Live */
             is_live: boolean;
+            /** Revoked At */
+            revoked_at: string | null;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2281,40 +2281,40 @@ export interface components {
          *     "overweight" is a judgement we are not yet entitled to publish.
          */
         MeasurementResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Measured On
-             * Format: date
-             */
-            measured_on: string;
-            /** Weight Kg */
-            weight_kg: string | null;
-            /** Height Cm */
-            height_cm: string | null;
-            /** Waist Cm */
-            waist_cm: string | null;
-            /** Hip Cm */
-            hip_cm: string | null;
-            /** Body Fat Pct */
-            body_fat_pct: string | null;
             /** Bmi */
             bmi: string | null;
-            /** Waist Hip Ratio */
-            waist_hip_ratio: string | null;
-            source: components["schemas"]["MeasurementSource"];
-            /** Is Flagged Implausible */
-            is_flagged_implausible: boolean;
-            /** Notes */
-            notes: string | null;
+            /** Body Fat Pct */
+            body_fat_pct: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Height Cm */
+            height_cm: string | null;
+            /** Hip Cm */
+            hip_cm: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Flagged Implausible */
+            is_flagged_implausible: boolean;
+            /**
+             * Measured On
+             * Format: date
+             */
+            measured_on: string;
+            /** Notes */
+            notes: string | null;
+            source: components["schemas"]["MeasurementSource"];
+            /** Waist Cm */
+            waist_cm: string | null;
+            /** Waist Hip Ratio */
+            waist_hip_ratio: string | null;
+            /** Weight Kg */
+            weight_kg: string | null;
         };
         /**
          * MeasurementSource
@@ -2332,27 +2332,27 @@ export interface components {
          */
         NoteResponse: {
             /**
-             * Id
+             * Author User Id
              * Format: uuid
              */
-            id: string;
+            author_user_id: string;
+            /** Body */
+            body: string;
             /**
              * Client Id
              * Format: uuid
              */
             client_id: string;
-            /** Body */
-            body: string;
-            /**
-             * Author User Id
-             * Format: uuid
-             */
-            author_user_id: string;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /**
              * Updated At
              * Format: date-time
@@ -2374,39 +2374,39 @@ export interface components {
          *     planning" is a question about *this*, not about section counts.
          */
         NutritionProfileResponse: {
+            activity_level: components["schemas"]["ActivityLevel"] | null;
+            /** Allergen Food Ids */
+            allergen_food_ids: string[];
             /** Date Of Birth */
             date_of_birth: string | null;
-            sex: components["schemas"]["SexType"] | null;
-            /** Height Cm */
-            height_cm: string | null;
-            activity_level: components["schemas"]["ActivityLevel"] | null;
-            primary_goal: components["schemas"]["GoalType"] | null;
             dietary_class: components["schemas"]["DietaryClass"] | null;
+            /** Excluded Food Ids */
+            excluded_food_ids: string[];
             /** Excludes Onion Garlic */
             excludes_onion_garlic: boolean;
             /** Excludes Root Vegetables */
             excludes_root_vegetables: boolean;
-            /** Allergen Food Ids */
-            allergen_food_ids: string[];
-            /** Excluded Food Ids */
-            excluded_food_ids: string[];
             /** Fasting Patterns */
             fasting_patterns: string[];
-            /** Staple Grain */
-            staple_grain: string | null;
+            /** Height Cm */
+            height_cm: string | null;
+            primary_goal: components["schemas"]["GoalType"] | null;
             /** Region Cuisine */
             region_cuisine: string | null;
+            sex: components["schemas"]["SexType"] | null;
             /** Source Response Id */
             source_response_id: string | null;
+            /** Staple Grain */
+            staple_grain: string | null;
             /** Updated At */
             updated_at: string | null;
         };
         /** PasswordResetConfirm */
         PasswordResetConfirm: {
-            /** Token */
-            token: string;
             /** Password */
             password: string;
+            /** Token */
+            token: string;
         };
         /** PasswordResetRequest */
         PasswordResetRequest: {
@@ -2430,27 +2430,27 @@ export interface components {
         PortalSessionResponse: {
             /** Access Token */
             access_token: string;
+            /** Expires In */
+            expires_in: number;
             /** Refresh Token */
             refresh_token: string;
+            target: components["schemas"]["PortalTarget"];
             /**
              * Token Type
              * @default Bearer
              * @constant
              */
             token_type: "Bearer";
-            /** Expires In */
-            expires_in: number;
-            target: components["schemas"]["PortalTarget"];
         };
         /**
          * PortalTarget
          * @description 🔒 FR-M7-013 — redemption and navigation in one hop.
          */
         PortalTarget: {
-            /** Type */
-            type: string;
             /** Ref */
             ref?: string | null;
+            /** Type */
+            type: string;
         };
         /**
          * PublicConsentNotice
@@ -2461,17 +2461,17 @@ export interface components {
          *     elsewhere could not evidence that they saw it.
          */
         PublicConsentNotice: {
+            /** Body */
+            body: string;
             /**
              * Notice Id
              * Format: uuid
              */
             notice_id: string;
-            /** Version */
-            version: string;
             /** Title */
             title: string;
-            /** Body */
-            body: string;
+            /** Version */
+            version: string;
         };
         /**
          * PublicFormResponse
@@ -2484,18 +2484,18 @@ export interface components {
          *     internal identifier.
          */
         PublicFormResponse: {
+            consent: components["schemas"]["PublicConsentNotice"];
             /**
              * Form Id
              * Format: uuid
              */
             form_id: string;
+            /** Intro Text */
+            intro_text: string | null;
             /** Practice Name */
             practice_name: string;
             /** Title */
             title: string;
-            /** Intro Text */
-            intro_text: string | null;
-            consent: components["schemas"]["PublicConsentNotice"];
         };
         /**
          * ReadinessResponse
@@ -2506,10 +2506,10 @@ export interface components {
          *     console (FR-M11-009) without gating the check.
          */
         ReadinessResponse: {
-            /** Ready */
-            ready: boolean;
             /** Dependencies */
             dependencies?: components["schemas"]["DependencyStatus"][];
+            /** Ready */
+            ready: boolean;
         };
         /** ReassignRequest */
         ReassignRequest: {
@@ -2530,28 +2530,28 @@ export interface components {
          *     in another.
          */
         RecordMeasurementRequest: {
-            /**
-             * Measured On
-             * Format: date
-             */
-            measured_on: string;
-            /** Weight Kg */
-            weight_kg?: number | string | null;
-            /** Height Cm */
-            height_cm?: number | string | null;
-            /** Waist Cm */
-            waist_cm?: number | string | null;
-            /** Hip Cm */
-            hip_cm?: number | string | null;
             /** Body Fat Pct */
             body_fat_pct?: number | string | null;
-            /** Notes */
-            notes?: string | null;
             /**
              * Confirm Implausible
              * @default false
              */
             confirm_implausible: boolean;
+            /** Height Cm */
+            height_cm?: number | string | null;
+            /** Hip Cm */
+            hip_cm?: number | string | null;
+            /**
+             * Measured On
+             * Format: date
+             */
+            measured_on: string;
+            /** Notes */
+            notes?: string | null;
+            /** Waist Cm */
+            waist_cm?: number | string | null;
+            /** Weight Kg */
+            weight_kg?: number | string | null;
         };
         /** RefreshRequest */
         RefreshRequest: {
@@ -2563,21 +2563,21 @@ export interface components {
          * @description API §2.2. 🔒 Password rules are length plus a denylist, not composition.
          */
         RegisterRequest: {
+            /** Accepted Terms Version */
+            accepted_terms_version: string;
             /**
              * Email
              * Format: email
              */
             email: string;
-            /** Password */
-            password: string;
             /** Full Name */
             full_name: string;
-            /** Practice Name */
-            practice_name: string;
             /** Mobile */
             mobile?: string | null;
-            /** Accepted Terms Version */
-            accepted_terms_version: string;
+            /** Password */
+            password: string;
+            /** Practice Name */
+            practice_name: string;
         };
         /**
          * RegisterResponse
@@ -2629,9 +2629,9 @@ export interface components {
          *     FR-M3-005 exists to prevent.
          */
         SaveAnswersResponse: {
-            response: components["schemas"]["AssessmentResponseBody"];
             /** Issues */
             issues: components["schemas"]["AnswerIssueResponse"][];
+            response: components["schemas"]["AssessmentResponseBody"];
         };
         /**
          * SectionResponse
@@ -2641,16 +2641,16 @@ export interface components {
          *     and requires nothing in them. AC-M3-002 is a coach skipping every one.
          */
         SectionResponse: {
-            /** Id */
-            id: string;
-            /** Title */
-            title: string;
             /** Description */
             description: string | null;
-            /** Is Clinical */
-            is_clinical: boolean;
             /** Fields */
             fields: components["schemas"]["FieldResponse"][];
+            /** Id */
+            id: string;
+            /** Is Clinical */
+            is_clinical: boolean;
+            /** Title */
+            title: string;
         };
         /**
          * SexType
@@ -2675,13 +2675,13 @@ export interface components {
          * @description `POST /app/clients/{id}/stage` — API §7.1.
          */
         StageChangeRequest: {
+            /** Reason */
+            reason?: string | null;
             /**
              * To Stage
              * @enum {string}
              */
             to_stage: "lead" | "contacted" | "consultation_scheduled" | "active" | "paused" | "churned";
-            /** Reason */
-            reason?: string | null;
         };
         /**
          * TagColour
@@ -2707,13 +2707,14 @@ export interface components {
         TagColour: "slate" | "red" | "amber" | "green" | "teal" | "blue" | "violet" | "pink";
         /** TagCreateRequest */
         TagCreateRequest: {
-            /** Name */
-            name: string;
             /** @default slate */
             colour: components["schemas"]["TagColour"];
+            /** Name */
+            name: string;
         };
         /** TagResponse */
         TagResponse: {
+            colour: components["schemas"]["TagColour"];
             /**
              * Id
              * Format: uuid
@@ -2721,7 +2722,6 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            colour: components["schemas"]["TagColour"];
         };
         /**
          * TimelineActorType
@@ -2748,26 +2748,26 @@ export interface components {
          *     resolve it, rather than the API pre-checking six tables on every read.
          */
         TimelineEntryResponse: {
+            /** Actor Id */
+            actor_id: string | null;
+            actor_type: components["schemas"]["TimelineActorType"];
+            event_type: components["schemas"]["TimelineEventType"];
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            event_type: components["schemas"]["TimelineEventType"];
             /**
              * Occurred At
              * Format: date-time
              */
             occurred_at: string;
-            /** Summary */
-            summary: string;
             /** Source Module */
             source_module: string;
             /** Source Record Id */
             source_record_id: string | null;
-            actor_type: components["schemas"]["TimelineActorType"];
-            /** Actor Id */
-            actor_id: string | null;
+            /** Summary */
+            summary: string;
         };
         /**
          * TimelineEventType
@@ -2810,10 +2810,10 @@ export interface components {
          *     — nobody needs to know a client has 431 events.
          */
         TimelinePageInfo: {
-            /** Next Cursor */
-            next_cursor?: string | null;
             /** Has More */
             has_more: boolean;
+            /** Next Cursor */
+            next_cursor?: string | null;
         };
         /**
          * TimelineResponse
@@ -2835,6 +2835,8 @@ export interface components {
         TokenResponse: {
             /** Access Token */
             access_token: string;
+            /** Expires In */
+            expires_in: number;
             /** Refresh Token */
             refresh_token: string;
             /**
@@ -2843,8 +2845,6 @@ export interface components {
              * @constant
              */
             token_type: "Bearer";
-            /** Expires In */
-            expires_in: number;
         };
         /**
          * UserRole
@@ -2868,13 +2868,13 @@ export interface components {
         };
         /** WriteNoteRequest */
         WriteNoteRequest: {
+            /** Body */
+            body: string;
             /**
              * Note Date
              * Format: date
              */
             note_date: string;
-            /** Body */
-            body: string;
         };
     };
     responses: never;
@@ -2885,7 +2885,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    healthLiveness: {
+    authLogout: {
         parameters: {
             query?: never;
             header?: never;
@@ -2893,215 +2893,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LivenessResponse"];
-                };
-            };
-        };
-    };
-    healthReadiness: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadinessResponse"];
-                };
-            };
-        };
-    };
-    authRegister: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegisterResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    authVerifyEmail: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VerifyEmailRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    authLogin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    authRefresh: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RefreshRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    authPasswordResetRequest: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PasswordResetRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AcceptedResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    authPasswordResetConfirm: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PasswordResetConfirm"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             204: {
@@ -3109,81 +2900,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    portalAccessRequest: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PortalAccessRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AcceptedResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    portalAccessRedeem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PortalRedeemRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PortalSessionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };
@@ -3204,24 +2920,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CurrentSessionResponse"];
                 };
-            };
-        };
-    };
-    authLogout: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -3303,6 +3001,59 @@ export interface operations {
             };
         };
     };
+    clientsBulkReassign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkReassignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkReassignResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsSortOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientSortOption"][];
+                };
+            };
+        };
+    };
     clientsRead: {
         parameters: {
             query?: never;
@@ -3359,328 +3110,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ClientResponse"];
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clientsChangeStage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                client_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StageChangeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClientResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clientsArchive: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                client_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClientResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clientsRestore: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                client_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClientResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clientNotesList: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                client_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NoteResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clientNotesCreate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                client_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NoteWriteRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NoteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clientNotesArchive: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                client_id: string;
-                note_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NoteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clientNotesUpdate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                client_id: string;
-                note_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NoteWriteRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NoteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clientTagsList: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                client_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TagResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clientTagsAttach: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                client_id: string;
-                tag_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clientTagsDetach: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                client_id: string;
-                tag_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3793,161 +3222,7 @@ export interface operations {
             };
         };
     };
-    clientOwnerReassign: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                client_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReassignRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    tagsList: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TagResponse"][];
-                };
-            };
-        };
-    };
-    tagsCreate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TagCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TagResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    tagsArchive: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                tag_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TagResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clientTimelineList: {
-        parameters: {
-            query?: {
-                /** @description Filter by event type. Repeat for OR — API §6.2. */
-                event_type?: components["schemas"]["TimelineEventType"][] | null;
-                /** @description Opaque, from a previous page. */
-                cursor?: string | null;
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                client_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TimelineResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clientTimelineFilters: {
+    clientsArchive: {
         parameters: {
             query?: never;
             header?: never;
@@ -3964,280 +3239,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TimelineFilterResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clientsSortOptions: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClientSortOption"][];
-                };
-            };
-        };
-    };
-    clientsBulkReassign: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BulkReassignRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BulkReassignResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    enquiriesList: {
-        parameters: {
-            query?: {
-                /** @description FR-M2-009 attribution. */
-                source?: components["schemas"]["LeadSource"] | null;
-                /** @description Opaque, from a previous page. */
-                cursor?: string | null;
-                limit?: number;
-                /** @description Adds a COUNT — API §6.1. */
-                include_total?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnquiryListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    enquiriesNeedsResponse: {
-        parameters: {
-            query?: {
-                cursor?: string | null;
-                limit?: number;
-                include_total?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnquiryListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    enquiriesMarkResponded: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                submission_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    enquiryFormsList: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnquiryFormResponse"][];
-                };
-            };
-        };
-    };
-    enquiryFormsUpdate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                form_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnquiryFormPatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnquiryFormResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    publicEnquiryForm: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                tenant_slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicFormResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    publicEnquirySubmit: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                tenant_slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnquirySubmitRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnquirySubmitResponse"];
+                    "application/json": components["schemas"]["ClientResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4403,106 +3405,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssessmentCompletionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    nutritionProfileRead: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                client_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NutritionProfileResponse"] | null;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    measurementList: {
-        parameters: {
-            query?: {
-                /** @description One row per date, practitioner value winning — EC-M3-05. */
-                preferred_only?: boolean;
-            };
-            header?: never;
-            path: {
-                client_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MeasurementResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    measurementRecord: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                client_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RecordMeasurementRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MeasurementResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4718,6 +3620,38 @@ export interface operations {
             };
         };
     };
+    clientDocumentArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientDocumentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     clientDocumentUrl: {
         parameters: {
             query?: never;
@@ -4750,13 +3684,15 @@ export interface operations {
             };
         };
     };
-    clientDocumentArchive: {
+    measurementList: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description One row per date, practitioner value winning — EC-M3-05. */
+                preferred_only?: boolean;
+            };
             header?: never;
             path: {
                 client_id: string;
-                document_id: string;
             };
             cookie?: never;
         };
@@ -4768,7 +3704,1071 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClientDocumentResponse"];
+                    "application/json": components["schemas"]["MeasurementResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    measurementRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordMeasurementRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientNotesList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientNotesCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientNotesArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientNotesUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    nutritionProfileRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NutritionProfileResponse"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientOwnerReassign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsChangeStage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StageChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTagsList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTagsAttach: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTagsDetach: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTimelineList: {
+        parameters: {
+            query?: {
+                /** @description Filter by event type. Repeat for OR — API §6.2. */
+                event_type?: components["schemas"]["TimelineEventType"][] | null;
+                /** @description Opaque, from a previous page. */
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTimelineFilters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineFilterResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enquiriesList: {
+        parameters: {
+            query?: {
+                /** @description FR-M2-009 attribution. */
+                source?: components["schemas"]["LeadSource"] | null;
+                /** @description Opaque, from a previous page. */
+                cursor?: string | null;
+                limit?: number;
+                /** @description Adds a COUNT — API §6.1. */
+                include_total?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enquiriesNeedsResponse: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+                include_total?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enquiriesMarkResponded: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enquiryFormsList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryFormResponse"][];
+                };
+            };
+        };
+    };
+    enquiryFormsUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                form_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnquiryFormPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryFormResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tagsList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResponse"][];
+                };
+            };
+        };
+    };
+    tagsCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tagsArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authPasswordResetConfirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetConfirm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authPasswordResetRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authRegister: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisterResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authVerifyEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publicEnquiryForm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicFormResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publicEnquirySubmit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnquirySubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquirySubmitResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    healthLiveness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LivenessResponse"];
+                };
+            };
+        };
+    };
+    healthReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadinessResponse"];
+                };
+            };
+        };
+    };
+    portalAccessRedeem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalRedeemRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    portalAccessRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalAccessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptedResponse"];
                 };
             };
             /** @description Validation Error */
