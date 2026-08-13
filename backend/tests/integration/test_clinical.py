@@ -39,7 +39,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, ProgrammingError
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from tests.integration.conftest import scope_to
 
@@ -50,20 +50,20 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _seed_tenant_with_user(
-    connection: object,
+    connection: AsyncConnection,
     *,
     tenant_id: uuid.UUID,
 ) -> uuid.UUID:
     """Create a tenant and user, returning the user_id."""
-    await connection.execute(  # type: ignore[union-attr]
+    await connection.execute(
         text(
             "INSERT INTO tenants (id, name, slug, status) " "VALUES (:id, :name, :slug, 'active')"
         ),
         {"id": tenant_id, "name": f"Clinical {tenant_id}", "slug": f"clin-{tenant_id}"},
     )
-    await scope_to(connection, tenant_id)  # type: ignore[arg-type]
+    await scope_to(connection, tenant_id)
     user_id = uuid.uuid4()
-    await connection.execute(  # type: ignore[union-attr]
+    await connection.execute(
         text(
             "INSERT INTO users "
             "  (id, tenant_id, auth_subject_id, email, full_name, role, status) "
@@ -81,7 +81,7 @@ async def _seed_tenant_with_user(
 
 
 async def _seed_definition(
-    connection: object,
+    connection: AsyncConnection,
     *,
     tenant_id: uuid.UUID | None,
     status: str = "published",
@@ -100,7 +100,7 @@ async def _seed_definition(
         ]
     }
     bindings_doc: dict[str, str] = {}
-    await connection.execute(  # type: ignore[union-attr]
+    await connection.execute(
         text(
             "INSERT INTO assessment_definitions "
             "  (id, tenant_id, code, version, title, status, published_at, "
@@ -123,7 +123,7 @@ async def _seed_definition(
 
 
 async def _seed_response(
-    connection: object,
+    connection: AsyncConnection,
     *,
     tenant_id: uuid.UUID,
     client_id: uuid.UUID,
@@ -131,12 +131,12 @@ async def _seed_response(
 ) -> uuid.UUID:
     """Insert an assessment response, returning its id."""
     response_id = uuid.uuid4()
-    await connection.execute(  # type: ignore[union-attr]
+    await connection.execute(
         text(
             "INSERT INTO assessment_responses "
             "  (id, tenant_id, client_id, definition_id, answers, status, "
             "   completed_sections) "
-            "VALUES (:id, :tenant, :client, :definition, '{}', 'in_progress', '[]')"
+            "VALUES (:id, :tenant, :client, :definition, '{}', 'in_progress', CAST('{}' AS text[]))"
         ),
         {
             "id": response_id,
@@ -149,7 +149,7 @@ async def _seed_response(
 
 
 async def _seed_measurement(
-    connection: object,
+    connection: AsyncConnection,
     *,
     tenant_id: uuid.UUID,
     client_id: uuid.UUID,
@@ -157,7 +157,7 @@ async def _seed_measurement(
 ) -> uuid.UUID:
     """Insert a measurement row, returning its id."""
     measurement_id = uuid.uuid4()
-    await connection.execute(  # type: ignore[union-attr]
+    await connection.execute(
         text(
             "INSERT INTO measurements "
             "  (id, tenant_id, client_id, measured_on, weight_kg, source, "
@@ -176,7 +176,7 @@ async def _seed_measurement(
 
 
 async def _seed_note(
-    connection: object,
+    connection: AsyncConnection,
     *,
     tenant_id: uuid.UUID,
     client_id: uuid.UUID,
@@ -184,7 +184,7 @@ async def _seed_note(
 ) -> uuid.UUID:
     """Insert a consultation note, returning its id."""
     note_id = uuid.uuid4()
-    await connection.execute(  # type: ignore[union-attr]
+    await connection.execute(
         text(
             "INSERT INTO consultation_notes "
             "  (id, tenant_id, client_id, note_date, body, author_user_id) "
