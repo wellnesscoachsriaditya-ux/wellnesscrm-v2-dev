@@ -31,6 +31,7 @@ from types import FrameType
 from app.kernel.events import configure_deferred_enqueuer, deferred_job_types
 from app.kernel.jobs import verify_handlers_exist
 from app.modules.clients import register_subscribers
+from app.modules.nutrition import register_jobs as register_nutrition_jobs
 from app.platform.config import get_settings
 from app.platform.db import dispose_engine
 from app.platform.job_runner import JobRunner
@@ -169,6 +170,7 @@ async def main() -> None:
     # entry points is what makes "every event produces a row" true regardless of
     # which process published it. Idempotent by handler identity.
     register_subscribers()
+    register_nutrition_jobs()
 
     worker = Worker(poll_interval_seconds=settings.worker_poll_interval_seconds)
 

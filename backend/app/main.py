@@ -30,6 +30,7 @@ from app.modules.clients import (
     ClientRepositoryIntake,
     register_subscribers,
 )
+from app.modules.nutrition import register_jobs as register_nutrition_jobs
 from app.platform.audit import (
     LoggingAuditSink,
     SqlAlchemyAuditSink,
@@ -61,6 +62,7 @@ from app.platform.http.routers.discovery import router as discovery_router
 from app.platform.http.routers.enquiries import form_router as enquiry_form_router
 from app.platform.http.routers.enquiries import router as enquiries_router
 from app.platform.http.routers.nutrition import router as nutrition_router
+from app.platform.http.routers.nutrition_plans import router as nutrition_plans_router
 from app.platform.http.routers.public_forms import router as public_forms_router
 from app.platform.http.routers.timeline import router as timeline_router
 from app.platform.identity.authentication import resolve_actor as authenticate
@@ -195,6 +197,10 @@ def create_app() -> FastAPI:
     # production, at the moment the work was actually needed.
     verify_handlers_exist(deferred_job_types())
 
+    # DDR-06 — same reason as the worker process.
+    register_subscribers()
+    register_nutrition_jobs()
+
     app = FastAPI(
         title="WellnessCRM V2 API",
         version="0.1.0",
@@ -271,6 +277,10 @@ def create_app() -> FastAPI:
     # client (AC-M1-006) rather than merely against the action.
     app.include_router(clinical_router)
     app.include_router(nutrition_router)
+    app.include_router(nutrition_plans_router)
+
+    # Note: Portal (clients querying their own plans, logging metrics) will use a
+    # separate realm and router hierarchy in M6.
 
     # 🔒 ADR-05 — last, after every router is registered, so it sees the whole
     # route table. A route that declares no authorization action, declares one

@@ -27,3 +27,19 @@ NUTRITION_CATALOGUE_WRITE = register_action(
     policies=(),
     is_read=False,
 )
+
+NUTRITION_PLANS_READ = register_action(
+    "nutrition.plans.read",
+    roles=_PRACTITIONER,
+    data_scope=DataScope.TENANT_PII,
+    policies=(),
+    is_read=True,
+)
+
+NUTRITION_PLANS_WRITE = register_action(
+    "nutrition.plans.write",
+    roles=_PRACTITIONER,
+    data_scope=DataScope.TENANT_PII,
+    policies=(),
+    is_read=False,
+)

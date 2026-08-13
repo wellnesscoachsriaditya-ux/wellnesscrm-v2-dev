@@ -9,9 +9,11 @@ from app.kernel.nutrition import (
     FoodNutrientValue,
     FoodPortionValue,
     PortionConversionError,
+    RecalculationItem,
     calculate_composition,
     calculate_meal_composition,
     convert_to_grams,
+    recalculate_quantities,
 )
 
 
@@ -104,3 +106,140 @@ def test_calculate_meal_composition():
     assert result["energy_kcal"] == Decimal("395.0")
     assert result["protein_g"] == Decimal("14.5")
     assert result["carbs_g"] == Decimal("0")  # Default zero when omitted
+
+
+def test_recalculate_quantities_basic():
+    """Validates proportional redistribution with locked and unlocked items."""
+    item1 = uuid4()
+    item2 = uuid4()
+    item3 = uuid4()
+
+    items: list[RecalculationItem] = [
+        {
+            "item_id": item1,
+            "is_locked": True,
+            "quantity": Decimal("100"),
+            "energy_kcal": Decimal("500"),
+        },
+        {
+            "item_id": item2,
+            "is_locked": False,
+            "quantity": Decimal("100"),
+            "energy_kcal": Decimal("250"),
+        },
+        {
+            "item_id": item3,
+            "is_locked": False,
+            "quantity": Decimal("50"),
+            "energy_kcal": Decimal("250"),
+        },
+    ]
+
+    # Target is 1500 kcal. Locked consumes 500. Remaining is 1000.
+    # Unlocked current total is 500 kcal. Multiplier should be 2.0.
+    # Item 2 quantity -> 200, Item 3 quantity -> 100.
+
+    result = recalculate_quantities(Decimal("1500"), items)
+
+    assert result[item1] == Decimal("100")  # locked, byte-identical
+    assert result[item2] == Decimal("200")
+    assert result[item3] == Decimal("100")
+
+
+def test_recalculate_quantities_zero_unlocked():
+    """Handles case where there are no unlocked items."""
+    item1 = uuid4()
+    items: list[RecalculationItem] = [
+        {
+            "item_id": item1,
+            "is_locked": True,
+            "quantity": Decimal("100"),
+            "energy_kcal": Decimal("500"),
+        },
+    ]
+
+    result = recalculate_quantities(Decimal("1500"), items)
+    assert result[item1] == Decimal("100")
+
+
+def test_recalculate_quantities_negative_budget():
+    """Handles negative remaining budget (locked exceeds target) by scaling unlocked downwards."""
+    item1 = uuid4()
+    item2 = uuid4()
+
+    items: list[RecalculationItem] = [
+        {
+            "item_id": item1,
+            "is_locked": True,
+            "quantity": Decimal("100"),
+            "energy_kcal": Decimal("2000"),
+        },
+        {
+            "item_id": item2,
+            "is_locked": False,
+            "quantity": Decimal("100"),
+            "energy_kcal": Decimal("500"),
+        },
+    ]
+
+    # Target 1500. Locked 2000. Remaining -500.
+    # Unlocked current 500. Multiplier -1.
+    # Note: Mathematically correct, but practically might need bounds in actual system.
+    # Assuming pure math function scales exactly.
+    result = recalculate_quantities(Decimal("1500"), items)
+    assert result[item1] == Decimal("100")
+    assert result[item2] == Decimal("-100")
+
+
+def test_recalculate_quantities_exact_target():
+    """Scales exactly to target if already equal."""
+    item1 = uuid4()
+    item2 = uuid4()
+
+    items: list[RecalculationItem] = [
+        {
+            "item_id": item1,
+            "is_locked": True,
+            "quantity": Decimal("100"),
+            "energy_kcal": Decimal("500"),
+        },
+        {
+            "item_id": item2,
+            "is_locked": False,
+            "quantity": Decimal("100"),
+            "energy_kcal": Decimal("500"),
+        },
+    ]
+
+    # Target 1000. Locked 500. Remaining 500. Unlocked 500. Multiplier 1.0.
+    result = recalculate_quantities(Decimal("1000"), items)
+    assert result[item1] == Decimal("100")
+    assert result[item2] == Decimal("100")
+
+
+def test_recalculate_quantities_fractional():
+    """Handles fractional targets and items deterministically."""
+    item1 = uuid4()
+    item2 = uuid4()
+
+    items: list[RecalculationItem] = [
+        {
+            "item_id": item1,
+            "is_locked": True,
+            "quantity": Decimal("100.5"),
+            "energy_kcal": Decimal("500.25"),
+        },
+        {
+            "item_id": item2,
+            "is_locked": False,
+            "quantity": Decimal("25.0"),
+            "energy_kcal": Decimal("100.5"),
+        },
+    ]
+
+    # Target 1500. Locked 500.25. Remaining 999.75.
+    # Unlocked 100.5. Multiplier = 999.75 / 100.5 = 9.947761...
+    # Quantity = 25 * 9.947761... = 248.694029...
+    result = recalculate_quantities(Decimal("1500"), items)
+    assert result[item1] == Decimal("100.5")
+    assert abs(result[item2] - Decimal("248.6940298507462686567164179")) < Decimal("0.0001")

@@ -5,8 +5,29 @@ Duplicating this logic in the application layer or frontend is an architectural 
 """
 
 from decimal import Decimal
+from enum import Enum
 from typing import TypedDict
 from uuid import UUID
+
+
+class PlanState(str, Enum):
+    draft = "draft"
+    issued = "issued"
+    superseded = "superseded"
+    discarded = "discarded"
+
+
+class PlanOrigin(str, Enum):
+    manual = "manual"
+    template = "template"
+    ai_draft = "ai_draft"
+    revision = "revision"
+
+
+class RenderStatus(str, Enum):
+    pending = "pending"
+    ready = "ready"
+    failed = "failed"
 
 
 class MacroTotals(TypedDict):
@@ -33,6 +54,19 @@ class PortionConversionError(ValueError):
     """Raised when a portion cannot be converted to grams."""
 
     pass
+
+
+class LockViolationError(ValueError):
+    """Raised when an operation attempts to alter a locked item or breaks lock constraints."""
+
+    pass
+
+
+class RecalculationItem(TypedDict):
+    item_id: UUID
+    is_locked: bool
+    quantity: Decimal
+    energy_kcal: Decimal
 
 
 # A sentinel UUID for "grams" to allow fallback.
@@ -147,3 +181,43 @@ def calculate_meal_composition(
         totals["fibre_g"] += item_totals["fibre_g"]
 
     return totals
+
+
+def recalculate_quantities(
+    target_kcal: Decimal, items: list[RecalculationItem]
+) -> dict[UUID, Decimal]:
+    """Recalculate quantities for unlocked items to hit the target energy budget.
+
+    Args:
+        target_kcal: The target energy budget in kcal.
+        items: A list of items in the plan, containing their current quantities and energy_kcal.
+
+    Returns:
+        A dictionary mapping item_id to their newly computed quantity.
+    """
+    locked_consumed = sum(
+        (item["energy_kcal"] for item in items if item["is_locked"]), Decimal("0")
+    )
+    remaining_available = target_kcal - locked_consumed
+
+    unlocked_items = [item for item in items if not item["is_locked"]]
+
+    if not unlocked_items:
+        return {item["item_id"]: item["quantity"] for item in items}
+
+    unlocked_current = sum((item["energy_kcal"] for item in unlocked_items), Decimal("0"))
+
+    if unlocked_current <= 0:
+        # Cannot scale proportionally if current sum is zero (or negative).
+        return {item["item_id"]: item["quantity"] for item in items}
+
+    multiplier = remaining_available / unlocked_current
+
+    result = {}
+    for item in items:
+        if item["is_locked"]:
+            result[item["item_id"]] = item["quantity"]
+        else:
+            result[item["item_id"]] = item["quantity"] * multiplier
+
+    return result
