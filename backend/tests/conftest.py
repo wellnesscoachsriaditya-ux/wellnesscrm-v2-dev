@@ -23,9 +23,26 @@ first fixture runs.
 
 from __future__ import annotations
 
+import asyncio
+import sys
+
+import pytest
+
 # Imported for the side effect described above. The application module graph —
 # including every router that declares an authorization action — is loaded once,
 # at collection, outside any fixture.
 import app.main as _app_main
 
 __all__ = ["_app_main"]
+
+
+@pytest.fixture(scope="session")
+def event_loop_policy() -> asyncio.AbstractEventLoopPolicy:
+    """Configure the asyncio event loop policy session-wide.
+
+    psycopg3's async mode requires the Selector event loop on Windows. The
+    default Proactor event loop raises an InterfaceError.
+    """
+    if sys.platform == "win32":
+        return asyncio.WindowsSelectorEventLoopPolicy()
+    return asyncio.DefaultEventLoopPolicy()  # type: ignore[unreachable]

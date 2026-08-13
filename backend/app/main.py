@@ -55,6 +55,7 @@ from app.platform.http.routers.auth import auth_public as auth_public_router
 from app.platform.http.routers.auth import portal_router as auth_portal_router
 from app.platform.http.routers.clients import router as clients_router
 from app.platform.http.routers.clinical import router as clinical_router
+from app.platform.http.routers.nutrition import router as nutrition_router
 from app.platform.http.routers.collaboration import client_router as collaboration_client_router
 from app.platform.http.routers.collaboration import tag_router as collaboration_tag_router
 from app.platform.http.routers.discovery import router as discovery_router
@@ -269,6 +270,7 @@ def create_app() -> FastAPI:
     # every one of them is a fact about a client and authorizes against that
     # client (AC-M1-006) rather than merely against the action.
     app.include_router(clinical_router)
+    app.include_router(nutrition_router)
 
     # 🔒 ADR-05 — last, after every router is registered, so it sees the whole
     # route table. A route that declares no authorization action, declares one
