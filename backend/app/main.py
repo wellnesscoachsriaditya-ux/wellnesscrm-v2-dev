@@ -55,12 +55,12 @@ from app.platform.http.routers.auth import auth_public as auth_public_router
 from app.platform.http.routers.auth import portal_router as auth_portal_router
 from app.platform.http.routers.clients import router as clients_router
 from app.platform.http.routers.clinical import router as clinical_router
-from app.platform.http.routers.nutrition import router as nutrition_router
 from app.platform.http.routers.collaboration import client_router as collaboration_client_router
 from app.platform.http.routers.collaboration import tag_router as collaboration_tag_router
 from app.platform.http.routers.discovery import router as discovery_router
 from app.platform.http.routers.enquiries import form_router as enquiry_form_router
 from app.platform.http.routers.enquiries import router as enquiries_router
+from app.platform.http.routers.nutrition import router as nutrition_router
 from app.platform.http.routers.public_forms import router as public_forms_router
 from app.platform.http.routers.timeline import router as timeline_router
 from app.platform.identity.authentication import resolve_actor as authenticate

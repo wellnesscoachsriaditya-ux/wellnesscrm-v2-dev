@@ -1131,6 +1131,29 @@
         "title": "ConsultationNoteResponse",
         "type": "object"
       },
+      "CreateCustomFoodRequest": {
+        "properties": {
+          "category_id": {
+            "format": "uuid",
+            "title": "Category Id",
+            "type": "string"
+          },
+          "dietary_class": {
+            "$ref": "#/components/schemas/DietaryClass"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "category_id",
+          "dietary_class"
+        ],
+        "title": "CreateCustomFoodRequest",
+        "type": "object"
+      },
       "CurrentSessionResponse": {
         "description": "Who the caller is — identifiers and role, nothing else.\n\n🔒 **No name, email or phone** (NFR-033). ``TokenResponse`` says the client\n\"fetches its own profile from a dedicated endpoint\"; this is that endpoint,\nand it deliberately answers the *authorization* question rather than the\ndisplay one. The UI needs ``user_id`` to know which notes it may edit\n(FR-M3-020) and ``role`` to know whether to offer access management\n(FR-M0-017) — neither needs a name.",
         "properties": {
@@ -1882,6 +1905,48 @@
         ],
         "title": "FieldType",
         "type": "string"
+      },
+      "FoodItemResponse": {
+        "properties": {
+          "category_id": {
+            "format": "uuid",
+            "title": "Category Id",
+            "type": "string"
+          },
+          "dietary_class": {
+            "$ref": "#/components/schemas/DietaryClass"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "category_id",
+          "dietary_class",
+          "tenant_id"
+        ],
+        "title": "FoodItemResponse",
+        "type": "object"
       },
       "GoalType": {
         "description": "What the client is trying to achieve — DB §7.4, PRD §9.5.\n\n⚠️ 🟡 **PROPOSED**, and taken verbatim from PRD §9.5's own proposed list so\nthat a Gate G4 revision has one place to land.",
@@ -5726,6 +5791,110 @@
         "summary": "Edit the enquiry form",
         "tags": [
           "leads"
+        ]
+      }
+    },
+    "/api/v1/app/nutrition/foods": {
+      "get": {
+        "description": "Search the food catalogue (FR-M4-008, AC-M4-003, AC-M4-009).",
+        "operationId": "searchFoods",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dietary_class",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DietaryClass"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dietary Class"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FoodItemResponse"
+                  },
+                  "title": "Response Searchfoods",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Foods",
+        "tags": [
+          "nutrition"
+        ]
+      },
+      "post": {
+        "description": "Create a new custom food for this tenant (FR-M4-012, FR-M4-013).",
+        "operationId": "createCustomFood",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomFoodRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoodItemResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Custom Food",
+        "tags": [
+          "nutrition"
         ]
       }
     },

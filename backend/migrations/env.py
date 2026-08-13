@@ -42,7 +42,13 @@ import app.modules.nutrition.models as _nutrition_models
 from app.kernel import Base
 from app.platform.config import get_settings
 
-__all__ = ["_clients_models", "_clinical_models", "_kernel_models", "_leads_models", "_nutrition_models"]
+__all__ = [
+    "_clients_models",
+    "_clinical_models",
+    "_kernel_models",
+    "_leads_models",
+    "_nutrition_models",
+]
 
 config = context.config
 

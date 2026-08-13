@@ -19,9 +19,15 @@ from app.kernel.context import get_context
 from app.modules.nutrition import (
     NUTRITION_CATALOGUE_READ,
     NUTRITION_CATALOGUE_WRITE,
+)
+from app.modules.nutrition import (
     create_custom_food as module_create_custom_food,
-    search_foods as module_search_foods,
+)
+from app.modules.nutrition import (
     record_search_miss as module_record_search_miss,
+)
+from app.modules.nutrition import (
+    search_foods as module_search_foods,
 )
 from app.platform.http.authz import requires
 from app.platform.http.pipeline import get_session, realm_router

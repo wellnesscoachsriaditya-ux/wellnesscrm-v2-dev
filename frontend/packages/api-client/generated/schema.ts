@@ -969,6 +969,30 @@ export interface paths {
         patch: operations["enquiryFormsUpdate"];
         trace?: never;
     };
+    "/api/v1/app/nutrition/foods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Foods
+         * @description Search the food catalogue (FR-M4-008, AC-M4-003, AC-M4-009).
+         */
+        get: operations["searchFoods"];
+        put?: never;
+        /**
+         * Create Custom Food
+         * @description Create a new custom food for this tenant (FR-M4-012, FR-M4-013).
+         */
+        post: operations["createCustomFood"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/app/tags": {
         parameters: {
             query?: never;
@@ -1831,6 +1855,17 @@ export interface components {
              */
             updated_at: string;
         };
+        /** CreateCustomFoodRequest */
+        CreateCustomFoodRequest: {
+            /**
+             * Category Id
+             * Format: uuid
+             */
+            category_id: string;
+            dietary_class: components["schemas"]["DietaryClass"];
+            /** Name */
+            name: string;
+        };
         /**
          * CurrentSessionResponse
          * @description Who the caller is — identifiers and role, nothing else.
@@ -2171,6 +2206,24 @@ export interface components {
          * @enum {string}
          */
         FieldType: "text" | "long_text" | "number" | "date" | "boolean" | "choice" | "multi_choice" | "scale" | "food_ref";
+        /** FoodItemResponse */
+        FoodItemResponse: {
+            /**
+             * Category Id
+             * Format: uuid
+             */
+            category_id: string;
+            dietary_class: components["schemas"]["DietaryClass"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Tenant Id */
+            tenant_id: string | null;
+        };
         /**
          * GoalType
          * @description What the client is trying to achieve — DB §7.4, PRD §9.5.
@@ -4317,6 +4370,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnquiryFormResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    searchFoods: {
+        parameters: {
+            query: {
+                q: string;
+                dietary_class?: components["schemas"]["DietaryClass"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodItemResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createCustomFood: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCustomFoodRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodItemResponse"];
                 };
             };
             /** @description Validation Error */

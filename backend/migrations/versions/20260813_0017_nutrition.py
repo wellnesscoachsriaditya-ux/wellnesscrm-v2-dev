@@ -13,7 +13,7 @@ Custom records (`tenant_id = current_setting(...)`) are isolated.
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -54,8 +54,8 @@ _APPLY_GRANTS = """
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_user') THEN
-        # DDR-15: Explicitly revoke UPDATE/DELETE where immutability is required
-        # or append-only access is intended.
+        -- DDR-15: Explicitly revoke UPDATE/DELETE where immutability is required
+        -- or append-only access is intended.
         REVOKE UPDATE, DELETE ON TABLE food_categories FROM app_user;
         GRANT SELECT, INSERT ON TABLE food_categories TO app_user;
 
@@ -89,7 +89,7 @@ BEGIN
         REVOKE UPDATE, DELETE ON TABLE dietary_rules FROM app_user;
         GRANT SELECT, INSERT ON TABLE dietary_rules TO app_user;
 
-        # Allow UPDATE on editable entities
+        -- Allow UPDATE on editable entities
         REVOKE DELETE ON TABLE meals FROM app_user;
         GRANT SELECT, INSERT, UPDATE ON TABLE meals TO app_user;
 
