@@ -18,6 +18,7 @@ from app.kernel.nutrition import (
     FoodPortionValue,
     LockViolationError,
     MacroTotals,
+    MealSlotType,
     PlanItemNutrition,
     PlanState,
     PortionConversionError,
@@ -25,6 +26,7 @@ from app.kernel.nutrition import (
     add_totals,
     assert_draft,
     assert_respects_locks,
+    budget_warnings,
     calculate_composition,
     calculate_meal_composition,
     compute_budget,
@@ -544,3 +546,120 @@ def test_snapshot_hash_handles_decimals_and_non_ascii():
     document = {"title": "आहार योजना", "total": Decimal("1234.5678")}
 
     assert len(snapshot_content_hash(document)) == 64
+
+
+# ─── Meal slot vocabulary — FR-M4-025 ────────────────────────────────────
+
+
+def test_meal_slot_type_matches_the_prd_proposal():
+    """🔒 Pinned to FR-M4-025's seven, in the order the PRD lists them.
+
+    ⚠️ 🟡 The PRD marks this list PROPOSED and Validation Gate G1 has not been
+    run, so it may yet change. This test is not asserting the list is *right* —
+    it is asserting the code and the PRD have not drifted apart without anyone
+    deciding they should.
+    """
+    assert [slot.value for slot in MealSlotType] == [
+        "early_morning",
+        "breakfast",
+        "mid_morning",
+        "lunch",
+        "evening_snack",
+        "dinner",
+        "bedtime",
+        # Not from the PRD's list: the slot a practitioner adds that is none of
+        # the seven. FR-M4-025 requires adding slots, and `custom_label` carries
+        # the name.
+        "custom",
+    ]
+
+
+def test_meal_slot_type_is_a_str_enum():
+    """It travels as a string on the wire and in the `text` column."""
+    assert MealSlotType.BREAKFAST == "breakfast"
+    assert f"{MealSlotType.LUNCH}" == "lunch"
+
+
+# ─── Soft warnings — API §8.7 ────────────────────────────────────────────
+
+
+def test_no_warnings_when_within_tolerance():
+    budget = compute_budget(
+        _totals(energy="1400"), [_item(is_locked=False, quantity="1", energy="1380")]
+    )
+
+    assert budget_warnings(budget) == []
+
+
+def test_no_warnings_without_a_target():
+    """Nothing to miss, so nothing to say."""
+    budget = compute_budget(None, [_item(is_locked=False, quantity="1", energy="900")])
+
+    assert budget_warnings(budget) == []
+
+
+def test_energy_below_target_warning():
+    budget = compute_budget(
+        _totals(energy="1400"), [_item(is_locked=False, quantity="1", energy="900")]
+    )
+
+    warnings = budget_warnings(budget)
+
+    assert [w["rule_code"] for w in warnings] == ["energy_below_target"]
+    assert warnings[0]["severity"] == "soft"
+    assert "500 kcal below" in warnings[0]["message"]
+    assert warnings[0]["scope"] == {"type": "plan"}
+
+
+def test_energy_above_target_warning():
+    budget = compute_budget(
+        _totals(energy="1400"), [_item(is_locked=False, quantity="1", energy="1800")]
+    )
+
+    warnings = budget_warnings(budget)
+
+    assert [w["rule_code"] for w in warnings] == ["energy_above_target"]
+    assert "400 kcal above" in warnings[0]["message"]
+
+
+def test_locked_exceeds_target_is_reported_and_never_blocks():
+    """🔒 EC-M4-05 / API §8.4 — a legitimate clinical state, reported as soft."""
+    budget = compute_budget(
+        _totals(energy="1400"), [_item(is_locked=True, quantity="1", energy="1800")]
+    )
+
+    warnings = budget_warnings(budget)
+
+    assert warnings[0]["rule_code"] == "locked_exceeds_target"
+    assert all(w["severity"] == "soft" for w in warnings)
+    assert "400 kcal over" in warnings[0]["message"]
+
+
+def test_locked_overshoot_is_reported_before_the_tolerance_miss():
+    """The constraint the practitioner set is the more specific finding."""
+    budget = compute_budget(
+        _totals(energy="1000"),
+        [
+            _item(is_locked=True, quantity="1", energy="1200"),
+            _item(is_locked=False, quantity="1", energy="300"),
+        ],
+    )
+
+    assert [w["rule_code"] for w in budget_warnings(budget)] == [
+        "locked_exceeds_target",
+        "energy_above_target",
+    ]
+
+
+def test_warnings_are_never_hard():
+    """🔒 API §8.7 — hard rules block and arrive with the dietary_rules engine.
+
+    Nothing this function can produce may carry `hard`, because nothing here
+    consults a rule that would justify rejecting the practitioner's write.
+    """
+    budget = compute_budget(
+        _totals(energy="1000"), [_item(is_locked=True, quantity="1", energy="5000")]
+    )
+
+    assert budget_warnings(budget)  # there is something to say
+    assert all(w["severity"] == "soft" for w in budget_warnings(budget))
