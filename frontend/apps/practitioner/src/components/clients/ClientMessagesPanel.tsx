@@ -24,6 +24,7 @@ import {
   Spinner,
 } from '@wellnesscrm/design-system'
 import type { BadgeTone } from '@wellnesscrm/design-system'
+import { WhatsAppFallbackLink } from './ClientWhatsAppPanel'
 
 export interface MessageHistoryView {
   id: string
@@ -35,6 +36,19 @@ export interface MessageHistoryView {
   failureReason: string | null
   createdAt: string
 }
+
+/**
+ * ⚠️ **A failed message offers no "send this by hand" link, and that is a gap
+ * with a reason.** `message_dispatches` stores the template and its version, not
+ * the rendered body (NFR-033 — the log is retained and read by operators), so
+ * the text that failed is not available to re-send. Re-rendering the template
+ * now would produce *today's* values — a different message from the one that
+ * failed, offered as though it were the same.
+ *
+ * The fallback is therefore offered where the body genuinely exists: a pending
+ * message, which carries its preview. Closing this properly means deciding what
+ * the delivery log stores, which is a schema question rather than a UI one.
+ */
 
 export interface PendingMessageView {
   id: string
@@ -48,6 +62,17 @@ export interface PendingMessageView {
 export interface ClientMessagesPanelProps {
   history: readonly MessageHistoryView[]
   pending: readonly PendingMessageView[]
+  /**
+   * Builds a manual WhatsApp link for one body, or returns `null` when the
+   * client cannot be reached that way.
+   *
+   * 🔒 A callback, not a number: the rule that turns a number and a body into a
+   * URL lives in `features/messaging`, and a component may not import it (R8).
+   * Absent by default, so the fallback simply does not render — EC-M1-08 permits
+   * a client with no mobile, and an action that opened an empty conversation
+   * would be worse than no action.
+   */
+  whatsAppLinkFor?: (message: string) => string | null
   loading?: boolean
   loadingMore?: boolean
   hasMore?: boolean
@@ -108,6 +133,7 @@ function when(value: string): string {
 export function ClientMessagesPanel({
   history,
   pending,
+  whatsAppLinkFor,
   loading = false,
   loadingMore = false,
   hasMore = false,
@@ -157,6 +183,14 @@ export function ClientMessagesPanel({
                       >
                         Cancel
                       </Button>
+                      {/* 🔒 The manual channel, beside the automated one: a
+                        * practitioner who wants this to go now can send it from
+                        * their own WhatsApp instead of waiting. It records
+                        * nothing — see `ClientWhatsAppPanel`. */}
+                      <WhatsAppFallbackLink
+                        href={whatsAppLinkFor ? whatsAppLinkFor(message.preview) : null}
+                        label="Send now from your WhatsApp"
+                      />
                     </li>
                   ))}
                 </ul>

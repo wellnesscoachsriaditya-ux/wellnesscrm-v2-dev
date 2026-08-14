@@ -28,6 +28,7 @@ import {
   type CheckinFrequencyValue,
   type CheckinScheduleView,
 } from '../components/clients/ClientCheckinPanel'
+import { ClientWhatsAppPanel } from '../components/clients/ClientWhatsAppPanel'
 import { EntitlementNotice } from '../components/clients/EntitlementNotice'
 import {
   ClinicalAssessmentPanel,
@@ -49,6 +50,7 @@ import { useClientDetail } from '../features/clients/useClientDetail'
 import { useCollaboration } from '../features/clients/useCollaboration'
 import { useTimeline } from '../features/clients/useTimeline'
 import { useClientMessaging } from '../features/messaging/useClientMessaging'
+import { useClickToChat } from '../features/messaging/useClickToChat'
 import {
   useAssessments,
   useMeasurements,
@@ -247,6 +249,7 @@ export function ClientDetail() {
   const collaboration = useCollaboration(clientId, refresh)
   const timeline = useTimeline(clientId)
   const messaging = useClientMessaging(clientId)
+  const whatsApp = useClickToChat(client?.mobile ?? null)
   
   const assessmentsData = useAssessments(clientId)
   const measurementsData = useMeasurements(clientId)
@@ -421,7 +424,20 @@ export function ClientDetail() {
         }
       />
 
+      {/* 🔒 The *manual* WhatsApp channel — the practitioner's own number, no
+        * Meta credentials, nothing recorded. Placed above the engine's own panel
+        * so the distinction is read in that order: this is what you send, that
+        * is what WellnessCRM sent. */}
+      <ClientWhatsAppPanel
+        clientName={client.full_name}
+        message={whatsApp.message}
+        href={whatsApp.href}
+        reason={whatsApp.reason}
+        onMessageChange={whatsApp.setMessage}
+      />
+
       <ClientMessagesPanel
+        whatsAppLinkFor={whatsApp.linkFor}
         history={messaging.history.map(toMessageView)}
         pending={messaging.pending.map(toPendingView)}
         loading={messaging.loading}
