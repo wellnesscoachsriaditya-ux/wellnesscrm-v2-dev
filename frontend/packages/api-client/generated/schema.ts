@@ -805,6 +805,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/app/clients/{client_id}/portal-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get portal access status
+         * @description Read a client's portal access status.
+         */
+        get: operations["clientsGetPortalAccess"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/portal-access/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grant portal access and send magic link
+         * @description Grant portal access and send a magic link to the client.
+         */
+        post: operations["clientsResendPortalAccess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/app/clients/{client_id}/restore": {
         parameters: {
             query?: never;
@@ -1804,11 +1844,6 @@ export interface paths {
          *
          *     🔒 Always 202 with an identical body. Anything else makes this a
          *     client-enumeration oracle against a practitioner's client list.
-         *
-         *     ⚠️ Issuing requires resolving an identifier to a client, which is the
-         *     `clients` module's data (S2). Until that module exists this endpoint
-         *     correctly acknowledges and sends nothing — the privacy-preserving response is
-         *     identical to the one it will give for an unknown identifier afterwards.
          */
         post: operations["portalAccessRequest"];
         delete?: never;
@@ -2256,6 +2291,8 @@ export interface components {
         ClientPatch: {
             /** City */
             city?: string | null;
+            /** Client Nutrition Visibility */
+            client_nutrition_visibility?: boolean | null;
             /** Date Of Birth */
             date_of_birth?: string | null;
             dietary_class?: components["schemas"]["DietaryClass"] | null;
@@ -2280,6 +2317,8 @@ export interface components {
             archived_at: string | null;
             /** City */
             city: string | null;
+            /** Client Nutrition Visibility */
+            client_nutrition_visibility: boolean;
             /**
              * Created At
              * Format: date-time
@@ -3576,6 +3615,13 @@ export interface components {
         PortalAccessRequest: {
             /** Mobile Or Email */
             mobile_or_email: string;
+        };
+        /** PortalAccessStatusResponse */
+        PortalAccessStatusResponse: {
+            /** Has Access */
+            has_access: boolean;
+            /** Last Accessed At */
+            last_accessed_at: string | null;
         };
         /** PortalRedeemRequest */
         PortalRedeemRequest: {
@@ -5578,6 +5624,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsGetPortalAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalAccessStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsResendPortalAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

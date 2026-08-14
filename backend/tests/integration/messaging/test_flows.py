@@ -152,7 +152,10 @@ async def test_the_practitioner_notification_goes_out_by_email(
     )
     async with session_for(tenant_a.tenant_id) as session:
         await dispatch_scheduled(
-            session, tenant_id=tenant_a.tenant_id, scheduled_message_id=notification.id
+            session, 
+            tenant_id=tenant_a.tenant_id, 
+            scheduled_message_id=notification.id,
+            now=datetime(2026, 8, 14, 6, 30, tzinfo=UTC)
         )
 
     assert len(email.sent) == 1
@@ -221,7 +224,10 @@ async def test_issuing_a_plan_delivers_it_to_the_client(
 
     async with session_for(tenant_a.tenant_id) as session:
         await dispatch_scheduled(
-            session, tenant_id=tenant_a.tenant_id, scheduled_message_id=delivery.id
+            session, 
+            tenant_id=tenant_a.tenant_id, 
+            scheduled_message_id=delivery.id,
+            now=datetime(2026, 8, 14, 6, 30, tzinfo=UTC)
         )
 
     assert len(whatsapp.sent) == 1
@@ -317,7 +323,10 @@ async def test_a_practitioner_message_travels_the_same_engine(
     message_id = uuid.UUID(response.json()["id"])
     async with session_for(tenant_a.tenant_id) as session:
         await dispatch_scheduled(
-            session, tenant_id=tenant_a.tenant_id, scheduled_message_id=message_id
+            session, 
+            tenant_id=tenant_a.tenant_id, 
+            scheduled_message_id=message_id,
+            now=datetime(2026, 8, 14, 6, 30, tzinfo=UTC)
         )
 
     assert len(whatsapp.sent) == 1
@@ -365,7 +374,10 @@ async def test_the_message_history_shows_the_whole_journey(
             continue
         async with session_for(tenant_a.tenant_id) as session:
             await dispatch_scheduled(
-                session, tenant_id=tenant_a.tenant_id, scheduled_message_id=message.id
+                session, 
+                tenant_id=tenant_a.tenant_id, 
+                scheduled_message_id=message.id,
+                now=datetime(2026, 8, 14, 6, 30, tzinfo=UTC)
             )
 
     messaging_api.as_actor(practitioner(tenant_a))

@@ -64,7 +64,7 @@ async def _queue(
             request=MessageRequest(
                 template_code=template_code,
                 occasion=occasion,
-                scheduled_for=scheduled_for or utc_now(),
+                scheduled_for=scheduled_for or datetime(2026, 8, 14, 6, 30, tzinfo=UTC),
                 source_module="tests",
                 client_id=tenant.client_id,
                 variables=variables
@@ -89,7 +89,10 @@ async def _dispatch(
     """Run the engine once, then re-read the row it acted on."""
     async with session_for(tenant.tenant_id) as session:
         await dispatch_scheduled(
-            session, tenant_id=tenant.tenant_id, scheduled_message_id=message_id, now=now
+            session, 
+            tenant_id=tenant.tenant_id, 
+            scheduled_message_id=message_id, 
+            now=now or datetime(2026, 8, 14, 6, 30, tzinfo=UTC)
         )
     async with session_for(tenant.tenant_id) as session:
         row = await session.get(ScheduledMessage, message_id)
@@ -618,7 +621,10 @@ async def test_a_transient_failure_asks_the_queue_to_retry(
     with pytest.raises(RetryableDispatchError):
         async with session_for(tenant_a.tenant_id) as session:
             await dispatch_scheduled(
-                session, tenant_id=tenant_a.tenant_id, scheduled_message_id=message_id
+                session,
+                tenant_id=tenant_a.tenant_id,
+                scheduled_message_id=message_id,
+                now=datetime(2026, 8, 14, 6, 30, tzinfo=UTC),
             )
 
     # ⚠️ The attempt row rolled back with the raising transaction, which is

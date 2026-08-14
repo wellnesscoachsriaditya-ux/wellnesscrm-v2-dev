@@ -6,20 +6,34 @@ proving that ANONYMOUS_SCOPE can successfully call the SECURITY DEFINER function
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 pytestmark = pytest.mark.isolation
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(app_engine: AsyncEngine) -> AsyncIterator[TestClient]:
     """The real application, configured for testing."""
-    # We import here to avoid loading the app before fixtures are ready
     from app.main import create_app
+    from app.platform.http import pipeline
+    from sqlalchemy.ext.asyncio import async_sessionmaker
 
+    factory = async_sessionmaker(app_engine, expire_on_commit=False)
+    original = pipeline._database_transaction
+
+    async def _test_tx() -> AsyncIterator[AsyncSession]:
+        async with factory() as session:
+            async with session.begin():
+                yield session
+
+    pipeline._database_transaction = _test_tx
     app = create_app()
-    return TestClient(app, raise_server_exceptions=False)
+    yield TestClient(app, raise_server_exceptions=False)
+    pipeline._database_transaction = original
 
 
 def test_public_registration_succeeds(client: TestClient) -> None:

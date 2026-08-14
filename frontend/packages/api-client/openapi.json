@@ -847,6 +847,17 @@
             ],
             "title": "City"
           },
+          "client_nutrition_visibility": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Nutrition Visibility"
+          },
           "date_of_birth": {
             "anyOf": [
               {
@@ -969,6 +980,10 @@
               }
             ],
             "title": "City"
+          },
+          "client_nutrition_visibility": {
+            "title": "Client Nutrition Visibility",
+            "type": "boolean"
           },
           "created_at": {
             "format": "date-time",
@@ -1103,6 +1118,7 @@
           "source_detail",
           "owner_user_id",
           "dietary_class",
+          "client_nutrition_visibility",
           "is_minor",
           "activated_at",
           "archived_at",
@@ -4157,6 +4173,32 @@
           "mobile_or_email"
         ],
         "title": "PortalAccessRequest",
+        "type": "object"
+      },
+      "PortalAccessStatusResponse": {
+        "properties": {
+          "has_access": {
+            "title": "Has Access",
+            "type": "boolean"
+          },
+          "last_accessed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Accessed At"
+          }
+        },
+        "required": [
+          "has_access",
+          "last_accessed_at"
+        ],
+        "title": "PortalAccessStatusResponse",
         "type": "object"
       },
       "PortalRedeemRequest": {
@@ -7765,6 +7807,92 @@
         ]
       }
     },
+    "/api/v1/app/clients/{client_id}/portal-access": {
+      "get": {
+        "description": "Read a client's portal access status.",
+        "operationId": "clientsGetPortalAccess",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortalAccessStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get portal access status",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/portal-access/resend": {
+      "post": {
+        "description": "Grant portal access and send a magic link to the client.",
+        "operationId": "clientsResendPortalAccess",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Grant portal access and send magic link",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
     "/api/v1/app/clients/{client_id}/restore": {
       "post": {
         "description": "Bring an archived client back — EC-M1-02, AC-M1-007.\n\n🔒 Returns them to the stage they were archived at. A returning client is\nreactivated in place; there is never a second record.\n\n🔒 Returns **402** when the restored stage is ``active`` and the plan is at\nits ceiling (EC-M1-06) — archiving frees a slot, so restoring takes one back.",
@@ -10113,7 +10241,7 @@
     },
     "/api/v1/public/portal/access/request": {
       "post": {
-        "description": "🔒 Self-service link re-request (EC-M7-01).\n\n⚠️ **On the critical path, not an error path.** With a 15–30 minute expiry, a\nclient opening a WhatsApp message an hour later *will* need a new link, and\nthis must never require the practitioner.\n\n🔒 Always 202 with an identical body. Anything else makes this a\nclient-enumeration oracle against a practitioner's client list.\n\n⚠️ Issuing requires resolving an identifier to a client, which is the\n`clients` module's data (S2). Until that module exists this endpoint\ncorrectly acknowledges and sends nothing — the privacy-preserving response is\nidentical to the one it will give for an unknown identifier afterwards.",
+        "description": "🔒 Self-service link re-request (EC-M7-01).\n\n⚠️ **On the critical path, not an error path.** With a 15–30 minute expiry, a\nclient opening a WhatsApp message an hour later *will* need a new link, and\nthis must never require the practitioner.\n\n🔒 Always 202 with an identical body. Anything else makes this a\nclient-enumeration oracle against a practitioner's client list.",
         "operationId": "portalAccessRequest",
         "requestBody": {
           "content": {
