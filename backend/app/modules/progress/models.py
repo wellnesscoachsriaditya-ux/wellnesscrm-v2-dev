@@ -42,8 +42,8 @@ class AdherenceLog(Base):
     )
     client_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("clients.id", ondelete="CASCADE"),
         nullable=False,
+        comment="Arch §3.4 — no FK to clients module",
     )
     # The client-provided date they are logging for
     for_date: Mapped[date] = mapped_column(Date, nullable=False)

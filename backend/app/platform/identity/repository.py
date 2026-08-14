@@ -431,6 +431,40 @@ async def is_session_live(session: AsyncSession, *, session_id: uuid.UUID, now: 
 # ─── Client realm ────────────────────────────────────────────────────────
 
 
+@dataclass(frozen=True, slots=True)
+class ClientIdentity:
+    """A client, resolved for portal access."""
+    tenant_id: uuid.UUID
+    client_id: uuid.UUID
+    archived_at: datetime | None
+    full_name: str
+
+    @property
+    def can_sign_in(self) -> bool:
+        """🔒 Only an unarchived client may reach the portal."""
+        return self.archived_at is None
+
+
+async def find_client_by_contact(session: AsyncSession, contact: str) -> ClientIdentity | None:
+    """Resolve a contact address to a client row anonymously via SECURITY DEFINER."""
+    row = (
+        await session.execute(
+            text("SELECT * FROM public.identity_lookup_client_by_contact(CAST(:contact AS text))"),
+            {"contact": contact},
+        )
+    ).mappings().one_or_none()
+
+    if row is None:
+        return None
+
+    return ClientIdentity(
+        tenant_id=row["tenant_id"],
+        client_id=row["client_id"],
+        archived_at=row["archived_at"],
+        full_name=row["full_name"],
+    )
+
+
 async def store_magic_link(
     session: AsyncSession,
     *,
@@ -523,3 +557,28 @@ async def touch_grant_access(
         .where(ClientAccessGrant.client_id == client_id)
         .values(last_accessed_at=when)
     )
+
+
+async def get_portal_access_grant(
+    session: AsyncSession, *, client_id: uuid.UUID
+) -> ClientAccessGrant | None:
+    return (
+        await session.execute(
+            select(ClientAccessGrant).where(ClientAccessGrant.client_id == client_id)
+        )
+    ).scalar_one_or_none()
+
+
+async def upsert_portal_access_grant(
+    session: AsyncSession, *, tenant_id: uuid.UUID, client_id: uuid.UUID, now: datetime
+) -> None:
+    from sqlalchemy.dialects.postgresql import insert
+    stmt = (
+        insert(ClientAccessGrant)
+        .values(tenant_id=tenant_id, client_id=client_id, status=AccessStatus.ACTIVE, created_at=now)
+        .on_conflict_do_update(
+            index_elements=["client_id"],
+            set_=dict(status=AccessStatus.ACTIVE),
+        )
+    )
+    await session.execute(stmt)

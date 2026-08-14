@@ -103,6 +103,12 @@ class PortalSession:
     target_ref: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class PortalAccessStatus:
+    has_access: bool
+    last_accessed_at: datetime | None
+
+
 # ─── Registration ────────────────────────────────────────────────────────
 
 
@@ -671,10 +677,28 @@ def _link_failed() -> AuthenticationError:
     )
 
 
+async def get_portal_access_status(
+    session: AsyncSession, *, client_id: uuid.UUID
+) -> PortalAccessStatus:
+    grant = await repo.get_portal_access_grant(session, client_id=client_id)
+    if grant is not None and grant.status.value == "active":
+        return PortalAccessStatus(has_access=True, last_accessed_at=grant.last_accessed_at)
+    return PortalAccessStatus(has_access=False, last_accessed_at=None)
+
+
+async def grant_portal_access(
+    session: AsyncSession, *, tenant_id: uuid.UUID, client_id: uuid.UUID, now: datetime
+) -> None:
+    await repo.upsert_portal_access_grant(session, tenant_id=tenant_id, client_id=client_id, now=now)
+
+
 __all__ = [
+    "PortalAccessStatus",
     "PortalSession",
     "Registration",
     "confirm_password_reset",
+    "get_portal_access_status",
+    "grant_portal_access",
     "issue_magic_link",
     "redeem_magic_link",
     "refresh_session",

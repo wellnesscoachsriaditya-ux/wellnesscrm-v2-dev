@@ -109,6 +109,7 @@ class ClientUpdate:
     sex: SexType | None | Unset = UNSET
     city: str | None | Unset = UNSET
     dietary_class: DietaryClass | None | Unset = UNSET
+    client_nutrition_visibility: bool | Unset = UNSET
 
 
 async def create_client(
@@ -267,6 +268,8 @@ async def update_client(
         client.city = payload.city.strip() if payload.city else None
     if not isinstance(payload.dietary_class, Unset):
         client.dietary_class = payload.dietary_class
+    if not isinstance(payload.client_nutrition_visibility, Unset):
+        client.client_nutrition_visibility = payload.client_nutrition_visibility
 
     client.updated_at = now()
     await session.flush()

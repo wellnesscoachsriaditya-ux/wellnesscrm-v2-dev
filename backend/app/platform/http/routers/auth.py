@@ -38,6 +38,8 @@ from app.platform.identity import service
 from app.platform.identity.credentials import MIN_PASSWORD_LENGTH, get_credential_store
 from app.platform.identity.tokens import IssuedTokens, utcnow
 from app.platform.logging import get_logger
+from app.modules import messaging
+from app.kernel.models import LinkPurpose, TransportType
 
 logger = get_logger(__name__)
 
@@ -407,13 +409,52 @@ async def request_portal_access(payload: PortalAccessRequest, request: Request) 
 
     🔒 Always 202 with an identical body. Anything else makes this a
     client-enumeration oracle against a practitioner's client list.
-
-    ⚠️ Issuing requires resolving an identifier to a client, which is the
-    `clients` module's data (S2). Until that module exists this endpoint
-    correctly acknowledges and sends nothing — the privacy-preserving response is
-    identical to the one it will give for an unknown identifier afterwards.
     """
-    logger.info("Portal access requested")
+    session = get_session(request)
+    now_ts = utcnow()
+    
+    # 1. Anonymous client lookup (via SECURITY DEFINER)
+    from app.platform.identity.repository import find_client_by_contact
+    client = await find_client_by_contact(session, payload.mobile_or_email)
+    
+    if client is not None and client.can_sign_in:
+        # 2. Issue the magic link token
+        token = await service.issue_magic_link(
+            session,
+            tenant_id=client.tenant_id,
+            client_id=client.client_id,
+            purpose=LinkPurpose.PORTAL_LOGIN,
+            target_ref=None,
+            transport=TransportType.WHATSAPP,
+            now=now_ts,
+        )
+        
+        # 3. Schedule the dispatch via messaging engine
+        import uuid
+        from app.platform.config import get_settings
+        
+        occasion = f"portal_login:{uuid.uuid4()}" # Distinct occasion for each request
+        base_url = get_settings().app_base_url.rstrip("/")
+        link_url = f"{base_url}/portal/access/{token}"
+        
+        await messaging.schedule(
+            session,
+            tenant_id=client.tenant_id,
+            request=messaging.MessageRequest(
+                template_code="magic_link",
+                occasion=occasion,
+                scheduled_for=now_ts,
+                source_module="identity",
+                client_id=client.client_id,
+                variables={
+                    "link_url": link_url,
+                    "expires_in_minutes": str(get_settings().magic_link_ttl_minutes)
+                },
+            )
+        )
+        
+        logger.info("Portal access requested and scheduled")
+        
     return AcceptedResponse(message="If that matches an account, a new link is on its way.")
 
 

@@ -91,6 +91,37 @@ def upgrade() -> None:
     )
 
 
+    # ─── 3. identity_lookup_client_by_contact (SECURITY DEFINER) ─────────────
+    # 🔒 Required for the public `/portal/access/request` endpoint to resolve
+    # a client's ID and tenant without an active session, so it can issue a magic link.
+    op.execute(
+        """
+        CREATE OR REPLACE FUNCTION public.identity_lookup_client_by_contact(p_contact text)
+        RETURNS TABLE (
+            tenant_id uuid,
+            client_id uuid,
+            archived_at timestamp with time zone,
+            full_name text
+        )
+        SECURITY DEFINER
+        SET search_path = public
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            RETURN QUERY
+            SELECT c.tenant_id, c.id, c.archived_at, c.full_name
+            FROM clients c
+            WHERE c.email = p_contact OR c.mobile = p_contact;
+        END;
+        $$;
+        
+        REVOKE ALL ON FUNCTION public.identity_lookup_client_by_contact(text) FROM public;
+        GRANT EXECUTE ON FUNCTION public.identity_lookup_client_by_contact(text) TO app_user;
+        """
+    )
+
+
 def downgrade() -> None:
+    op.execute("DROP FUNCTION IF EXISTS public.identity_lookup_client_by_contact(text)")
     op.drop_column("clients", "client_nutrition_visibility")
     op.drop_table("adherence_logs")

@@ -57,6 +57,10 @@ from app.modules.clients import (
 )
 from app.platform.http.authz import requires
 from app.platform.http.pipeline import authorize, get_session, realm_router, record_audit
+from app.platform.identity import service as identity_service
+from app.modules import messaging
+from app.kernel.models import LinkPurpose, TransportType
+from app.platform.config import get_settings
 
 router = realm_router("/api/v1/app/clients", tags=["clients"])
 
@@ -109,6 +113,7 @@ class ClientPatch(BaseModel):
     city: str | None = Field(default=None, max_length=120)
     preferred_language: str | None = Field(default=None, max_length=16)
     dietary_class: DietaryClass | None = None
+    client_nutrition_visibility: bool | None = None
 
 
 class ClientResponse(BaseModel):
@@ -127,6 +132,7 @@ class ClientResponse(BaseModel):
     source_detail: str | None
     owner_user_id: uuid.UUID
     dietary_class: DietaryClass | None
+    client_nutrition_visibility: bool
     #: 🔒 FR-M0-028 — derived from ``date_of_birth`` on every read, never stored.
     #: ``None`` when the date of birth is unknown, which is not the same as
     #: "adult": the enquiry form does not ask for one.
@@ -135,6 +141,11 @@ class ClientResponse(BaseModel):
     archived_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class PortalAccessStatusResponse(BaseModel):
+    has_access: bool
+    last_accessed_at: datetime | None
 
 
 def _response(client: object) -> ClientResponse:
@@ -314,6 +325,7 @@ async def update(
             sex=field("sex"),  # type: ignore[arg-type]
             city=field("city"),  # type: ignore[arg-type]
             dietary_class=field("dietary_class"),  # type: ignore[arg-type]
+            client_nutrition_visibility=field("client_nutrition_visibility"),  # type: ignore[arg-type]
         ),
         expected_updated_at=_parse_if_match(if_match),
     )
@@ -473,3 +485,82 @@ async def restore_client(
     )
     response.headers["ETag"] = _etag(restored.updated_at)
     return _response(restored)
+
+
+@router.get(
+    "/{client_id}/portal-access",
+    summary="Get portal access status",
+    operation_id="clientsGetPortalAccess",
+)
+@requires(CLIENT_READ)
+async def get_portal_access(
+    request: Request, client_id: uuid.UUID
+) -> PortalAccessStatusResponse:
+    """Read a client's portal access status."""
+    await authorized_client(request, client_id)
+    status_obj = await identity_service.get_portal_access_status(
+        get_session(request), client_id=client_id
+    )
+    return PortalAccessStatusResponse(
+        has_access=status_obj.has_access,
+        last_accessed_at=status_obj.last_accessed_at,
+    )
+
+
+@router.post(
+    "/{client_id}/portal-access/resend",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Grant portal access and send magic link",
+    operation_id="clientsResendPortalAccess",
+)
+@requires(CLIENT_UPDATE)
+async def resend_portal_access(
+    request: Request, client_id: uuid.UUID
+) -> Response:
+    """Grant portal access and send a magic link to the client."""
+    from datetime import UTC
+    client = await authorized_client(request, client_id)
+    session = get_session(request)
+    now_ts = datetime.now(UTC)
+
+    # 1. Grant access
+    await identity_service.grant_portal_access(
+        session, tenant_id=client.tenant_id, client_id=client.id, now=now_ts
+    )
+
+    # 2. Issue magic link
+    transport = TransportType.WHATSAPP if client.mobile else TransportType.EMAIL
+    token = await identity_service.issue_magic_link(
+        session,
+        tenant_id=client.tenant_id,
+        client_id=client.id,
+        purpose=LinkPurpose.PORTAL_LOGIN,
+        target_ref=None,
+        transport=transport,
+        now=now_ts,
+    )
+
+    # 3. Schedule messaging
+    settings = get_settings()
+    occasion = f"portal_login:{uuid.uuid4()}"
+    base_url = settings.app_base_url.rstrip("/")
+    link_url = f"{base_url}/portal/access/{token}"
+
+    await messaging.schedule(
+        session,
+        tenant_id=client.tenant_id,
+        request=messaging.MessageRequest(
+            template_code="magic_link",
+            occasion=occasion,
+            scheduled_for=now_ts,
+            source_module="clients",
+            client_id=client.id,
+            variables={
+                "link_url": link_url,
+                "expires_in_minutes": str(settings.magic_link_ttl_minutes),
+            },
+        ),
+    )
+
+    record_audit(request, resource_id=client.id, metadata={"action": "portal_access_resent"})
+    return Response(status_code=status.HTTP_202_ACCEPTED)
