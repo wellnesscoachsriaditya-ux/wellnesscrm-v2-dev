@@ -17,6 +17,7 @@ def client() -> TestClient:
     """The real application, configured for testing."""
     # We import here to avoid loading the app before fixtures are ready
     from app.main import create_app
+
     app = create_app()
     return TestClient(app, raise_server_exceptions=False)
 
@@ -47,7 +48,7 @@ def test_public_login_fails_safely_for_unknown_user(client: TestClient) -> None:
             "password": "correct-horse-battery-staple",
         },
     )
-    # 401 means the credentials were rejected (or not found), 
+    # 401 means the credentials were rejected (or not found),
     # but the DB lookup successfully returned 0 rows instead of throwing an RLS exception.
     assert response.status_code == 401, f"Login failed unexpectedly: {response.text}"
     assert response.json()["error"]["type"] == "unauthenticated"

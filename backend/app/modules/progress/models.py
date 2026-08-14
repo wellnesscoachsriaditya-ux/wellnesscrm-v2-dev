@@ -47,19 +47,18 @@ class AdherenceLog(Base):
     )
     # The client-provided date they are logging for
     for_date: Mapped[date] = mapped_column(Date, nullable=False)
-    
+
     # 🔒 Offline sync idempotency — the frontend provides this.
     idempotency_key: Mapped[str] = mapped_column(
         Text, nullable=False, comment="🔒 Client-side UUID for idempotency"
     )
-    
-    # We may capture a percentage score (0-100) or enum. Let's stick to an integer score for simplicity.
-    # The S6 plan mentions "one-tap adherence", usually meaning 100% or "did it". 
+
+    # We may capture a percentage score (0-100) or enum. Let's stick to an integer
+    # score for simplicity.
+    # The S6 plan mentions "one-tap adherence", usually meaning 100% or "did it".
     # Let's store adherence_score from 0 to 100.
-    score: Mapped[int] = mapped_column(
-        nullable=False, comment="Adherence score (0-100)"
-    )
-    
+    score: Mapped[int] = mapped_column(nullable=False, comment="Adherence score (0-100)")
+
     # 🔒 Client and server timestamps to handle offline sync correctly
     client_timestamp: Mapped[datetime] = mapped_column(
         nullable=False, comment="🔒 When the client actually logged this offline"

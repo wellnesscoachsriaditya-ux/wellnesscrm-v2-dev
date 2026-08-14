@@ -27,6 +27,8 @@ from pydantic import BaseModel, EmailStr, Field
 from app.kernel.authz import DataScope, register_action
 from app.kernel.context import UserRole, get_context
 from app.kernel.errors import AuthenticationError
+from app.kernel.models import LinkPurpose, TransportType
+from app.modules import messaging
 from app.platform.http.authz import requires
 from app.platform.http.pipeline import (
     get_session,
@@ -38,8 +40,6 @@ from app.platform.identity import service
 from app.platform.identity.credentials import MIN_PASSWORD_LENGTH, get_credential_store
 from app.platform.identity.tokens import IssuedTokens, utcnow
 from app.platform.logging import get_logger
-from app.modules import messaging
-from app.kernel.models import LinkPurpose, TransportType
 
 logger = get_logger(__name__)
 
@@ -412,11 +412,12 @@ async def request_portal_access(payload: PortalAccessRequest, request: Request) 
     """
     session = get_session(request)
     now_ts = utcnow()
-    
+
     # 1. Anonymous client lookup (via SECURITY DEFINER)
     from app.platform.identity.repository import find_client_by_contact
+
     client = await find_client_by_contact(session, payload.mobile_or_email)
-    
+
     if client is not None and client.can_sign_in:
         # 2. Issue the magic link token
         token = await service.issue_magic_link(
@@ -428,15 +429,16 @@ async def request_portal_access(payload: PortalAccessRequest, request: Request) 
             transport=TransportType.WHATSAPP,
             now=now_ts,
         )
-        
+
         # 3. Schedule the dispatch via messaging engine
         import uuid
+
         from app.platform.config import get_settings
-        
-        occasion = f"portal_login:{uuid.uuid4()}" # Distinct occasion for each request
+
+        occasion = f"portal_login:{uuid.uuid4()}"  # Distinct occasion for each request
         base_url = get_settings().app_base_url.rstrip("/")
         link_url = f"{base_url}/portal/access/{token}"
-        
+
         await messaging.schedule(
             session,
             tenant_id=client.tenant_id,
@@ -448,13 +450,13 @@ async def request_portal_access(payload: PortalAccessRequest, request: Request) 
                 client_id=client.client_id,
                 variables={
                     "link_url": link_url,
-                    "expires_in_minutes": str(get_settings().magic_link_ttl_minutes)
+                    "expires_in_minutes": str(get_settings().magic_link_ttl_minutes),
                 },
-            )
+            ),
         )
-        
+
         logger.info("Portal access requested and scheduled")
-        
+
     return AcceptedResponse(message="If that matches an account, a new link is on its way.")
 
 

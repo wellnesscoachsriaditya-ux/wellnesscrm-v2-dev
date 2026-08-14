@@ -11,7 +11,6 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects import postgresql
 
 revision: str = "2eb56b8913d5"
 down_revision: str | None = "0022_s1_sec_definer"
@@ -67,15 +66,17 @@ def upgrade() -> None:
             USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid)
         """
     )
-    
-    # 🔒 RLS (Client Access) 
-    # Clients can only see and insert their own adherence logs. 
+
+    # 🔒 RLS (Client Access)
+    # Clients can only see and insert their own adherence logs.
     # The client ID is set in the session when redeeming a magic link.
     # We will need a policy for client access if they connect directly, but our architecture says:
     # "The browser never queries the database. FastAPI is the only data path".
-    # Therefore, we just need standard practitioner access + client access over API, which is handled via tenant_id + application logic, 
+    # Therefore, we just need standard practitioner access + client access over API, which is
+    # handled via tenant_id + application logic,
     # BUT wait, the application might enforce `app.current_client_id` for client endpoints.
-    # Let's check `0009_clients.py` to see if there is a client policy. Wait, the DB docs say "RLS discriminator".
+    # Let's check `0009_clients.py` to see if there is a client policy. Wait, the DB docs say
+    # "RLS discriminator".
     # Standard tenant isolation is sufficient if FastAPI is the one connecting.
 
     # ─── 2. client_nutrition_visibility ──────────────────────────────
@@ -89,7 +90,6 @@ def upgrade() -> None:
             comment="🔒 Whether this client sees nutrition data",
         ),
     )
-
 
     # ─── 3. identity_lookup_client_by_contact (SECURITY DEFINER) ─────────────
     # 🔒 Required for the public `/portal/access/request` endpoint to resolve
@@ -114,7 +114,7 @@ def upgrade() -> None:
             WHERE c.email = p_contact OR c.mobile = p_contact;
         END;
         $$;
-        
+
         REVOKE ALL ON FUNCTION public.identity_lookup_client_by_contact(text) FROM public;
         GRANT EXECUTE ON FUNCTION public.identity_lookup_client_by_contact(text) TO app_user;
         """

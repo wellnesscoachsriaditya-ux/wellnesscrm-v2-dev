@@ -26,12 +26,13 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select, and_, or_, select, update, text
+from sqlalchemy import Select, and_, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.kernel.context import AuthRealm as ContextRealm
 from app.kernel.identity import SessionSnapshot
 from app.kernel.models import (
+    AccessStatus,
     AuthRealm,
     AuthToken,
     AuthTokenPurpose,
@@ -88,15 +89,19 @@ async def find_user_by_subject(
 ) -> PractitionerIdentity | None:
     """Resolve the identity provider's subject to our user row."""
     row = (
-        await session.execute(
-            text("SELECT * FROM public.identity_lookup_by_subject(CAST(:subject AS text))"),
-            {"subject": auth_subject_id},
+        (
+            await session.execute(
+                text("SELECT * FROM public.identity_lookup_by_subject(CAST(:subject AS text))"),
+                {"subject": auth_subject_id},
+            )
         )
-    ).mappings().one_or_none()
-    
+        .mappings()
+        .one_or_none()
+    )
+
     if row is None:
         return None
-        
+
     return PractitionerIdentity(
         user_id=row["user_id"],
         tenant_id=row["tenant_id"],
@@ -119,7 +124,9 @@ async def find_subject_by_email(session: AsyncSession, email: str) -> str | None
     """
     return (
         await session.execute(
-            text("SELECT auth_subject_id FROM public.identity_lookup_by_email(CAST(:email AS text))"),
+            text(
+                "SELECT auth_subject_id FROM public.identity_lookup_by_email(CAST(:email AS text))"
+            ),
             {"email": email},
         )
     ).scalar_one_or_none()
@@ -134,7 +141,9 @@ async def email_is_registered(session: AsyncSession, email: str) -> bool:
     """
     found = (
         await session.execute(
-            text("SELECT auth_subject_id FROM public.identity_lookup_by_email(CAST(:email AS text))"),
+            text(
+                "SELECT auth_subject_id FROM public.identity_lookup_by_email(CAST(:email AS text))"
+            ),
             {"email": email},
         )
     ).scalar_one_or_none()
@@ -246,7 +255,13 @@ async def consume_auth_token(
     address must not be redeemable at the password-reset endpoint.
     """
     result = await session.execute(
-        text("SELECT auth_subject_id FROM public.identity_consume_auth_token(CAST(:token_hash AS text), CAST(:purpose AS auth_token_purpose), CAST(:now AS timestamptz))"),
+        text(
+            "SELECT auth_subject_id "
+            "FROM public.identity_consume_auth_token("
+            "CAST(:token_hash AS text), "
+            "CAST(:purpose AS auth_token_purpose), "
+            "CAST(:now AS timestamptz))"
+        ),
         {"token_hash": token_hash, "purpose": purpose.value, "now": now},
     )
     return result.scalar_one_or_none()
@@ -434,6 +449,7 @@ async def is_session_live(session: AsyncSession, *, session_id: uuid.UUID, now: 
 @dataclass(frozen=True, slots=True)
 class ClientIdentity:
     """A client, resolved for portal access."""
+
     tenant_id: uuid.UUID
     client_id: uuid.UUID
     archived_at: datetime | None
@@ -448,11 +464,17 @@ class ClientIdentity:
 async def find_client_by_contact(session: AsyncSession, contact: str) -> ClientIdentity | None:
     """Resolve a contact address to a client row anonymously via SECURITY DEFINER."""
     row = (
-        await session.execute(
-            text("SELECT * FROM public.identity_lookup_client_by_contact(CAST(:contact AS text))"),
-            {"contact": contact},
+        (
+            await session.execute(
+                text(
+                    "SELECT * FROM public.identity_lookup_client_by_contact(CAST(:contact AS text))"
+                ),
+                {"contact": contact},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
 
     if row is None:
         return None
@@ -509,11 +531,18 @@ async def consume_magic_link(
     as they cannot be if either check happens in Python.
     """
     result = (
-        await session.execute(
-            text("SELECT * FROM public.identity_consume_magic_link(CAST(:token_hash AS text), CAST(:now AS timestamptz))"),
-            {"token_hash": token_hash, "now": now},
+        (
+            await session.execute(
+                text(
+                    "SELECT * FROM public.identity_consume_magic_link("
+                    "CAST(:token_hash AS text), CAST(:now AS timestamptz))"
+                ),
+                {"token_hash": token_hash, "now": now},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
 
     if result is None:
         return None
@@ -573,12 +602,15 @@ async def upsert_portal_access_grant(
     session: AsyncSession, *, tenant_id: uuid.UUID, client_id: uuid.UUID, now: datetime
 ) -> None:
     from sqlalchemy.dialects.postgresql import insert
+
     stmt = (
         insert(ClientAccessGrant)
-        .values(tenant_id=tenant_id, client_id=client_id, status=AccessStatus.ACTIVE, created_at=now)
+        .values(
+            tenant_id=tenant_id, client_id=client_id, status=AccessStatus.ACTIVE, created_at=now
+        )
         .on_conflict_do_update(
             index_elements=["client_id"],
-            set_=dict(status=AccessStatus.ACTIVE),
+            set_={"status": AccessStatus.ACTIVE},
         )
     )
     await session.execute(stmt)

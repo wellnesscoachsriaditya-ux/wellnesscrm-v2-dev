@@ -35,6 +35,8 @@ from app.kernel.clients import (
 )
 from app.kernel.context import get_context
 from app.kernel.errors import PreconditionRequiredError
+from app.kernel.models import LinkPurpose, TransportType
+from app.modules import messaging
 from app.modules.clients import (
     CLIENT_ARCHIVE,
     CLIENT_CHANGE_STAGE,
@@ -55,12 +57,10 @@ from app.modules.clients import (
     restore,
     update_client,
 )
+from app.platform.config import get_settings
 from app.platform.http.authz import requires
 from app.platform.http.pipeline import authorize, get_session, realm_router, record_audit
 from app.platform.identity import service as identity_service
-from app.modules import messaging
-from app.kernel.models import LinkPurpose, TransportType
-from app.platform.config import get_settings
 
 router = realm_router("/api/v1/app/clients", tags=["clients"])
 
@@ -493,9 +493,7 @@ async def restore_client(
     operation_id="clientsGetPortalAccess",
 )
 @requires(CLIENT_READ)
-async def get_portal_access(
-    request: Request, client_id: uuid.UUID
-) -> PortalAccessStatusResponse:
+async def get_portal_access(request: Request, client_id: uuid.UUID) -> PortalAccessStatusResponse:
     """Read a client's portal access status."""
     await authorized_client(request, client_id)
     status_obj = await identity_service.get_portal_access_status(
@@ -514,11 +512,10 @@ async def get_portal_access(
     operation_id="clientsResendPortalAccess",
 )
 @requires(CLIENT_UPDATE)
-async def resend_portal_access(
-    request: Request, client_id: uuid.UUID
-) -> Response:
+async def resend_portal_access(request: Request, client_id: uuid.UUID) -> Response:
     """Grant portal access and send a magic link to the client."""
     from datetime import UTC
+
     client = await authorized_client(request, client_id)
     session = get_session(request)
     now_ts = datetime.now(UTC)

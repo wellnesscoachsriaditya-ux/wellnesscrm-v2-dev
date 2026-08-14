@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0022_s1_sec_definer"
@@ -38,7 +37,7 @@ def upgrade() -> None:
             FROM users
             WHERE auth_subject_id = p_subject_id;
         $$;
-        
+
         REVOKE ALL ON FUNCTION identity_lookup_by_subject(text) FROM public;
         GRANT EXECUTE ON FUNCTION identity_lookup_by_subject(text) TO app_user;
         """
@@ -93,7 +92,9 @@ def upgrade() -> None:
     # 🔒 4. identity_consume_auth_token
     op.execute(
         """
-        CREATE OR REPLACE FUNCTION identity_consume_auth_token(p_token_hash text, p_purpose auth_token_purpose, p_now timestamptz)
+        CREATE OR REPLACE FUNCTION identity_consume_auth_token(
+            p_token_hash text, p_purpose auth_token_purpose, p_now timestamptz
+        )
         RETURNS TABLE (auth_subject_id text)
         LANGUAGE sql
         SECURITY DEFINER
@@ -108,14 +109,20 @@ def upgrade() -> None:
             RETURNING auth_subject_id;
         $$;
 
-        REVOKE ALL ON FUNCTION identity_consume_auth_token(text, auth_token_purpose, timestamptz) FROM public;
-        GRANT EXECUTE ON FUNCTION identity_consume_auth_token(text, auth_token_purpose, timestamptz) TO app_user;
+        REVOKE ALL ON FUNCTION identity_consume_auth_token(
+            text, auth_token_purpose, timestamptz
+        ) FROM public;
+        GRANT EXECUTE ON FUNCTION identity_consume_auth_token(
+            text, auth_token_purpose, timestamptz
+        ) TO app_user;
         """
     )
 
 
 def downgrade() -> None:
-    op.execute("DROP FUNCTION IF EXISTS identity_consume_auth_token(text, auth_token_purpose, timestamptz)")
+    op.execute(
+        "DROP FUNCTION IF EXISTS identity_consume_auth_token(text, auth_token_purpose, timestamptz)"
+    )
     op.execute("DROP FUNCTION IF EXISTS identity_consume_magic_link(text, timestamptz)")
     op.execute("DROP FUNCTION IF EXISTS identity_lookup_by_email(text)")
     op.execute("DROP FUNCTION IF EXISTS identity_lookup_by_subject(text)")

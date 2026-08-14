@@ -689,7 +689,9 @@ async def get_portal_access_status(
 async def grant_portal_access(
     session: AsyncSession, *, tenant_id: uuid.UUID, client_id: uuid.UUID, now: datetime
 ) -> None:
-    await repo.upsert_portal_access_grant(session, tenant_id=tenant_id, client_id=client_id, now=now)
+    await repo.upsert_portal_access_grant(
+        session, tenant_id=tenant_id, client_id=client_id, now=now
+    )
 
 
 __all__ = [
