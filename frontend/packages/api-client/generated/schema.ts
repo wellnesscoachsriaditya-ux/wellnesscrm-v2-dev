@@ -373,6 +373,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/app/clients/{client_id}/checkin-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A client's check-in cadence
+         * @description FR-M8-022. ``null`` when the client has no schedule yet.
+         */
+        get: operations["clientCheckinScheduleRead"];
+        /**
+         * Configure or pause a client's check-ins
+         * @description FR-M8-022/024 — the cadence, and the pause that does not change the stage.
+         *
+         *     🔒 Pausing cancels anything already queued. A pause that left Friday's nudge
+         *     in the queue would send one more message after the practitioner asked us to
+         *     stop.
+         */
+        put: operations["clientCheckinScheduleUpdate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/app/clients/{client_id}/consultation-notes": {
         parameters: {
             query?: never;
@@ -542,6 +570,93 @@ export interface paths {
          *     the record matters most.
          */
         post: operations["measurementRecord"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/message-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A client's message settings
+         * @description The client's own overrides *and* the practice defaults they layer on.
+         *
+         *     ⚠️ Both, deliberately: a screen showing an override without what it overrides
+         *     cannot explain itself.
+         */
+        get: operations["clientMessagePreferences"];
+        /**
+         * Change a client's message settings
+         * @description US-M8-06 — a per-client override, including an unsubscribe.
+         *
+         *     ⚠️ 🔒 **A client-initiated unsubscribe must also write the consent ledger.**
+         *     This is the practitioner-facing route and writes the preference only; the
+         *     portal's own withdrawal path (S6) writes both, because the preference
+         *     controls behaviour while the ledger is the legal record.
+         */
+        put: operations["clientMessagePreferenceUpdate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every message sent to a client
+         * @description FR-M8-011 — the delivery log for one client, newest first.
+         *
+         *     🔒 Every attempt, including failures and retries. A history that showed only
+         *     successes would hide the case AC-M8-007 exists for.
+         */
+        get: operations["clientMessageHistory"];
+        put?: never;
+        /**
+         * Send a message to a client
+         * @description Queue a practitioner-triggered message — the core loop's "message the client".
+         *
+         *     🔒 **Queues, never sends.** Suppression, quiet hours and the frequency cap are
+         *     applied at dispatch by the same engine that handles every automated message
+         *     (FR-M8-001). A practitioner cannot message a client who withdrew consent by
+         *     doing it by hand, which is the protection they actually want.
+         *
+         *     ⚠️ The occasion is the template plus the minute, so a double-tapped button
+         *     queues one message while a deliberate re-send a minute later queues another.
+         */
+        post: operations["clientMessageSend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/messages/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Messages queued for a client but not yet sent
+         * @description FR-M8-028 — what is about to be sent on the practitioner's behalf.
+         */
+        get: operations["clientPendingMessages"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -995,6 +1110,128 @@ export interface paths {
          *     requires a precondition for that reason; this deliberately does not.
          */
         patch: operations["enquiryFormsUpdate"];
+        trace?: never;
+    };
+    "/api/v1/app/messaging/failures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent delivery failures across the practice
+         * @description AC-M8-007 — terminal failures, in one place a practitioner will look.
+         */
+        get: operations["messageFailures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/messaging/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The practice's message-type settings
+         * @description FR-M8-027 — the tenant-wide toggles and quiet hours.
+         */
+        get: operations["messagePreferenceList"];
+        /**
+         * Change a practice-wide message setting
+         * @description FR-M8-027 — disable a non-essential message type across the practice.
+         *
+         *     🔒 An essential template is refused here, before the write, so the
+         *     practitioner reads a sentence rather than a constraint violation. The
+         *     database carries the same rule, which is what makes it true regardless of
+         *     which path reaches the table.
+         */
+        put: operations["messagePreferenceUpdate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/messaging/scheduled/{scheduled_message_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a message that has not been sent
+         * @description FR-M8-028's other half.
+         *
+         *     ⚠️ Only a `pending` message can be cancelled. There is no "unsend": once the
+         *     engine has handed a message to a transport, the honest record is the delivery
+         *     log, and an endpoint that appeared to undo it would misinform the
+         *     practitioner about what their client saw.
+         */
+        post: operations["messageCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/messaging/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every message type this practice can send
+         * @description The eight MVP message types — FR-M8-013…020, FR-M8-026.
+         */
+        get: operations["messageTemplateList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/messaging/templates/{code}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A message template as the client will receive it
+         * @description 🔒 FR-M8-026 — "as their clients will receive it".
+         *
+         *     Rendered by :func:`modules.messaging.render`, the same function the dispatch
+         *     path uses. A preview produced by different code would be a preview of
+         *     something else, which is precisely the reassurance this requirement is for.
+         *
+         *     ⚠️ With no ``client_id`` the values are illustrative and ``is_sample`` says
+         *     so. Without that flag a practitioner could reasonably believe they were
+         *     looking at a real client's message.
+         */
+        get: operations["messageTemplatePreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/app/nutrition/foods": {
@@ -1580,6 +1817,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/webhooks/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Provider webhook verification challenge
+         * @description Meta's one-time registration handshake.
+         *
+         *     🔒 Echoes the challenge **only** when the token matches the configured one.
+         *     Echoing unconditionally would let anyone register our endpoint against their
+         *     own app and start feeding it callbacks.
+         *
+         *     ⚠️ Returns 403 rather than 401 on a mismatch, because Meta treats 403 as
+         *     "verification failed" and shows it in their console; a 401 is reported as a
+         *     transport error and sends the operator looking in the wrong place.
+         */
+        get: operations["webhookVerify"];
+        put?: never;
+        /**
+         * Provider delivery-status callback
+         * @description Accept a delivery receipt, queue it, and acknowledge.
+         *
+         *     🔒 The signature is checked against the **raw body**, before it is parsed.
+         *     JSON round-tripping changes key order and whitespace, and the signature is
+         *     over the bytes the provider sent.
+         *
+         *     🔒 A failure returns 401 with no body (API §11.3). No detail: an unsigned
+         *     caller learns only that it was refused.
+         */
+        post: operations["webhookReceive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1769,6 +2045,58 @@ export interface components {
             moved: number;
             /** Requested */
             requested: number;
+        };
+        /**
+         * CheckinFrequency
+         * @description DB §11.7 — FR-M8-022.
+         * @enum {string}
+         */
+        CheckinFrequency: "weekly" | "fortnightly" | "monthly";
+        /**
+         * CheckinScheduleRequest
+         * @description Configure or pause a client's check-ins.
+         */
+        CheckinScheduleRequest: {
+            /** Day Of Week */
+            day_of_week?: number | null;
+            /** @default weekly */
+            frequency: components["schemas"]["CheckinFrequency"];
+            /**
+             * Is Paused
+             * @default false
+             */
+            is_paused: boolean;
+            /**
+             * Time Of Day
+             * Format: time
+             * @default 09:00:00
+             */
+            time_of_day: string;
+        };
+        /**
+         * CheckinScheduleResponse
+         * @description A client's check-in cadence — FR-M8-022…024.
+         */
+        CheckinScheduleResponse: {
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /** Day Of Week */
+            day_of_week: number | null;
+            frequency: components["schemas"]["CheckinFrequency"];
+            /** Is Paused */
+            is_paused: boolean;
+            /** Last Generated For */
+            last_generated_for: string | null;
+            /** Next Due On */
+            next_due_on: string | null;
+            /**
+             * Time Of Day
+             * Format: time
+             */
+            time_of_day: string;
         };
         /**
          * ClientCreateRequest
@@ -2244,6 +2572,52 @@ export interface components {
          */
         DietaryClass: "vegetarian" | "eggetarian" | "non_vegetarian" | "vegan" | "jain";
         /**
+         * DispatchResponse
+         * @description One delivery attempt — FR-M8-003, FR-M8-011.
+         *
+         *     ⚠️ ``failure_reason`` is the provider's own text. It is shown to the
+         *     *practitioner*, who needs to know why their client did not receive something,
+         *     and must never be forwarded to a client.
+         */
+        DispatchResponse: {
+            /** Attempt Number */
+            attempt_number: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Delivered At */
+            delivered_at: string | null;
+            /** Failure Code */
+            failure_code: string | null;
+            /** Failure Reason */
+            failure_reason: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Read At */
+            read_at: string | null;
+            /** Recipient Address */
+            recipient_address: string;
+            /** Sent At */
+            sent_at: string | null;
+            status: components["schemas"]["DispatchStatus"];
+            /** Template Code */
+            template_code: string;
+            /** Template Version */
+            template_version: number;
+            transport: components["schemas"]["TransportType"];
+        };
+        /**
+         * DispatchStatus
+         * @description DB §11.3 — the provider-reported lifecycle of one attempt.
+         * @enum {string}
+         */
+        DispatchStatus: "queued" | "sent" | "delivered" | "read" | "failed" | "rejected";
+        /**
          * DocumentUrlResponse
          * @description A short-lived URL — FR-M0-038, NFR-035.
          *
@@ -2551,6 +2925,16 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * HistoryPageInfo
+         * @description Where the next page resumes — API §6.1.
+         */
+        HistoryPageInfo: {
+            /** Has More */
+            has_more: boolean;
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** ItemCreateRequest */
         ItemCreateRequest: {
             /** Client Note */
@@ -2779,6 +3163,15 @@ export interface components {
          */
         MeasurementSource: "practitioner" | "client" | "device";
         /**
+         * MessageHistoryResponse
+         * @description API §5.1's collection envelope.
+         */
+        MessageHistoryResponse: {
+            /** Items */
+            items: components["schemas"]["DispatchResponse"][];
+            page: components["schemas"]["HistoryPageInfo"];
+        };
+        /**
          * NoteResponse
          * @description One note — FR-M1-007, "with timestamp and author".
          */
@@ -2885,6 +3278,33 @@ export interface components {
              * Format: email
              */
             email: string;
+        };
+        /**
+         * PendingMessageResponse
+         * @description A message queued but not yet sent — FR-M8-028.
+         *
+         *     🔒 ``preview`` is the rendered body, because "you have three messages
+         *     scheduled" is not something a practitioner can act on. What they need to know
+         *     before it goes out on their behalf is what it *says*.
+         */
+        PendingMessageResponse: {
+            /** Deferred From */
+            deferred_from: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Preview */
+            preview: string;
+            /**
+             * Scheduled For
+             * Format: date-time
+             */
+            scheduled_for: string;
+            state: components["schemas"]["ScheduledState"];
+            /** Template Code */
+            template_code: string;
         };
         /** PlanCreateRequest */
         PlanCreateRequest: {
@@ -3189,6 +3609,60 @@ export interface components {
             type: string;
         };
         /**
+         * PreferenceResponse
+         * @description One preference row — DB §11.8.
+         */
+        PreferenceResponse: {
+            /** Client Id */
+            client_id: string | null;
+            /** Is Enabled */
+            is_enabled: boolean;
+            /** Max Messages Per Week */
+            max_messages_per_week: number | null;
+            /** Quiet Hours End */
+            quiet_hours_end: string | null;
+            /** Quiet Hours Start */
+            quiet_hours_start: string | null;
+            /** Template Code */
+            template_code: string | null;
+            transport: components["schemas"]["TransportType"] | null;
+        };
+        /**
+         * PreferenceUpdateRequest
+         * @description A change to a message-type toggle or a quiet window — FR-M8-027.
+         *
+         *     ⚠️ Every field is optional and ``None`` means "leave alone", so a screen that
+         *     submits one section does not clear another. See ``preferences.upsert``.
+         */
+        PreferenceUpdateRequest: {
+            /** Is Enabled */
+            is_enabled?: boolean | null;
+            /** Max Messages Per Week */
+            max_messages_per_week?: number | null;
+            /** Quiet Hours End */
+            quiet_hours_end?: string | null;
+            /** Quiet Hours Start */
+            quiet_hours_start?: string | null;
+            /** Template Code */
+            template_code?: string | null;
+            transport?: components["schemas"]["TransportType"] | null;
+        };
+        /**
+         * PreviewResponse
+         * @description 🔒 FR-M8-026 — the message exactly as the client will receive it.
+         */
+        PreviewResponse: {
+            /** Body */
+            body: string;
+            /** Is Sample */
+            is_sample: boolean;
+            /** Template Code */
+            template_code: string;
+            transport: components["schemas"]["TransportType"];
+            /** Version */
+            version: number;
+        };
+        /**
          * PublicConsentNotice
          * @description The notice a prospect must agree to — API §11.1, FR-M2-004.
          *
@@ -3370,6 +3844,32 @@ export interface components {
             response: components["schemas"]["AssessmentResponseBody"];
         };
         /**
+         * ScheduledMessageResponse
+         * @description What a caller gets back after queueing a message.
+         */
+        ScheduledMessageResponse: {
+            /** Created */
+            created: boolean;
+            /** Id */
+            id: string | null;
+            /**
+             * Scheduled For
+             * Format: date-time
+             */
+            scheduled_for: string;
+            state: components["schemas"]["ScheduledState"];
+            /** Template Code */
+            template_code: string;
+        };
+        /**
+         * ScheduledState
+         * @description DB §11.2. 🔒 ``suppressed`` and ``expired`` are retained, never deleted
+         *     (AC-M8-004) — the reason a message did not arrive is the answer to the
+         *     support question that follows.
+         * @enum {string}
+         */
+        ScheduledState: "pending" | "dispatched" | "suppressed" | "expired" | "cancelled";
+        /**
          * SectionResponse
          * @description One page of the form — PRD §9.3.
          *
@@ -3387,6 +3887,26 @@ export interface components {
             is_clinical: boolean;
             /** Title */
             title: string;
+        };
+        /**
+         * SendMessageRequest
+         * @description A practitioner sending a message by hand.
+         *
+         *     ⚠️ ``variables`` carries only what the server cannot know. The recipient's
+         *     name, their practitioner's name and the portal link are filled in server-side
+         *     — a caller-supplied ``client_name`` would let one client's name be sent to
+         *     another, and a caller-supplied URL would be an open redirect delivered over
+         *     WhatsApp.
+         */
+        SendMessageRequest: {
+            /** Scheduled For */
+            scheduled_for?: string | null;
+            /** Template Code */
+            template_code: string;
+            /** Variables */
+            variables?: {
+                [key: string]: string;
+            };
         };
         /**
          * SexType
@@ -3504,6 +4024,27 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+        };
+        /**
+         * TemplateResponse
+         * @description One message type a practitioner can preview or control — FR-M8-026/027.
+         */
+        TemplateResponse: {
+            /** Category */
+            category: string;
+            /** Code */
+            code: string;
+            default_transport: components["schemas"]["TransportType"];
+            /** Is Essential */
+            is_essential: boolean;
+            /** Is Practitioner Disableable */
+            is_practitioner_disableable: boolean;
+            /** Provider Template Status */
+            provider_template_status: string;
+            /** Variables */
+            variables: Record<string, never>;
+            /** Version */
+            version: number;
         };
         /**
          * TimelineActorType
@@ -3628,6 +4169,24 @@ export interface components {
              */
             token_type: "Bearer";
         };
+        /**
+         * TransportType
+         * @description Outbound message channels — the PostgreSQL ``transport_type`` enum.
+         *
+         *     🔒 ``LOGGED`` was added by migration 0021 and is what makes S5 shippable
+         *     before Meta Business Verification lands: a real no-op transport that records
+         *     a delivery attempt and sends nothing, so the engine, the schedule, the
+         *     suppression rules and the delivery log all run end to end without pretending
+         *     a WhatsApp message was delivered.
+         *
+         *     ⚠️ ``SMS`` remains declared because the enum value exists in the database
+         *     since 0002 and ``magic_links.issued_via`` can hold it. It has no adapter at
+         *     MVP — approved proposal #7 keeps TRAI DLT registration off the critical path
+         *     — and ``kernel.messaging.TransportType`` (the messaging engine's own,
+         *     narrower vocabulary) deliberately omits it.
+         * @enum {string}
+         */
+        TransportType: "whatsapp" | "sms" | "email" | "logged";
         /**
          * UserRole
          * @description Roles within a tenant (FR-M0-016).
@@ -4200,6 +4759,72 @@ export interface operations {
             };
         };
     };
+    clientCheckinScheduleRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckinScheduleResponse"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientCheckinScheduleUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckinScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckinScheduleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     consultationNoteList: {
         parameters: {
             query?: never;
@@ -4522,6 +5147,173 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeasurementResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientMessagePreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientMessagePreferenceUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferenceUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientMessageHistory: {
+        parameters: {
+            query?: {
+                /** @description Opaque, from a previous page. */
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientMessageSend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledMessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientPendingMessages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingMessageResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -5165,6 +5957,175 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnquiryFormResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    messageFailures: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DispatchResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    messagePreferenceList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceResponse"][];
+                };
+            };
+        };
+    };
+    messagePreferenceUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferenceUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    messageCancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduled_message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledMessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    messageTemplateList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateResponse"][];
+                };
+            };
+        };
+    };
+    messageTemplatePreview: {
+        parameters: {
+            query?: {
+                /** @description Render with this client's own values. */
+                client_id?: string | null;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewResponse"];
                 };
             };
             /** @description Validation Error */
@@ -6131,6 +7092,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    webhookVerify: {
+        parameters: {
+            query?: {
+                "hub.mode"?: string | null;
+                "hub.challenge"?: string | null;
+                "hub.verify_token"?: string | null;
+            };
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    webhookReceive: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Hub-Signature-256"?: string | null;
+            };
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

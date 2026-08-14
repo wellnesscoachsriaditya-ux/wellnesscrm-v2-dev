@@ -18,6 +18,16 @@ import { ClientNotesPanel, type NoteView } from '../components/clients/ClientNot
 import { ClientSummary } from '../components/clients/ClientSummary'
 import { ClientTagsPanel, type TagView } from '../components/clients/ClientTagsPanel'
 import { ClientTimelinePanel, type TimelineEntryView } from '../components/clients/ClientTimelinePanel'
+import {
+  ClientMessagesPanel,
+  type MessageHistoryView,
+  type PendingMessageView,
+} from '../components/clients/ClientMessagesPanel'
+import {
+  ClientCheckinPanel,
+  type CheckinFrequencyValue,
+  type CheckinScheduleView,
+} from '../components/clients/ClientCheckinPanel'
 import { EntitlementNotice } from '../components/clients/EntitlementNotice'
 import {
   ClinicalAssessmentPanel,
@@ -38,6 +48,7 @@ import {
 import { useClientDetail } from '../features/clients/useClientDetail'
 import { useCollaboration } from '../features/clients/useCollaboration'
 import { useTimeline } from '../features/clients/useTimeline'
+import { useClientMessaging } from '../features/messaging/useClientMessaging'
 import {
   useAssessments,
   useMeasurements,
@@ -47,6 +58,11 @@ import {
 import { useCurrentSession } from '../features/session/useCurrentSession'
 import type { Grant, Note, Tag } from '../features/clients/collaborationApi'
 import type { TimelineEntry, TimelineEventType } from '../features/clients/timelineApi'
+import type {
+  CheckinSchedule,
+  Dispatch,
+  PendingMessage,
+} from '../features/messaging/messagingApi'
 import type {
   AssessmentSummary,
   MeasurementResponse,
@@ -96,6 +112,46 @@ function toTimelineView(entry: TimelineEntry): TimelineEntryView {
     summary: entry.summary,
     actorType: entry.actor_type,
     actorId: entry.actor_id,
+  }
+}
+
+/**
+ * A delivery attempt, as the panel renders it — FR-M8-011.
+ *
+ * ⚠️ `failure_reason` is the provider's own text, shown to the practitioner and
+ * never to the client.
+ */
+function toMessageView(dispatch: Dispatch): MessageHistoryView {
+  return {
+    id: dispatch.id,
+    templateCode: dispatch.template_code,
+    transport: dispatch.transport,
+    status: dispatch.status,
+    recipientAddress: dispatch.recipient_address,
+    attemptNumber: dispatch.attempt_number,
+    failureReason: dispatch.failure_reason,
+    createdAt: dispatch.created_at,
+  }
+}
+
+function toPendingView(message: PendingMessage): PendingMessageView {
+  return {
+    id: message.id,
+    templateCode: message.template_code,
+    scheduledFor: message.scheduled_for,
+    deferredFrom: message.deferred_from,
+    preview: message.preview,
+  }
+}
+
+function toCheckinView(schedule: CheckinSchedule | null): CheckinScheduleView | null {
+  if (schedule === null) return null
+  return {
+    frequency: schedule.frequency as CheckinFrequencyValue,
+    dayOfWeek: schedule.day_of_week,
+    timeOfDay: schedule.time_of_day,
+    isPaused: schedule.is_paused,
+    nextDueOn: schedule.next_due_on,
   }
 }
 
@@ -190,6 +246,7 @@ export function ClientDetail() {
   // client record, which this hook does not own. See `useClientDetail.refresh`.
   const collaboration = useCollaboration(clientId, refresh)
   const timeline = useTimeline(clientId)
+  const messaging = useClientMessaging(clientId)
   
   const assessmentsData = useAssessments(clientId)
   const measurementsData = useMeasurements(clientId)
@@ -346,6 +403,37 @@ export function ClientDetail() {
         * the mutation commits, but this hook holds a page fetched earlier. A
         * practitioner sees it on their next load — acceptable for a history
         * panel, and cheaper than invalidating on every mutation. */}
+      {/* 🔒 M8 — what was sent and what is queued (FR-M8-011, FR-M8-028), and
+        * the check-in cadence behind most of it (FR-M8-022).
+        * ⚠️ Above the timeline: the timeline says a message was sent, this says
+        * what it was and whether it arrived. */}
+      <ClientCheckinPanel
+        schedule={toCheckinView(messaging.checkin)}
+        loading={messaging.loading}
+        error={messaging.checkinError}
+        busy={messaging.busy}
+        onSave={(update) =>
+          void messaging.saveCheckin({
+            frequency: update.frequency,
+            day_of_week: update.dayOfWeek,
+            is_paused: update.isPaused,
+          })
+        }
+      />
+
+      <ClientMessagesPanel
+        history={messaging.history.map(toMessageView)}
+        pending={messaging.pending.map(toPendingView)}
+        loading={messaging.loading}
+        loadingMore={messaging.loadingMore}
+        hasMore={messaging.hasMore}
+        historyError={messaging.historyError}
+        pendingError={messaging.pendingError}
+        busy={messaging.busy}
+        onLoadMore={() => void messaging.loadMore()}
+        onCancel={(id) => void messaging.cancel(id)}
+      />
+
       <ClientTimelinePanel
         entries={timeline.entries.map(toTimelineView)}
         filters={timeline.filters.map((filter) => ({

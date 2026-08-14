@@ -4,6 +4,7 @@ import { ClientDetail } from '../screens/ClientDetail'
 import { ClientList } from '../screens/ClientList'
 import { Dashboard } from '../screens/Dashboard'
 import { Leads } from '../screens/Leads'
+import { Messages } from '../screens/Messages'
 import { placeholder } from '../screens/Placeholder'
 import {
   appointmentsIcon,
@@ -116,9 +117,16 @@ export const ia = defineIa({
       id: 'messages',
       path: '/messages',
       label: 'Messages',
-      permission: 'messages.read',
+      // 🔒 The action the backend registers for reading the delivery log
+      // (S5). The menu gate mirrors the API's authorization rather than
+      // inventing its own name — a hidden item is a courtesy, the API is what
+      // refuses.
+      permission: 'message.history_read',
       nav: { order: 6, icon: messagesIcon },
-      view: placeholder('S7', 'WhatsApp conversations and the scheduled messages queued behind them.'),
+      // ⚠️ Not an inbox. MVP sends and records; a client's reply reaches the
+      // practitioner's own WhatsApp (EC-M8-07) and the two-way inbox is
+      // Phase 2 (FR-M8-030).
+      view: Messages,
     },
 
     // ─── M10 Subscription & Entitlements ──────────────────────────────────

@@ -113,6 +113,13 @@ function stubRoutes(...routes: Route[]) {
     if (url.includes('/measurements')) return jsonResponse([])
     if (url.includes('/consultation-notes')) return jsonResponse([])
     if (url.includes('/documents')) return jsonResponse([])
+    // ⚠️ Before `/messages`, because `/messages/pending` contains both and the
+    // pending list is an array while the history is an envelope — the same trap
+    // `/timeline/filters` sets above.
+    if (url.includes('/messages/pending')) return jsonResponse([])
+    if (url.includes('/message-preferences')) return jsonResponse([])
+    if (url.includes('/messages')) return jsonResponse({ items: [], page: { has_more: false } })
+    if (url.includes('/checkin-schedule')) return jsonResponse(null)
     if (url.includes('/auth/me')) return jsonResponse(SESSION)
     return undefined
   }
