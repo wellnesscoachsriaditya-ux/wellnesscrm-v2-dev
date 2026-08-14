@@ -1,13 +1,18 @@
-import uuid
-from dataclasses import dataclass
+"""Domain events this module publishes.
 
-from app.kernel.events import DomainEvent, register_event
+🔒 ``PlanVersionIssued`` now lives in ``kernel.nutrition`` and is re-exported
+here. It moved in S5 because `messaging` subscribes to it (FR-M8-013) and R3
+forbids one module importing another at all — an event class defined in the
+publisher's module is one only that module can subscribe to. The kernel is the
+layer both sides may depend on, which is the same reason ``ClientStageChanged``
+lives in ``kernel.clients``.
 
+⚠️ The re-export is not cosmetic: existing imports of
+``app.modules.nutrition.events.PlanVersionIssued`` keep working, and the class is
+the *same object*, so ``register_event``'s duplicate-name check is satisfied and
+subscriptions made through either path reach the same handler list.
+"""
 
-@register_event("nutrition.plan_version_issued")
-@dataclass(frozen=True, slots=True)
-class PlanVersionIssued(DomainEvent):
-    """Fired when a plan version transitions to issued."""
+from app.kernel.nutrition import PlanVersionIssued
 
-    tenant_id: uuid.UUID
-    plan_version_id: uuid.UUID
+__all__ = ["PlanVersionIssued"]

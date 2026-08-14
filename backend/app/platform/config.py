@@ -100,6 +100,45 @@ class Settings(BaseSettings):
     supabase_service_key: SecretStr | None = None
     supabase_storage_bucket: str = "wellnesscrm-files"
 
+    # ─── Messaging transports (M8, S5) ───────────────────────────────────
+    #
+    # 🔒 **An adapter is registered only when its credentials are present.** The
+    # entry point reads these and wires whatever this deployment can actually
+    # reach; a WhatsApp adapter with no access token would turn every plan
+    # delivery into a failed attempt with a retry schedule.
+    #
+    # ⚠️ Every one of these is `None` by default and none has a working
+    # fallback. NFR-034 forbids secrets in source control, and a default that
+    # happened to work would be a default that sends somewhere in a
+    # misconfigured deployment.
+    #
+    # 🔒 With nothing configured, the engine runs on the `logged` transport,
+    # which records every attempt and sends nothing. That is the state S5 ships
+    # in until Meta Business Verification lands, and it is a real deployment mode
+    # rather than a degraded one.
+    whatsapp_phone_number_id: str | None = None
+    whatsapp_access_token: SecretStr | None = None
+    whatsapp_api_base_url: str = "https://graph.facebook.com"
+    whatsapp_api_version: str = "v21.0"
+    whatsapp_template_language: str = "en"
+    #: 🔒 Meta's app secret, used to verify `X-Hub-Signature-256` (API §11.3).
+    #: ⚠️ Without it the webhook rejects every request: an unverified webhook is
+    #: an unauthenticated write endpoint, and failing closed is the only safe
+    #: direction for one that can move a delivery status.
+    whatsapp_webhook_secret: SecretStr | None = None
+    #: The token Meta echoes during webhook registration (the `GET` challenge).
+    whatsapp_verify_token: SecretStr | None = None
+
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from_address: str | None = None
+    #: ⚠️ There is no plaintext option. Credentials and a client's address would
+    #: otherwise cross the network in the clear, and a "TLS optional" flag is one
+    #: somebody eventually sets wrong.
+    smtp_use_tls: bool = True
+
     # ─── Worker ──────────────────────────────────────────────────────────
     worker_poll_interval_seconds: int = Field(default=60, ge=1, le=300)
     worker_concurrency: int = Field(default=1, ge=1, le=16)

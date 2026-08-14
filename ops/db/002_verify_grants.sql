@@ -43,12 +43,21 @@ DECLARE
     -- by `trg_usage_events__immutable` (migration 0007), because a grant cannot
     -- express "every column but one". Listing it here would fail on the UPDATE
     -- it is designed to hold. The trigger is the check for that table.
+    --
+    -- 🔒 `message_dispatches` (DB §11.3) is append-only in the same sense as
+    -- `usage_events` but by a different mechanism, so it *is* listed here.
+    -- Migration 0021 revokes table-level UPDATE and DELETE and grants UPDATE on
+    -- exactly the columns a provider delivery receipt moves (status, provider
+    -- id, failure detail, timestamps, cost). `has_table_privilege` reports
+    -- table-level privileges only, so the column grant does not trip this check
+    -- while the two verbs that must never return still do.
     append_only CONSTANT text[] := ARRAY[
         'audit_log',
         'consent_records',
         'operator_actions',
         'subscription_events',
-        'client_stage_history'
+        'client_stage_history',
+        'message_dispatches'
     ];
     forbidden   CONSTANT text[] := ARRAY['UPDATE', 'DELETE'];
 

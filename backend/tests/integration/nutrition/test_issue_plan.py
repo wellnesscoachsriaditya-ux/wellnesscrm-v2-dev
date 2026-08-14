@@ -191,15 +191,27 @@ async def test_issue_draft_successfully(
         snapshot = snap_result.scalar_one()
         assert snapshot.document["version_number"] == 1
 
-        # 3. Verify PDF job is enqueued
+        # 3. Verify the PDF job is enqueued
+        #
+        # 🔒 **Two jobs from S5, and that is the point of the event bus.** Issuing
+        # a plan announces `PlanVersionIssued`; `nutrition` renders the PDF and
+        # `messaging` schedules the client's delivery (FR-M8-013). Neither
+        # subscriber knows the other exists, and `issue_plan_version` did not
+        # change to gain the second — which is what AC-M8-008 asserts.
         job_result = await session.execute(select(Job).where(Job.tenant_id == tenant_id))
-        jobs = list(job_result.scalars())
-        assert len(jobs) == 1
-        job = jobs[0]
-        assert job.job_type == "generate_nutrition_pdf"
+        jobs = {job.job_type: job for job in job_result.scalars()}
+        assert set(jobs) == {"generate_nutrition_pdf", "dispatch_scheduled_message"}
+
+        job = jobs["generate_nutrition_pdf"]
         assert job.job_class == JobClass.RENDERING.value
         assert job.status == JobStatus.PENDING.value
         assert job.payload["plan_version_id"] == str(version_id)
+
+        # ⚠️ The delivery job is asserted only by its existence here. What it
+        # does — suppression, quiet hours, the transport it lands on — belongs to
+        # `tests/integration/messaging`, and duplicating it would give this file
+        # a second reason to fail.
+        assert jobs["dispatch_scheduled_message"].status == JobStatus.PENDING.value
 
 
 async def test_invalid_issue_transition(

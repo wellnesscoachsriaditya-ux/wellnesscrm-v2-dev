@@ -250,6 +250,13 @@ def test_exempt_paths_cover_health_and_the_authentication_surface() -> None:
         # (EC-M2-04) — see `routers/public_forms.py`.
         "/api/v1/public/forms/{tenant_slug}",
         "/api/v1/public/forms/{tenant_slug}/submit",
+        # 🔒 S5 — API §11.3. A provider's delivery-status callback has no actor
+        # and no token it could present. Bounded instead by HMAC signature
+        # verification over the raw body before it is parsed, a verify-token
+        # challenge on the GET, and a tenant resolved from the provider's own
+        # message id through a policy that admits exactly one row — see
+        # `routers/webhooks.py` and migration 0021 §5.
+        "/api/v1/public/webhooks/{provider}",
     }
 
 

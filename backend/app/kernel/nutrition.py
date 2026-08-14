@@ -14,12 +14,14 @@ import hashlib
 import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum, StrEnum
 from typing import Any, Final, Literal, TypedDict
 from uuid import UUID
 
 from app.kernel.errors import ConflictError, DomainRuleError
+from app.kernel.events import DomainEvent, register_event
 
 
 class PlanState(str, Enum):
@@ -707,3 +709,35 @@ def snapshot_content_hash(document: Mapping[str, Any]) -> str:
         document, sort_keys=True, separators=(",", ":"), default=str, ensure_ascii=False
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+# ─── Cross-module vocabulary (Arch §3.4a) ────────────────────────────────
+#
+# 🔒 Moved here in S5, from `modules/nutrition/events.py`, and the move is the
+# point rather than a tidy-up. `messaging` must deliver a plan the moment it is
+# issued (FR-M8-013, AC-M8-001), which means subscribing to this event — and R3
+# forbids one module importing another *at all*. An event class that lives in the
+# publisher's module is an event only that module can subscribe to.
+#
+# `modules.nutrition.events` re-exports it, so nothing that already imported it
+# from there had to change.
+
+
+@register_event("nutrition.plan_version_issued")
+@dataclass(frozen=True, slots=True)
+class PlanVersionIssued(DomainEvent):
+    """A plan version was issued to a client — FR-M4-030, and M8's trigger.
+
+    ⚠️ ``client_id`` is carried rather than looked up, and it has to be: a
+    subscriber in `messaging` cannot read `diet_plans` (R6), so without it the
+    event would name a plan nobody outside `nutrition` can resolve to a person.
+
+    ⚠️ Identifiers only (NFR-033). There is no title, no macro total and no
+    snapshot — the message says a plan is ready and links to it; the client opens
+    the portal to see what is in it.
+    """
+
+    tenant_id: UUID
+    plan_version_id: UUID
+    client_id: UUID
+    issued_at: datetime

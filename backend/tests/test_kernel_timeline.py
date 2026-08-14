@@ -164,10 +164,25 @@ def test_future_event_types_are_not_offered_as_filters() -> None:
     for event_type in (
         TimelineEventType.PLAN_ISSUED,
         TimelineEventType.APPOINTMENT_SCHEDULED,
-        TimelineEventType.MESSAGE_SENT,
         TimelineEventType.CLIENT_ACTIVITY,
     ):
         assert not is_producible(event_type)
+
+
+def test_message_sent_became_producible_in_m8() -> None:
+    """The messaging engine's producer landed in S5 — FR-M1-018, AC-M8-003.
+
+    ⚠️ Pinned as its own test rather than by quietly deleting a line above, for
+    the same reason the clinical types were: the *transition* is what needs
+    guarding. `MESSAGE_SENT` predated its producer by three sprints, and the
+    moment `messaging` began publishing `MessageDispatched` is the moment the
+    "Messages" filter started returning rows.
+
+    🔒 The entry is written when a dispatch is *attempted*, not when a provider
+    confirms delivery — otherwise the common "sent, never delivered" case would
+    be invisible on the surface a practitioner checks first.
+    """
+    assert is_producible(TimelineEventType.MESSAGE_SENT)
 
 
 def test_clinical_event_types_became_producible_in_m3() -> None:

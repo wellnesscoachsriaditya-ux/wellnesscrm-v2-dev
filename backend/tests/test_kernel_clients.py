@@ -519,11 +519,20 @@ def test_the_port_declares_no_write_method() -> None:
       so AC-M1-006's scoping rule has one definition (the ``clients`` module's)
       that another module can embed as a subquery, instead of reimplementing the
       predicate and drifting from it.
+
+    S5 added one, also a read:
+
+    * ``contact_for`` — the mobile and email a message may be sent to, read at
+      dispatch (EC-M8-08). It is **separate from ``find``** deliberately:
+      ``ClientIdentity`` is read by five modules and putting contact PII on it
+      would disclose a client's number to every caller that only wanted a name
+      and a stage. One caller uses this, and it writes nothing.
     """
     surface = {name for name in vars(ClientDirectory) if not name.startswith("_")}
     assert surface == {
         "find",
         "find_by_mobile",
+        "contact_for",
         "count_active",
         "find_many",
         "visible_client_ids",

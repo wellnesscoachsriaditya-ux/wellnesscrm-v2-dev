@@ -24,12 +24,14 @@ from fastapi import FastAPI
 from app.kernel.clients import configure_client_directory, configure_client_intake
 from app.kernel.entitlements import configure_entitlement_guard
 from app.kernel.events import configure_deferred_enqueuer, deferred_job_types
-from app.kernel.jobs import verify_handlers_exist
+from app.kernel.jobs import configure_job_enqueuer, verify_handlers_exist
 from app.modules.clients import (
     ClientRepositoryDirectory,
     ClientRepositoryIntake,
     register_subscribers,
 )
+from app.modules.messaging import configure_link_base_url
+from app.modules.messaging import register_jobs as register_messaging_jobs
 from app.modules.nutrition import register_jobs as register_nutrition_jobs
 from app.platform.audit import (
     LoggingAuditSink,
@@ -61,6 +63,8 @@ from app.platform.http.routers.collaboration import tag_router as collaboration_
 from app.platform.http.routers.discovery import router as discovery_router
 from app.platform.http.routers.enquiries import form_router as enquiry_form_router
 from app.platform.http.routers.enquiries import router as enquiries_router
+from app.platform.http.routers.messaging import client_router as messaging_client_router
+from app.platform.http.routers.messaging import router as messaging_router
 from app.platform.http.routers.nutrition import router as nutrition_router
 from app.platform.http.routers.nutrition_plan_items import day_router as plan_day_router
 from app.platform.http.routers.nutrition_plan_items import item_router as plan_item_router
@@ -70,10 +74,12 @@ from app.platform.http.routers.nutrition_plans import plan_router as client_plan
 from app.platform.http.routers.nutrition_plans import version_router as plan_version_router
 from app.platform.http.routers.public_forms import router as public_forms_router
 from app.platform.http.routers.timeline import router as timeline_router
+from app.platform.http.routers.webhooks import router as webhooks_router
 from app.platform.identity.authentication import resolve_actor as authenticate
 from app.platform.identity.credentials import raise_if_credentials_are_local
-from app.platform.jobs import enqueue_for_event
+from app.platform.jobs import enqueue, enqueue_for_event
 from app.platform.logging import configure_logging, get_logger
+from app.platform.messaging_wiring import configure_messaging
 from app.platform.observability import configure_observability, is_production_like
 
 logger = get_logger(__name__)
@@ -167,6 +173,19 @@ def create_app() -> FastAPI:
     # are published; the worker wires it too, since a job handler may publish.
     configure_deferred_enqueuer(enqueue_for_event)
 
+    # 🔒 The direct-enqueue seam (kernel.jobs). `configure_deferred_enqueuer`
+    # covers jobs an *event* schedules; this covers a module that must queue work
+    # itself with an idempotency key it chooses — S5's scheduler is the first,
+    # and the key is what stops two sweeps queueing one message twice.
+    configure_job_enqueuer(enqueue)
+
+    # 🔒 M8 — the transports this deployment can actually reach, and the deep-link
+    # base URL that goes inside a message. Both are entry-point concerns: the
+    # adapters must not read settings (R5/R4) and the messaging module must not
+    # either.
+    configure_messaging(settings)
+    configure_link_base_url(settings.app_base_url)
+
     # 🔒 DB §5 — the seam five modules read client identity and stage through.
     # Installed here for the same reason as the enqueuer: R1 forbids the kernel
     # importing the `clients` module that satisfies its port, so the entry point
@@ -205,6 +224,11 @@ def create_app() -> FastAPI:
     # DDR-06 — same reason as the worker process.
     register_subscribers()
     register_nutrition_jobs()
+    # 🔒 M8 — the dispatch handler and the four producers (plan issued, enquiry
+    # received, stage changed, client archived). Registered in the web process
+    # too, because the events that create message intent are published by
+    # requests, not by jobs.
+    register_messaging_jobs()
 
     app = FastAPI(
         title="WellnessCRM V2 API",
@@ -298,6 +322,18 @@ def create_app() -> FastAPI:
     app.include_router(plan_day_router)
     app.include_router(plan_slot_router)
     app.include_router(plan_item_router)
+
+    # 🔒 M8 — the messaging surface. `messaging_client_router` shares the
+    # `/app/clients` prefix with five earlier routers and collides with none of
+    # them: every route it declares carries a further segment (`/messages`,
+    # `/checkin-schedule`, `/message-preferences`).
+    app.include_router(messaging_client_router)
+    app.include_router(messaging_router)
+
+    # 🔒 Provider delivery-status callbacks (API §11.3). The second router in the
+    # application on `PublicRoute`; its path is named in `EXEMPT_PATHS`, and
+    # `verify_route_authorization` below aborts startup if that stops being true.
+    app.include_router(webhooks_router)
 
     # Note: Portal (clients querying their own plans, logging metrics) will use a
     # separate realm and router hierarchy in M6.

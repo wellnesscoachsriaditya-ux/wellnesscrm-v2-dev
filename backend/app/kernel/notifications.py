@@ -64,6 +64,13 @@ _TRANSPORT_PURPOSE: dict[TransportType, str] = {
     # a marketing send must use `purpose_for` with its own category, not this.
     TransportType.SMS: "service_delivery",
     TransportType.EMAIL: "service_delivery",
+    # 🔒 The no-op transport still requires a purpose, and deliberately the same
+    # one as a real channel. `logged` sends nothing, so it is tempting to treat
+    # it as consent-free — but it is selected by *configuration*, not by the
+    # caller, and a purpose that weakened when WhatsApp was unavailable would
+    # mean the consent check a message passed depended on which environment it
+    # ran in. The rule must not move when the transport does.
+    TransportType.LOGGED: "service_delivery",
 }
 
 
@@ -162,6 +169,29 @@ class Notification:
     #: Set when the send belongs to a client engagement, so the delivery record
     #: can be shown on that client's timeline once messaging ships.
     client_id: uuid.UUID | None = None
+    #: 🔒 The provider's own name for the approved template — WhatsApp's
+    #: ``provider_template_name`` (DB §11.1). ``None`` on transports that carry
+    #: free text. An adapter that needs one and is handed ``None`` must fail the
+    #: send rather than improvise a body: Meta rejects unapproved content per
+    #: recipient, which is a failure discovered in production one client at a
+    #: time.
+    provider_template_name: str | None = None
+    #: The rendered fallback body — DB §11.1's ``body_template`` with this
+    #: message's variables substituted.
+    #:
+    #: ⚠️ This does **not** contradict "a template code and variables, never a
+    #: rendered body". WhatsApp ignores it entirely and sends
+    #: :attr:`provider_template_name`; email and the logged transport have no
+    #: approval registry and genuinely need text. Rendering happens once, in the
+    #: messaging module against the versioned template, rather than in each
+    #: adapter — which is what stops two transports rendering one template
+    #: differently.
+    body: str | None = None
+    #: Correlates the provider's delivery receipt with the attempt that caused
+    #: it. Carried so an adapter can echo it where a provider supports a client
+    #: reference; never required for correctness — ``provider_message_id`` is
+    #: what the webhook matches on.
+    dispatch_id: uuid.UUID | None = None
 
     def __post_init__(self) -> None:
         if not self.template_code:
@@ -282,26 +312,94 @@ class NotificationTransport(Protocol):
         ...
 
 
-# ─── 🔒 Remaining work: the adapters ─────────────────────────────────────
+# ─── The transport registry (S5) ─────────────────────────────────────────
 #
-# S1 ships the port and no adapters, which the sprint plan asks for explicitly
-# ("`notifications` port — Interface only; no adapters yet", FR-M0-041).
+# 🔒 Arch §3.1 R5 — the same seam shape as `configure_client_directory` and
+# `configure_deferred_enqueuer`. The `messaging` module must reach a transport
+# without importing `app.integrations` (which would bind it to a provider) or
+# `app.platform` (which holds the credentials). So the kernel names the
+# capability and the entry point supplies the adapters, built from settings.
+
+
+class TransportNotConfiguredError(RuntimeError):
+    """A send was attempted on a transport this deployment has not wired.
+
+    🔒 A deployment error, deliberately loud. The alternative — silently
+    substituting a transport the caller did not choose — is how a message
+    intended for WhatsApp becomes an email nobody expected, or worse, a log line
+    a practitioner is told was a delivery.
+    """
+
+
+_transports: dict[TransportType, NotificationTransport] = {}
+
+
+def configure_transports(transports: Mapping[TransportType, NotificationTransport]) -> None:
+    """Install the adapters this process may send through.
+
+    Called by the entry points (``main``/``worker``) with whatever the current
+    configuration can actually reach. 🔒 **An adapter is registered only when its
+    credentials are present**: an entry here is a claim that a send will be
+    attempted for real, and the dispatch engine chooses its transport from what
+    is registered. Registering a WhatsApp adapter with no access token would
+    turn every plan delivery into a failed attempt with a retry schedule.
+
+    Replaces the registry wholesale rather than merging, so a test configuring
+    one transport does not inherit another from an earlier test.
+    """
+    _transports.clear()
+    _transports.update(transports)
+
+
+def available_transports() -> frozenset[TransportType]:
+    """Which transports this process can actually send through."""
+    return frozenset(_transports)
+
+
+def get_transport(transport: TransportType) -> NotificationTransport:
+    """The adapter for one transport.
+
+    Raises:
+        TransportNotConfiguredError: If nothing is registered for it. The caller
+            resolves *which* transport to use before calling — see
+            ``modules.messaging.dispatch`` — so reaching here with an
+            unconfigured one is a wiring bug, not an operational state.
+    """
+    adapter = _transports.get(transport)
+    if adapter is None:
+        known = ", ".join(sorted(t.value for t in _transports)) or "(none)"
+        raise TransportNotConfiguredError(
+            f"No adapter registered for transport {transport.value!r}. Configured: {known}. "
+            "Call configure_transports() at startup with the adapters this deployment's "
+            "credentials support."
+        )
+    return adapter
+
+
+# ─── The adapters (S5) ───────────────────────────────────────────────────
 #
-# They are deliberately NOT written here. An HTTP client against a WhatsApp
-# Business account that has not been provisioned would produce code whose tests
-# assert only my assumptions about the provider's contract — green, and evidence
-# of nothing. That is the same reasoning that defers the GoTrue adapter in
-# `app/platform/identity/credentials.py`.
+# S1 shipped this port with no adapters, deliberately: an HTTP client against a
+# WhatsApp Business account that had not been provisioned would have produced
+# code whose tests asserted only assumptions about the provider's contract.
 #
-# The shape above is drawn from the constraints that are already known and are
-# not going to change:
+# S5 supplies three, in `app/integrations/messaging/`:
 #
-#   * WhatsApp delivers pre-approved templates only, so `Notification` carries a
-#     template code and variables rather than a body.
+#   * `logged`   — records the attempt and sends nothing. 🔒 The transport the
+#                  engine runs on before Meta verification, and the one that
+#                  makes "S5 ships without WhatsApp" true rather than aspirational.
+#   * `email`    — SMTP, behind the same port.
+#   * `whatsapp` — Meta Cloud API. ⚠️ Contract-tested against fixtures only;
+#                  no real delivery has been verified (see the S5 report).
+#
+# The shape has not changed, because the constraints it was drawn from have not:
+#
+#   * WhatsApp delivers pre-approved templates only, so a `Notification` carries
+#     a template code, its variables and `provider_template_name` — never a body
+#     the adapter composed.
 #   * Providers report failure as a response, not an exception, so `send`
 #     returns a `DeliveryRecord` rather than raising.
 #   * Every provider issues its own message id, so `provider_message_id` exists
 #     for the delivery-receipt webhook to correlate against.
 #
-# When messaging is built (S4/S5), the adapter is a translation of one call, and
-# `DeliveryRecord` gains the table that FR-M0-042 requires.
+# `DeliveryRecord` now has the table FR-M0-042 required: `message_dispatches`
+# (DB §11.3), written by `modules.messaging.dispatch`.

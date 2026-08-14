@@ -26,9 +26,10 @@ to survive but should never have to.
 from __future__ import annotations
 
 import re
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -389,3 +390,77 @@ def verify_handlers_exist(job_types: frozenset[str] | set[str]) -> None:
 def reset_handlers() -> None:
     """Clear the registry. 🔒 Tests only — it is process-global."""
     _HANDLERS.clear()
+
+
+# ─── The enqueue seam (Arch §3.1 R5) ──────────────────────────────────────
+#
+# 🔒 The same shape as `kernel.events.DeferredEnqueuer`, and it exists for the
+# same reason: the queue's storage lives in `platform.jobs`, which a module must
+# not import. `kernel.events` already carries a seam for jobs enqueued *by an
+# event*; this one is for a module that must enqueue work directly, with an
+# idempotency key it chooses.
+#
+# S5's scheduler is the first caller. It needs the key: a sweep that runs twice
+# before a dispatch job is claimed would otherwise queue the same message twice,
+# and while the dispatch engine's re-entry guard makes that harmless, two jobs
+# for one message is a queue an operator cannot reason about.
+
+
+class JobEnqueuer(Protocol):
+    """Enqueues a job inside the caller's transaction.
+
+    🔒 The session is the first argument and is not optional (Arch §11.1). A job
+    must exist only if the transaction that created it commits — an enqueuer with
+    its own connection would reintroduce the outbox problem an external broker
+    has: a committed job whose cause rolled back, or a committed change whose job
+    vanished.
+    """
+
+    async def __call__(
+        self,
+        session: AsyncSession,
+        /,
+        *,
+        job_type: str,
+        payload: Mapping[str, Any],
+        tenant_id: uuid.UUID | None = None,
+        idempotency_key: str | None = None,
+        run_after: datetime | None = None,
+        priority: int | None = None,
+    ) -> uuid.UUID | None: ...
+
+
+async def _unconfigured_job_enqueuer(
+    _session: AsyncSession,
+    /,
+    *,
+    job_type: str,
+    payload: Mapping[str, Any],
+    tenant_id: uuid.UUID | None = None,
+    idempotency_key: str | None = None,
+    run_after: datetime | None = None,
+    priority: int | None = None,
+) -> uuid.UUID | None:
+    """🔒 The default: refuse, loudly. Never a silent no-op.
+
+    A dropped enqueue means a message is due and nothing will ever send it, with
+    nothing in any log to say why.
+    """
+    raise JobContractError(
+        f"No job queue is configured, so job type {job_type!r} cannot be enqueued. "
+        "Call `configure_job_enqueuer()` during startup."
+    )
+
+
+_enqueuer: JobEnqueuer = _unconfigured_job_enqueuer
+
+
+def configure_job_enqueuer(enqueuer: JobEnqueuer) -> None:
+    """Install the queue-backed enqueuer. Called by the entry points."""
+    global _enqueuer
+    _enqueuer = enqueuer
+
+
+def get_job_enqueuer() -> JobEnqueuer:
+    """The installed enqueuer — how a module queues work."""
+    return _enqueuer

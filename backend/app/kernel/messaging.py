@@ -30,6 +30,8 @@ from datetime import UTC, datetime, time, timedelta
 from typing import Final
 from uuid import UUID
 
+from app.kernel.events import DomainEvent, register_event
+
 
 class MessageCategory(enum.StrEnum):
     """DB §11.1 — what kind of message this is, for reporting and policy."""
@@ -328,3 +330,40 @@ def next_checkin_due(last: datetime, *, frequency: CheckinFrequency) -> datetime
 def utc_now() -> datetime:
     """The dispatch clock, in one place so tests can reason about it."""
     return datetime.now(UTC)
+
+
+# ─── Cross-module vocabulary (Arch §3.4a) ────────────────────────────────
+#
+# 🔒 Declared in the kernel for the same reason `ClientStageChanged` is: the
+# publisher (`messaging`) and the subscriber (`clients`, which owns
+# `timeline_events`) must not import each other (R3). The event class is the
+# shared vocabulary, so it belongs to the layer both may depend on.
+#
+# ⚠️ Identifiers and enums only (NFR-033). There is no `body`, no
+# `recipient_address` and no failure text: an event becomes a job payload and a
+# log line, both of which have different retention rules from the delivery log
+# the values came from.
+
+
+@register_event("messaging.message_dispatched")
+@dataclass(frozen=True, slots=True)
+class MessageDispatched(DomainEvent):
+    """One delivery attempt was made — FR-M1-018, AC-M8-003.
+
+    🔒 Published when the attempt is *made*, not when the provider confirms it.
+    A timeline that only recorded confirmed deliveries would leave "sent, never
+    delivered" — the case a practitioner most needs to see — invisible.
+
+    ``status`` is the outcome the transport reported synchronously
+    (``sent``/``failed``/``rejected``); a later webhook moves the dispatch row
+    on without republishing, because the timeline records the act, not its
+    subsequent status changes.
+    """
+
+    tenant_id: UUID
+    client_id: UUID | None
+    dispatch_id: UUID
+    template_code: str
+    transport: TransportType
+    status: DispatchStatus
+    occurred_at: datetime

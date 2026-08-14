@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from sqlalchemy import Select, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.kernel.clients import ClientIdentity, ClientStage, LeadIntake
+from app.kernel.clients import ClientIdentity, ClientStage, ContactDetails, LeadIntake
 from app.kernel.context import UserRole as ContextUserRole
 from app.kernel.errors import NotFoundError
 
@@ -100,6 +100,33 @@ class ClientRepositoryDirectory:
             .order_by(Client.created_at)
         )
         return [_identity(row) for row in rows]
+
+    async def contact_for(
+        self, session: AsyncSession, /, *, tenant_id: uuid.UUID, client_id: uuid.UUID
+    ) -> ContactDetails | None:
+        """The addresses a message may be sent to — M8, EC-M8-08.
+
+        🔒 Reads two columns, not the row. The dispatch engine needs an address
+        and nothing else, and selecting the whole record here would put a
+        client's clinical columns into a worker's memory for no reason.
+
+        ⚠️ Archived clients are **not** excluded. Suppression is the dispatch
+        engine's decision, made against live stage through
+        ``kernel.messaging.evaluate_suppression`` and recorded with its reason
+        (AC-M8-004). Filtering them out here would turn a recorded suppression
+        into "no contact details", which is a different — and untrue — answer to
+        the support question that follows.
+        """
+        row = (
+            await session.execute(
+                select(Client.mobile, Client.email).where(
+                    Client.tenant_id == tenant_id, Client.id == client_id
+                )
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        return ContactDetails(mobile=row.mobile, email=row.email)
 
     async def count_active(self, session: AsyncSession, /, *, tenant_id: uuid.UUID) -> int:
         """Clients consuming the entitlement — M1.5.

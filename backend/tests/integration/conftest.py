@@ -255,6 +255,25 @@ async def scope_to(connection: AsyncConnection, tenant_id: uuid.UUID | None) -> 
     )
 
 
+#: 🔒 Rows M8's subscribers create as a *side effect* of what other suites do.
+#:
+#: ⚠️ This is not scope creep in the fixture — it is the messaging engine
+#: working. From S5, publishing `EnquiryReceived` queues two messages and
+#: `ClientStageChanged` starts a check-in schedule, in production and in every
+#: test that exercises those paths. `scheduled_messages.recipient_user_id` has a
+#: foreign key to `users`, so a teardown that deleted users first failed *after*
+#: the assertions had passed — which reads as a flaky suite rather than a
+#: fixture that had fallen behind the system.
+#:
+#: Child-first: `message_dispatches` references `scheduled_messages`.
+_MESSAGING_RESIDUE: tuple[str, ...] = (
+    "message_dispatches",
+    "scheduled_messages",
+    "checkin_schedules",
+    "notification_preferences",
+)
+
+
 @pytest_asyncio.fixture
 async def seeded_tenants(migrator_engine: AsyncEngine) -> AsyncIterator[tuple[uuid.UUID, ...]]:
     """Create two tenants, each with one user, and clean up afterwards.
@@ -312,6 +331,25 @@ async def seeded_tenants(migrator_engine: AsyncEngine) -> AsyncIterator[tuple[uu
         async with migrator_engine.begin() as connection:
             for tenant_id in (tenant_a, tenant_b):
                 await scope_to(connection, tenant_id)
+                for table in _MESSAGING_RESIDUE:
+                    await connection.execute(
+                        text(f"DELETE FROM {table} WHERE tenant_id = :id"), {"id": tenant_id}
+                    )
+                # 🔒 And the jobs those messages queued. ⚠️ This is not
+                # housekeeping: a leftover `dispatch_scheduled_message` row is
+                # *claimable*, so the next suite's "claim the job I just
+                # enqueued" test claims someone else's instead and fails on an
+                # id comparison that names neither cause nor culprit.
+                await connection.execute(
+                    text(
+                        "DELETE FROM job_runs WHERE job_id IN "
+                        "(SELECT id FROM jobs WHERE tenant_id = :id)"
+                    ),
+                    {"id": tenant_id},
+                )
+                await connection.execute(
+                    text("DELETE FROM jobs WHERE tenant_id = :id"), {"id": tenant_id}
+                )
                 await connection.execute(
                     text("DELETE FROM users WHERE tenant_id = :id"), {"id": tenant_id}
                 )

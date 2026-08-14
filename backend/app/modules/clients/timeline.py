@@ -36,6 +36,7 @@ from app.kernel.clinical import (
 )
 from app.kernel.events import subscribe
 from app.kernel.leads import EnquiryReceived
+from app.kernel.messaging import MessageDispatched
 from app.kernel.timeline import (
     ClientAccessChanged,
     ClientNoteAdded,
@@ -75,19 +76,27 @@ async def record(
     actor_type: TimelineActorType,
     actor_id: uuid.UUID | None,
     source_record_id: uuid.UUID | None = None,
+    source_module: str = _SOURCE,
 ) -> TimelineEvent:
     """Append one entry.
 
     🔒 Takes an already-built ``summary`` rather than building one, so every
     caller goes through ``kernel.timeline``'s label functions and none can pass
     prose assembled locally.
+
+    Args:
+        source_module: Which module the referenced record belongs to — DB §5.6.
+            Defaults to this one. ⚠️ It exists because ``source_record_id`` is
+            only resolvable with it: a ``message_dispatches`` id and a
+            ``client_notes`` id are both bare UUIDs, and a UI that must decide
+            which panel to open cannot tell them apart from the value alone.
     """
     entry = TimelineEvent(
         tenant_id=tenant_id,
         client_id=client_id,
         event_type=event_type,
         occurred_at=occurred_at,
-        source_module=_SOURCE,
+        source_module=source_module,
         source_record_id=source_record_id,
         summary=summary,
         actor_type=actor_type,
@@ -355,6 +364,42 @@ async def on_document_uploaded(event: DocumentUploaded, session: AsyncSession, /
     )
 
 
+async def on_message_dispatched(event: MessageDispatched, session: AsyncSession, /) -> None:
+    """FR-M1-018, AC-M8-003 — an outbound message on the client's timeline.
+
+    🔒 The summary is the fixed "Message sent" label, never the rendered body or
+    even the template code. A template code such as ``assessment_invitation``
+    tells a reader what stage of care the client is at, and DB §5.6 is explicit
+    that a timeline row's *existence* is already a disclosure — the content of
+    the message belongs to the message history, which authorizes separately.
+
+    ⚠️ Entries are written for practitioner-directed messages too, and those
+    carry no ``client_id``; those are skipped rather than recorded against an
+    arbitrary client. A lead notification is a fact about the practitioner's
+    inbox, not about the client's care.
+
+    🔒 ``actor_type`` is always ``SYSTEM``. Even a practitioner-triggered send is
+    performed by the scheduler minutes later, after suppression is evaluated
+    against state that may have changed; attributing it to the person who
+    approved the plan would misreport when and by what it was actually sent.
+    """
+    if event.client_id is None:
+        return
+
+    await record(
+        session,
+        tenant_id=event.tenant_id,
+        client_id=event.client_id,
+        event_type=TimelineEventType.MESSAGE_SENT,
+        summary=summarise(TimelineEventType.MESSAGE_SENT),
+        occurred_at=event.occurred_at,
+        actor_type=TimelineActorType.SYSTEM,
+        actor_id=None,
+        source_record_id=event.dispatch_id,
+        source_module="messaging",
+    )
+
+
 def register_subscribers() -> None:
     """Wire the DDR-06 subscribers.
 
@@ -391,6 +436,17 @@ def register_subscribers() -> None:
     subscribe(AssessmentCompleted, transactional=on_assessment_completed)
     subscribe(MeasurementRecorded, transactional=on_measurement_recorded)
     subscribe(DocumentUploaded, transactional=on_document_uploaded)
+    # 🔒 M8 (S5). `messaging` publishes, `clients` subscribes — the third
+    # instance of the same shape, and the reason the event lives in
+    # `kernel.messaging`.
+    #
+    # ⚠️ Transactional, and that choice has a consequence worth naming: the
+    # handler runs inside the *dispatch job's* transaction, so a failure here
+    # rolls back the delivery-log row as well. That is correct — a dispatch the
+    # timeline does not know about is the state AC-M8-003 forbids — and it is
+    # safe because the handler does one INSERT of values the event already
+    # carries.
+    subscribe(MessageDispatched, transactional=on_message_dispatched)
 
 
 # ─── Reading (FR-M1-018, ADR-A05) ────────────────────────────────────────

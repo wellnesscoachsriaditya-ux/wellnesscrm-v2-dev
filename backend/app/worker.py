@@ -29,14 +29,17 @@ import signal
 from types import FrameType
 
 from app.kernel.events import configure_deferred_enqueuer, deferred_job_types
-from app.kernel.jobs import verify_handlers_exist
+from app.kernel.jobs import configure_job_enqueuer, verify_handlers_exist
 from app.modules.clients import register_subscribers
+from app.modules.messaging import active_tenant_ids, configure_link_base_url, sweep_tenant
+from app.modules.messaging import register_jobs as register_messaging_jobs
 from app.modules.nutrition import register_jobs as register_nutrition_jobs
 from app.platform.config import get_settings
-from app.platform.db import dispose_engine
+from app.platform.db import dispose_engine, transaction
 from app.platform.job_runner import JobRunner
-from app.platform.jobs import enqueue_for_event
+from app.platform.jobs import enqueue, enqueue_for_event
 from app.platform.logging import configure_logging, get_logger
+from app.platform.messaging_wiring import configure_messaging
 from app.platform.observability import configure_observability, is_production_like
 
 logger = get_logger(__name__)
@@ -50,11 +53,23 @@ class Worker:
     class is the loop and the signal handling around it.
     """
 
-    def __init__(self, *, poll_interval_seconds: int, runner: JobRunner | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        poll_interval_seconds: int,
+        runner: JobRunner | None = None,
+        run_scheduler: bool = True,
+    ) -> None:
         self._poll_interval = poll_interval_seconds
         self._shutdown = asyncio.Event()
         self._current_work: asyncio.Task[None] | None = None
         self._runner = runner or JobRunner()
+        #: 🔒 M8's single scheduler (FR-M8-001). It runs *here*, in the one
+        #: background process, rather than as a self-perpetuating job: a job that
+        #: re-enqueues itself stops forever the first time it dead-letters, and
+        #: nothing would notice until a practitioner asked why check-ins had
+        #: stopped. Turned off only by tests that drive the sweep directly.
+        self._run_scheduler = run_scheduler
 
     def request_shutdown(self, reason: str) -> None:
         """Signal a graceful stop.
@@ -105,12 +120,17 @@ class Worker:
         logger.info("Worker stopped")
 
     async def _tick(self) -> bool:
-        """Recover expired leases, then claim and execute due work.
+        """Sweep for due messages, then recover leases, claim and execute.
+
+        🔒 The sweep runs **before** the claim, so a message that becomes due
+        this second is dispatched in the same tick rather than waiting a full
+        poll interval — which is most of NFR-009's 60-second budget.
 
         Returns:
             True when the tick did something, so the loop polls again rather
             than sleeping.
         """
+        swept = await self._sweep_messages() if self._run_scheduler else 0
         result = await self._runner.tick()
 
         if result.claimed or result.recovered:
@@ -125,7 +145,36 @@ class Worker:
                 },
             )
 
-        return result.did_work
+        return result.did_work or swept > 0
+
+    async def _sweep_messages(self) -> int:
+        """Queue every due message, one tenant at a time — M8's scheduler.
+
+        ⚠️ **One transaction per tenant**, because RLS scopes a transaction to a
+        single tenant and there is no cross-tenant "what is due" query for the
+        application role — nor should there be. At the 50–200 tenants this
+        product is sized for that is a few hundred cheap indexed queries a
+        minute; `modules.messaging.scheduler` records the revisit trigger.
+
+        🔒 A failure for one tenant must not stop the others. A tenant whose
+        sweep raises is logged and skipped, and the next tick tries again.
+        """
+        queued = 0
+        async with transaction() as session:
+            tenant_ids = await active_tenant_ids(session)
+
+        for tenant_id in tenant_ids:
+            try:
+                async with transaction(tenant_id=tenant_id) as session:
+                    result = await sweep_tenant(session, tenant_id=tenant_id)
+                queued += result.dispatches_queued + result.checkins_generated
+            except Exception:
+                logger.exception(
+                    "Message sweep failed for one tenant; continuing",
+                    extra={"tenant_id": str(tenant_id)},
+                )
+
+        return queued
 
     async def _drain(self) -> None:
         """Wait briefly for in-flight work to finish."""
@@ -161,6 +210,16 @@ async def main() -> None:
     # for the same reason the web process does — a job type nothing can run
     # would dead-letter every row that reached it.
     configure_deferred_enqueuer(enqueue_for_event)
+    # 🔒 The direct-enqueue seam — see `main.create_app` for why both exist. The
+    # worker needs it because the sweep runs here.
+    configure_job_enqueuer(enqueue)
+
+    # 🔒 M8 — the transports and the deep-link base URL. The worker is where
+    # messages are actually sent, so a worker without this configured would
+    # dispatch nothing.
+    configure_messaging(settings)
+    configure_link_base_url(settings.app_base_url)
+
     verify_handlers_exist(deferred_job_types())
 
     # 🔒 DDR-06 — and needed here for a reason easy to miss. Subscriptions are
@@ -171,6 +230,8 @@ async def main() -> None:
     # which process published it. Idempotent by handler identity.
     register_subscribers()
     register_nutrition_jobs()
+    # 🔒 The dispatch handler, the webhook-status handler and the four producers.
+    register_messaging_jobs()
 
     worker = Worker(poll_interval_seconds=settings.worker_poll_interval_seconds)
 

@@ -224,6 +224,17 @@ _PRODUCIBLE: frozenset[TimelineEventType] = frozenset(
         TimelineEventType.MEASUREMENT_RECORDED,
         TimelineEventType.ASSESSMENT_COMPLETED,
         TimelineEventType.DOCUMENT_UPLOADED,
+        # 🔒 M8 (S5) — the messaging engine's producer. FR-M1-018 lists "messages
+        # sent" among what the timeline must aggregate, and AC-M8-003 requires
+        # every attempt across a full journey to be accounted for.
+        #
+        # ⚠️ Written when a dispatch is **attempted**, not when the provider
+        # confirms delivery. A timeline is a record of what the practice did; a
+        # row that appeared only on a delivery receipt would leave the common
+        # "sent, never delivered" case invisible on the very surface a
+        # practitioner checks first. The delivery *status* lives on
+        # `message_dispatches`, which the message history reads.
+        TimelineEventType.MESSAGE_SENT,
     }
 )
 

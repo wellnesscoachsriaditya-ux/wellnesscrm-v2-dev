@@ -575,6 +575,30 @@ class ClientDirectory(Protocol):
         """
         ...
 
+    async def contact_for(
+        self, session: AsyncSession, /, *, tenant_id: uuid.UUID, client_id: uuid.UUID
+    ) -> ContactDetails | None:
+        """🔒 The addresses a message may be sent to — M8's one reason to ask.
+
+        **Separate from :meth:`find` on purpose.** :class:`ClientIdentity` is
+        read by five modules and is deliberately thin; a mobile number and an
+        email address on it would put contact PII into every caller that only
+        wanted a name and a stage. This method is called by exactly one caller —
+        the dispatch engine, at send time — so the disclosure is narrow enough to
+        reason about.
+
+        🔒 **Resolved at dispatch, never carried on the scheduled row** (EC-M8-08).
+        A client who changes number between scheduling and sending must receive
+        the message at the new one, while the delivery log retains the address
+        each past attempt actually used.
+
+        Returns ``None`` when the client does not exist for this tenant. A client
+        with no usable address is impossible by construction —
+        ``ck_clients__contact_present`` requires one — but a caller must still
+        handle a :class:`ContactDetails` whose ``mobile`` or ``email`` is absent.
+        """
+        ...
+
     async def count_active(self, session: AsyncSession, /, *, tenant_id: uuid.UUID) -> int:
         """Live count of clients consuming the entitlement — M1.5.
 

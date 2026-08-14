@@ -87,11 +87,25 @@ class LinkPurpose(str, enum.Enum):
 
 
 class TransportType(str, enum.Enum):
-    """Outbound message channels."""
+    """Outbound message channels — the PostgreSQL ``transport_type`` enum.
+
+    🔒 ``LOGGED`` was added by migration 0021 and is what makes S5 shippable
+    before Meta Business Verification lands: a real no-op transport that records
+    a delivery attempt and sends nothing, so the engine, the schedule, the
+    suppression rules and the delivery log all run end to end without pretending
+    a WhatsApp message was delivered.
+
+    ⚠️ ``SMS`` remains declared because the enum value exists in the database
+    since 0002 and ``magic_links.issued_via`` can hold it. It has no adapter at
+    MVP — approved proposal #7 keeps TRAI DLT registration off the critical path
+    — and ``kernel.messaging.TransportType`` (the messaging engine's own,
+    narrower vocabulary) deliberately omits it.
+    """
 
     WHATSAPP = "whatsapp"
     SMS = "sms"
     EMAIL = "email"
+    LOGGED = "logged"
 
 
 class ConsentSubjectType(str, enum.Enum):

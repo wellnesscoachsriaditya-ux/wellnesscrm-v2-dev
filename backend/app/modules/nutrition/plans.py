@@ -1041,11 +1041,33 @@ async def remove_item(
 # ─── Issue (Slice 1.3; the snapshot it writes is still a stub) ───────────
 
 
-async def enqueue_pdf_generation(
-    session: AsyncSession, tenant_id: UUID, plan_version_id: UUID
+async def announce_issue(
+    session: AsyncSession,
+    tenant_id: UUID,
+    plan_version_id: UUID,
+    client_id: UUID,
+    issued_at: datetime,
 ) -> None:
-    """Queue a background job to generate the PDF for this issued plan version."""
-    await publish(PlanVersionIssued(tenant_id=tenant_id, plan_version_id=plan_version_id), session)
+    """Publish that a version was issued — PDF rendering and delivery follow.
+
+    🔒 One event, two subscribers, and neither is named here (Arch §3.4a):
+    `nutrition` enqueues the PDF render, and from S5 `messaging` schedules the
+    delivery message (FR-M8-013). Adding the second consumer required no change
+    to this call, which is the property AC-M8-008 asserts.
+
+    ⚠️ Renamed from ``enqueue_pdf_generation``. The old name described one
+    subscriber's reaction rather than the fact being announced, and a publisher
+    that names its subscribers is the coupling the event bus exists to remove.
+    """
+    await publish(
+        PlanVersionIssued(
+            tenant_id=tenant_id,
+            plan_version_id=plan_version_id,
+            client_id=client_id,
+            issued_at=issued_at,
+        ),
+        session,
+    )
 
 
 # -- State Machine Transitions --
@@ -1128,5 +1150,19 @@ async def issue_plan_version(
     )
     await session.execute(stmt_plan)
 
-    # Enqueue PDF generation job
-    await enqueue_pdf_generation(session, tenant_id, version_id)
+    # 🔒 Announce the issue. The PDF render and the client's delivery message
+    # both hang off this one event; neither is called by name from here.
+    #
+    # ⚠️ The client is read from the plan rather than passed in: the event must
+    # carry it (a `messaging` subscriber cannot read `diet_plans` — R6), and
+    # taking it as a parameter would let a caller announce a plan against the
+    # wrong client.
+    plan_client_id = await session.scalar(
+        select(DietPlan.client_id).where(DietPlan.id == plan_id, DietPlan.tenant_id == tenant_id)
+    )
+    if plan_client_id is None:  # pragma: no cover — the update above proved it exists
+        raise NotFoundError(
+            message="The plan this version belongs to could not be found.",
+            action="Reload the plan and try again.",
+        )
+    await announce_issue(session, tenant_id, version_id, plan_client_id, now)

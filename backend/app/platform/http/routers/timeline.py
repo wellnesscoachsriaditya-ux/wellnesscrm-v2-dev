@@ -187,4 +187,6 @@ _FILTER_LABELS: dict[TimelineEventType, str] = {
     TimelineEventType.ASSESSMENT_COMPLETED: "Assessments",
     TimelineEventType.MEASUREMENT_RECORDED: "Measurements",
     TimelineEventType.DOCUMENT_UPLOADED: "Documents",
+    # ── M8, the messaging engine ──
+    TimelineEventType.MESSAGE_SENT: "Messages",
 }

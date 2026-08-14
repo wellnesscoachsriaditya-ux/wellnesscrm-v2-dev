@@ -323,6 +323,117 @@
         "title": "BulkReassignResponse",
         "type": "object"
       },
+      "CheckinFrequency": {
+        "description": "DB §11.7 — FR-M8-022.",
+        "enum": [
+          "weekly",
+          "fortnightly",
+          "monthly"
+        ],
+        "title": "CheckinFrequency",
+        "type": "string"
+      },
+      "CheckinScheduleRequest": {
+        "description": "Configure or pause a client's check-ins.",
+        "properties": {
+          "day_of_week": {
+            "anyOf": [
+              {
+                "maximum": 7.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Of Week"
+          },
+          "frequency": {
+            "$ref": "#/components/schemas/CheckinFrequency",
+            "default": "weekly"
+          },
+          "is_paused": {
+            "default": false,
+            "title": "Is Paused",
+            "type": "boolean"
+          },
+          "time_of_day": {
+            "default": "09:00:00",
+            "format": "time",
+            "title": "Time Of Day",
+            "type": "string"
+          }
+        },
+        "title": "CheckinScheduleRequest",
+        "type": "object"
+      },
+      "CheckinScheduleResponse": {
+        "description": "A client's check-in cadence — FR-M8-022…024.",
+        "properties": {
+          "client_id": {
+            "format": "uuid",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "day_of_week": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Of Week"
+          },
+          "frequency": {
+            "$ref": "#/components/schemas/CheckinFrequency"
+          },
+          "is_paused": {
+            "title": "Is Paused",
+            "type": "boolean"
+          },
+          "last_generated_for": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Generated For"
+          },
+          "next_due_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Due On"
+          },
+          "time_of_day": {
+            "format": "time",
+            "title": "Time Of Day",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "frequency",
+          "day_of_week",
+          "time_of_day",
+          "is_paused",
+          "next_due_on",
+          "last_generated_for"
+        ],
+        "title": "CheckinScheduleResponse",
+        "type": "object"
+      },
       "ClientCreateRequest": {
         "description": "FR-M1-004 — name plus one contact method is the whole requirement.\n\n🔒 Everything else is optional. A practitioner capturing a lead mid-call has\na name and a number; a form demanding more is a form they abandon, and\nNFR-011 budgets the whole interaction at three steps.",
         "properties": {
@@ -1391,6 +1502,131 @@
         "title": "DietaryClass",
         "type": "string"
       },
+      "DispatchResponse": {
+        "description": "One delivery attempt — FR-M8-003, FR-M8-011.\n\n⚠️ ``failure_reason`` is the provider's own text. It is shown to the\n*practitioner*, who needs to know why their client did not receive something,\nand must never be forwarded to a client.",
+        "properties": {
+          "attempt_number": {
+            "title": "Attempt Number",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "delivered_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivered At"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "recipient_address": {
+            "title": "Recipient Address",
+            "type": "string"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DispatchStatus"
+          },
+          "template_code": {
+            "title": "Template Code",
+            "type": "string"
+          },
+          "template_version": {
+            "title": "Template Version",
+            "type": "integer"
+          },
+          "transport": {
+            "$ref": "#/components/schemas/TransportType"
+          }
+        },
+        "required": [
+          "id",
+          "template_code",
+          "template_version",
+          "transport",
+          "recipient_address",
+          "status",
+          "attempt_number",
+          "failure_code",
+          "failure_reason",
+          "created_at",
+          "sent_at",
+          "delivered_at",
+          "read_at"
+        ],
+        "title": "DispatchResponse",
+        "type": "object"
+      },
+      "DispatchStatus": {
+        "description": "DB §11.3 — the provider-reported lifecycle of one attempt.",
+        "enum": [
+          "queued",
+          "sent",
+          "delivered",
+          "read",
+          "failed",
+          "rejected"
+        ],
+        "title": "DispatchStatus",
+        "type": "string"
+      },
       "DocumentUrlResponse": {
         "description": "A short-lived URL — FR-M0-038, NFR-035.\n\n⚠️ Delivery, not authorization. It must not be stored, logged or embedded\nanywhere that outlives it.",
         "properties": {
@@ -2113,6 +2349,31 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HistoryPageInfo": {
+        "description": "Where the next page resumes — API §6.1.",
+        "properties": {
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "has_more"
+        ],
+        "title": "HistoryPageInfo",
+        "type": "object"
+      },
       "ItemCreateRequest": {
         "properties": {
           "client_note": {
@@ -2629,6 +2890,27 @@
         "title": "MeasurementSource",
         "type": "string"
       },
+      "MessageHistoryResponse": {
+        "description": "API §5.1's collection envelope.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DispatchResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/HistoryPageInfo"
+          }
+        },
+        "required": [
+          "items",
+          "page"
+        ],
+        "title": "MessageHistoryResponse",
+        "type": "object"
+      },
       "NoteResponse": {
         "description": "One note — FR-M1-007, \"with timestamp and author\".",
         "properties": {
@@ -2932,6 +3214,54 @@
           "email"
         ],
         "title": "PasswordResetRequest",
+        "type": "object"
+      },
+      "PendingMessageResponse": {
+        "description": "A message queued but not yet sent — FR-M8-028.\n\n🔒 ``preview`` is the rendered body, because \"you have three messages\nscheduled\" is not something a practitioner can act on. What they need to know\nbefore it goes out on their behalf is what it *says*.",
+        "properties": {
+          "deferred_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deferred From"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "preview": {
+            "title": "Preview",
+            "type": "string"
+          },
+          "scheduled_for": {
+            "format": "date-time",
+            "title": "Scheduled For",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ScheduledState"
+          },
+          "template_code": {
+            "title": "Template Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "template_code",
+          "scheduled_for",
+          "deferred_from",
+          "state",
+          "preview"
+        ],
+        "title": "PendingMessageResponse",
         "type": "object"
       },
       "PlanCreateRequest": {
@@ -3902,6 +4232,204 @@
         "title": "PortalTarget",
         "type": "object"
       },
+      "PreferenceResponse": {
+        "description": "One preference row — DB §11.8.",
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "is_enabled": {
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "max_messages_per_week": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Messages Per Week"
+          },
+          "quiet_hours_end": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quiet Hours End"
+          },
+          "quiet_hours_start": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quiet Hours Start"
+          },
+          "template_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Code"
+          },
+          "transport": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransportType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "client_id",
+          "template_code",
+          "transport",
+          "is_enabled",
+          "quiet_hours_start",
+          "quiet_hours_end",
+          "max_messages_per_week"
+        ],
+        "title": "PreferenceResponse",
+        "type": "object"
+      },
+      "PreferenceUpdateRequest": {
+        "description": "A change to a message-type toggle or a quiet window — FR-M8-027.\n\n⚠️ Every field is optional and ``None`` means \"leave alone\", so a screen that\nsubmits one section does not clear another. See ``preferences.upsert``.",
+        "properties": {
+          "is_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Enabled"
+          },
+          "max_messages_per_week": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Messages Per Week"
+          },
+          "quiet_hours_end": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quiet Hours End"
+          },
+          "quiet_hours_start": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quiet Hours Start"
+          },
+          "template_code": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Code"
+          },
+          "transport": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransportType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "PreferenceUpdateRequest",
+        "type": "object"
+      },
+      "PreviewResponse": {
+        "description": "🔒 FR-M8-026 — the message exactly as the client will receive it.",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "is_sample": {
+            "title": "Is Sample",
+            "type": "boolean"
+          },
+          "template_code": {
+            "title": "Template Code",
+            "type": "string"
+          },
+          "transport": {
+            "$ref": "#/components/schemas/TransportType"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "template_code",
+          "version",
+          "transport",
+          "body",
+          "is_sample"
+        ],
+        "title": "PreviewResponse",
+        "type": "object"
+      },
       "PublicConsentNotice": {
         "description": "The notice a prospect must agree to — API §11.1, FR-M2-004.\n\n🔒 The **body** is sent, not just a reference. DPDP requires consent against\ntext the person actually saw (NFR-051), and a form that linked to a notice\nelsewhere could not evidence that they saw it.",
         "properties": {
@@ -4248,6 +4776,60 @@
         "title": "SaveAnswersResponse",
         "type": "object"
       },
+      "ScheduledMessageResponse": {
+        "description": "What a caller gets back after queueing a message.",
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "scheduled_for": {
+            "format": "date-time",
+            "title": "Scheduled For",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ScheduledState"
+          },
+          "template_code": {
+            "title": "Template Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "template_code",
+          "scheduled_for",
+          "state",
+          "created"
+        ],
+        "title": "ScheduledMessageResponse",
+        "type": "object"
+      },
+      "ScheduledState": {
+        "description": "DB §11.2. 🔒 ``suppressed`` and ``expired`` are retained, never deleted\n(AC-M8-004) — the reason a message did not arrive is the answer to the\nsupport question that follows.",
+        "enum": [
+          "pending",
+          "dispatched",
+          "suppressed",
+          "expired",
+          "cancelled"
+        ],
+        "title": "ScheduledState",
+        "type": "string"
+      },
       "SectionResponse": {
         "description": "One page of the form — PRD §9.3.\n\n⚠️ ``is_clinical`` is what FR-M3-006 turns on: the UI offers a skip for these\nand requires nothing in them. AC-M3-002 is a coach skipping every one.",
         "properties": {
@@ -4290,6 +4872,41 @@
           "fields"
         ],
         "title": "SectionResponse",
+        "type": "object"
+      },
+      "SendMessageRequest": {
+        "description": "A practitioner sending a message by hand.\n\n⚠️ ``variables`` carries only what the server cannot know. The recipient's\nname, their practitioner's name and the portal link are filled in server-side\n— a caller-supplied ``client_name`` would let one client's name be sent to\nanother, and a caller-supplied URL would be an open redirect delivered over\nWhatsApp.",
+        "properties": {
+          "scheduled_for": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled For"
+          },
+          "template_code": {
+            "maxLength": 64,
+            "minLength": 3,
+            "title": "Template Code",
+            "type": "string"
+          },
+          "variables": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Variables",
+            "type": "object"
+          }
+        },
+        "required": [
+          "template_code"
+        ],
+        "title": "SendMessageRequest",
         "type": "object"
       },
       "SexType": {
@@ -4546,6 +5163,54 @@
         "title": "TagResponse",
         "type": "object"
       },
+      "TemplateResponse": {
+        "description": "One message type a practitioner can preview or control — FR-M8-026/027.",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "default_transport": {
+            "$ref": "#/components/schemas/TransportType"
+          },
+          "is_essential": {
+            "title": "Is Essential",
+            "type": "boolean"
+          },
+          "is_practitioner_disableable": {
+            "title": "Is Practitioner Disableable",
+            "type": "boolean"
+          },
+          "provider_template_status": {
+            "title": "Provider Template Status",
+            "type": "string"
+          },
+          "variables": {
+            "title": "Variables",
+            "type": "object"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "version",
+          "category",
+          "is_essential",
+          "default_transport",
+          "provider_template_status",
+          "is_practitioner_disableable",
+          "variables"
+        ],
+        "title": "TemplateResponse",
+        "type": "object"
+      },
       "TimelineActorType": {
         "description": "Who caused it — DB §5.6 ``actor_type``.\n\n🔒 Three kinds, and the distinction matters for reading the timeline rather\nthan for authorization. \"Priya changed the stage\" and \"the system archived\nthem after 90 days\" are different facts, and a timeline that renders both as\na bare name misattributes automated action to a person.",
         "enum": [
@@ -4736,6 +5401,17 @@
         ],
         "title": "TokenResponse",
         "type": "object"
+      },
+      "TransportType": {
+        "description": "Outbound message channels — the PostgreSQL ``transport_type`` enum.\n\n🔒 ``LOGGED`` was added by migration 0021 and is what makes S5 shippable\nbefore Meta Business Verification lands: a real no-op transport that records\na delivery attempt and sends nothing, so the engine, the schedule, the\nsuppression rules and the delivery log all run end to end without pretending\na WhatsApp message was delivered.\n\n⚠️ ``SMS`` remains declared because the enum value exists in the database\nsince 0002 and ``magic_links.issued_via`` can hold it. It has no adapter at\nMVP — approved proposal #7 keeps TRAI DLT registration off the critical path\n— and ``kernel.messaging.TransportType`` (the messaging engine's own,\nnarrower vocabulary) deliberately omits it.",
+        "enum": [
+          "whatsapp",
+          "sms",
+          "email",
+          "logged"
+        ],
+        "title": "TransportType",
+        "type": "string"
       },
       "UserRole": {
         "description": "Roles within a tenant (FR-M0-016).",
@@ -5748,6 +6424,110 @@
         ]
       }
     },
+    "/api/v1/app/clients/{client_id}/checkin-schedule": {
+      "get": {
+        "description": "FR-M8-022. ``null`` when the client has no schedule yet.",
+        "operationId": "clientCheckinScheduleRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CheckinScheduleResponse"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Clientcheckinscheduleread"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "A client's check-in cadence",
+        "tags": [
+          "messaging"
+        ]
+      },
+      "put": {
+        "description": "FR-M8-022/024 — the cadence, and the pause that does not change the stage.\n\n🔒 Pausing cancels anything already queued. A pause that left Friday's nudge\nin the queue would send one more message after the practitioner asked us to\nstop.",
+        "operationId": "clientCheckinScheduleUpdate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckinScheduleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckinScheduleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Configure or pause a client's check-ins",
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
     "/api/v1/app/clients/{client_id}/consultation-notes": {
       "get": {
         "description": "Newest first — FR-M3-018.",
@@ -6293,6 +7073,280 @@
         "summary": "Record a measurement",
         "tags": [
           "clinical"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/message-preferences": {
+      "get": {
+        "description": "The client's own overrides *and* the practice defaults they layer on.\n\n⚠️ Both, deliberately: a screen showing an override without what it overrides\ncannot explain itself.",
+        "operationId": "clientMessagePreferences",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PreferenceResponse"
+                  },
+                  "title": "Response Clientmessagepreferences",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "A client's message settings",
+        "tags": [
+          "messaging"
+        ]
+      },
+      "put": {
+        "description": "US-M8-06 — a per-client override, including an unsubscribe.\n\n⚠️ 🔒 **A client-initiated unsubscribe must also write the consent ledger.**\nThis is the practitioner-facing route and writes the preference only; the\nportal's own withdrawal path (S6) writes both, because the preference\ncontrols behaviour while the ledger is the legal record.",
+        "operationId": "clientMessagePreferenceUpdate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferenceUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change a client's message settings",
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/messages": {
+      "get": {
+        "description": "FR-M8-011 — the delivery log for one client, newest first.\n\n🔒 Every attempt, including failures and retries. A history that showed only\nsuccesses would hide the case AC-M8-007 exists for.",
+        "operationId": "clientMessageHistory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Opaque, from a previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque, from a previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageHistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Every message sent to a client",
+        "tags": [
+          "messaging"
+        ]
+      },
+      "post": {
+        "description": "Queue a practitioner-triggered message — the core loop's \"message the client\".\n\n🔒 **Queues, never sends.** Suppression, quiet hours and the frequency cap are\napplied at dispatch by the same engine that handles every automated message\n(FR-M8-001). A practitioner cannot message a client who withdrew consent by\ndoing it by hand, which is the protection they actually want.\n\n⚠️ The occasion is the template plus the minute, so a double-tapped button\nqueues one message while a deliberate re-send a minute later queues another.",
+        "operationId": "clientMessageSend",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledMessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send a message to a client",
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/api/v1/app/clients/{client_id}/messages/pending": {
+      "get": {
+        "description": "FR-M8-028 — what is about to be sent on the practitioner's behalf.",
+        "operationId": "clientPendingMessages",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PendingMessageResponse"
+                  },
+                  "title": "Response Clientpendingmessages",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Messages queued for a client but not yet sent",
+        "tags": [
+          "messaging"
         ]
       }
     },
@@ -7371,6 +8425,254 @@
         "summary": "Edit the enquiry form",
         "tags": [
           "leads"
+        ]
+      }
+    },
+    "/api/v1/app/messaging/failures": {
+      "get": {
+        "description": "AC-M8-007 — terminal failures, in one place a practitioner will look.",
+        "operationId": "messageFailures",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DispatchResponse"
+                  },
+                  "title": "Response Messagefailures",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recent delivery failures across the practice",
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/api/v1/app/messaging/preferences": {
+      "get": {
+        "description": "FR-M8-027 — the tenant-wide toggles and quiet hours.",
+        "operationId": "messagePreferenceList",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PreferenceResponse"
+                  },
+                  "title": "Response Messagepreferencelist",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "The practice's message-type settings",
+        "tags": [
+          "messaging"
+        ]
+      },
+      "put": {
+        "description": "FR-M8-027 — disable a non-essential message type across the practice.\n\n🔒 An essential template is refused here, before the write, so the\npractitioner reads a sentence rather than a constraint violation. The\ndatabase carries the same rule, which is what makes it true regardless of\nwhich path reaches the table.",
+        "operationId": "messagePreferenceUpdate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferenceUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change a practice-wide message setting",
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/api/v1/app/messaging/scheduled/{scheduled_message_id}/cancel": {
+      "post": {
+        "description": "FR-M8-028's other half.\n\n⚠️ Only a `pending` message can be cancelled. There is no \"unsend\": once the\nengine has handed a message to a transport, the honest record is the delivery\nlog, and an endpoint that appeared to undo it would misinform the\npractitioner about what their client saw.",
+        "operationId": "messageCancel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scheduled_message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scheduled Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledMessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel a message that has not been sent",
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/api/v1/app/messaging/templates": {
+      "get": {
+        "description": "The eight MVP message types — FR-M8-013…020, FR-M8-026.",
+        "operationId": "messageTemplateList",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TemplateResponse"
+                  },
+                  "title": "Response Messagetemplatelist",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Every message type this practice can send",
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/api/v1/app/messaging/templates/{code}/preview": {
+      "get": {
+        "description": "🔒 FR-M8-026 — \"as their clients will receive it\".\n\nRendered by :func:`modules.messaging.render`, the same function the dispatch\npath uses. A preview produced by different code would be a preview of\nsomething else, which is precisely the reassurance this requirement is for.\n\n⚠️ With no ``client_id`` the values are illustrative and ``is_sample`` says\nso. Without that flag a practitioner could reasonably believe they were\nlooking at a real client's message.",
+        "operationId": "messageTemplatePreview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Render with this client's own values.",
+            "in": "query",
+            "name": "client_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Render with this client's own values.",
+              "title": "Client Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "A message template as the client will receive it",
+        "tags": [
+          "messaging"
         ]
       }
     },
@@ -8848,6 +10150,150 @@
         "summary": "Request a portal link",
         "tags": [
           "portal-auth"
+        ]
+      }
+    },
+    "/api/v1/public/webhooks/{provider}": {
+      "get": {
+        "description": "Meta's one-time registration handshake.\n\n🔒 Echoes the challenge **only** when the token matches the configured one.\nEchoing unconditionally would let anyone register our endpoint against their\nown app and start feeding it callbacks.\n\n⚠️ Returns 403 rather than 401 on a mismatch, because Meta treats 403 as\n\"verification failed\" and shows it in their console; a 401 is reported as a\ntransport error and sends the operator looking in the wrong place.",
+        "operationId": "webhookVerify",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hub.mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hub.Mode"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hub.challenge",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hub.Challenge"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hub.verify_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hub.Verify Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Provider webhook verification challenge",
+        "tags": [
+          "public"
+        ]
+      },
+      "post": {
+        "description": "Accept a delivery receipt, queue it, and acknowledge.\n\n🔒 The signature is checked against the **raw body**, before it is parsed.\nJSON round-tripping changes key order and whitespace, and the signature is\nover the bytes the provider sent.\n\n🔒 A failure returns 401 with no body (API §11.3). No detail: an unsigned\ncaller learns only that it was refused.",
+        "operationId": "webhookReceive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Hub-Signature-256",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hub-Signature-256"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Provider delivery-status callback",
+        "tags": [
+          "public"
         ]
       }
     }

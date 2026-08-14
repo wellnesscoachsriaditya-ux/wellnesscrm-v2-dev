@@ -106,12 +106,24 @@ def test_a_notification_carries_a_template_not_a_body() -> None:
     """🔒 WhatsApp delivers pre-approved templates only.
 
     A composed body would be rejected by the transport per-recipient at send
-    time, which surfaces in production one client at a time. The dataclass has no
-    body field at all — the strongest form of this guarantee.
+    time, which surfaces in production one client at a time.
+
+    ⚠️ **The guarantee moved in S5; it did not weaken.** S1 made it structural —
+    the dataclass had no ``body`` field at all — but email and the logged
+    transport genuinely carry free text, and an adapter that had to compose one
+    would be composing it *per transport*, which is how two channels come to
+    render one template differently.
+
+    So ``body`` now exists and is **optional and pre-rendered**: it is produced
+    once by ``modules.messaging.render`` from the versioned template, and
+    ``provider_template_name`` is what WhatsApp actually sends. The property that
+    matters is unchanged and is asserted here: a notification always names its
+    template, and the default carries no body for an adapter to reach for.
     """
     notification = _notification()
     assert notification.template_code == "plan_ready"
-    assert not hasattr(notification, "body")
+    assert notification.body is None
+    assert notification.provider_template_name is None
 
 
 def test_a_notification_without_a_template_is_refused() -> None:

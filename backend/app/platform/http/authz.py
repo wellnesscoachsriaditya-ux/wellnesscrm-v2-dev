@@ -91,6 +91,18 @@ EXEMPT_PATHS: frozenset[str] = frozenset(
         # request body (`adopt_tenant_scope`).
         "/api/v1/public/forms/{tenant_slug}",
         "/api/v1/public/forms/{tenant_slug}/submit",
+        # 🔒 S5 — provider delivery-status callbacks (API §11.3). No actor
+        # exists: the caller is Meta's infrastructure, not a person, and there is
+        # no token it could present.
+        #
+        # What protects them instead, each stated at its own call site:
+        # HMAC signature verification over the raw body *before* it is parsed
+        # (an unverified webhook is an unauthenticated write endpoint), a
+        # verify-token challenge on the GET, a tenant resolved server-side from
+        # the provider's own message id through a policy that admits exactly one
+        # row, and processing deferred to a job that runs under that tenant's
+        # ordinary scope.
+        "/api/v1/public/webhooks/{provider}",
     }
 )
 

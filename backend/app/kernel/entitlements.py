@@ -466,6 +466,40 @@ class EntitlementGuard(Protocol):
         """
         ...
 
+    async def record(
+        self,
+        session: AsyncSession,
+        /,
+        *,
+        tenant_id: uuid.UUID,
+        resource: ResourceCode,
+        amount: Decimal | int,
+        source_module: str,
+        source_record_id: uuid.UUID | None = None,
+    ) -> None:
+        """Record consumption that has already happened — FR-M0-044.
+
+        🔒 **Separate from :meth:`require`, and deliberately not folded into it.**
+        A check and a consumption happen at different moments and, for messaging,
+        with a provider call in between: `require` runs before the send decides
+        whether a limit permits it, `record` runs after the send establishes that
+        something was actually consumed. Collapsing them would meter attempts
+        that failed — which is a tenant billed for messages nobody received.
+
+        ⚠️ Not called for live-counted resources (``active_clients``,
+        ``storage_mb``). Those have no ``usage_counters`` row by design (DB
+        §14.4); maintaining one alongside the live count is exactly the drift
+        M1.5 avoids by not having one.
+
+        Args:
+            source_module: Which module consumed it, for the usage event's
+                provenance.
+            source_record_id: The row that caused it — a dispatch, a generation.
+                🔒 An identifier, never a value: `usage_events` is retained and
+                read by operators (NFR-033).
+        """
+        ...
+
 
 #: The installed guard. 🔒 Same seam as ``ClientDirectory``: the kernel names the
 #: capability, ``platform`` implements it, and the entry point wires the two —

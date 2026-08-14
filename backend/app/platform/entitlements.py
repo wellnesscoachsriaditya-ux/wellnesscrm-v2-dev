@@ -646,3 +646,35 @@ class DatabaseEntitlementGuard:
         # that as indeterminate and refuses, which is the fail-safe direction —
         # passing "active" here would invent a commercial state nobody granted.
         check(allowance, amount=amount, status=subscription.status if subscription else None)
+
+    async def record(
+        self,
+        session: AsyncSession,
+        /,
+        *,
+        tenant_id: uuid.UUID,
+        resource: ResourceCode,
+        amount: Decimal | int,
+        source_module: str,
+        source_record_id: uuid.UUID | None = None,
+    ) -> None:
+        """Record consumption that has actually happened — FR-M0-044, FR-M8-010.
+
+        🔒 Delegates to :func:`record_usage`, which writes the event and the
+        counter in one transaction (DDR-14). The port exists for the same reason
+        :meth:`require` does: a module must be able to meter what it consumed
+        without importing ``platform`` (R5), and S5's messaging engine is the
+        first consumer that both *checks* a limit and *consumes* against it.
+
+        ⚠️ Called after the consumption, never before. A reservation taken ahead
+        of an attempt has to be released when the attempt fails, and a release
+        that fails leaves a tenant billed for a message nobody received.
+        """
+        await record_usage(
+            session,
+            tenant_id=tenant_id,
+            resource=resource,
+            amount=amount,
+            source_module=source_module,
+            source_record_id=source_record_id,
+        )
