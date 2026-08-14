@@ -26,7 +26,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select, and_, or_, select, update
+from sqlalchemy import Select, and_, or_, select, update, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.kernel.context import AuthRealm as ContextRealm
@@ -43,6 +43,7 @@ from app.kernel.models import (
     UserRole,
     UserStatus,
 )
+from app.platform.db import set_tenant_scope
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,9 +88,22 @@ async def find_user_by_subject(
 ) -> PractitionerIdentity | None:
     """Resolve the identity provider's subject to our user row."""
     row = (
-        await session.execute(select(User).where(User.auth_subject_id == auth_subject_id))
-    ).scalar_one_or_none()
-    return _practitioner_from(row) if row is not None else None
+        await session.execute(
+            text("SELECT * FROM public.identity_lookup_by_subject(CAST(:subject AS text))"),
+            {"subject": auth_subject_id},
+        )
+    ).mappings().one_or_none()
+    
+    if row is None:
+        return None
+        
+    return PractitionerIdentity(
+        user_id=row["user_id"],
+        tenant_id=row["tenant_id"],
+        role=UserRole(row["role"]) if isinstance(row["role"], str) else row["role"],
+        status=UserStatus(row["status"]) if isinstance(row["status"], str) else row["status"],
+        is_archived=row["archived_at"] is not None,
+    )
 
 
 async def find_user_by_id(session: AsyncSession, user_id: uuid.UUID) -> PractitionerIdentity | None:
@@ -105,9 +119,8 @@ async def find_subject_by_email(session: AsyncSession, email: str) -> str | None
     """
     return (
         await session.execute(
-            select(User.auth_subject_id)
-            .where(and_(User.email == email, User.archived_at.is_(None)))
-            .limit(1)
+            text("SELECT auth_subject_id FROM public.identity_lookup_by_email(CAST(:email AS text))"),
+            {"email": email},
         )
     ).scalar_one_or_none()
 
@@ -121,7 +134,8 @@ async def email_is_registered(session: AsyncSession, email: str) -> bool:
     """
     found = (
         await session.execute(
-            select(User.id).where(and_(User.email == email, User.archived_at.is_(None))).limit(1)
+            text("SELECT auth_subject_id FROM public.identity_lookup_by_email(CAST(:email AS text))"),
+            {"email": email},
         )
     ).scalar_one_or_none()
     return found is not None
@@ -158,6 +172,10 @@ async def create_tenant_with_owner(
     )
     session.add(tenant)
     await session.flush()
+
+    # Adopt the newly created tenant's scope so the User insert satisfies
+    # the FORCE ROW LEVEL SECURITY WITH CHECK(tenant_id = current_tenant_id()) constraint.
+    await set_tenant_scope(session, tenant_id=tenant.id)
 
     user = User(
         tenant_id=tenant.id,
@@ -228,17 +246,8 @@ async def consume_auth_token(
     address must not be redeemable at the password-reset endpoint.
     """
     result = await session.execute(
-        update(AuthToken)
-        .where(
-            and_(
-                AuthToken.token_hash == token_hash,
-                AuthToken.purpose == purpose,
-                AuthToken.consumed_at.is_(None),
-                AuthToken.expires_at > now,
-            )
-        )
-        .values(consumed_at=now)
-        .returning(AuthToken.auth_subject_id)
+        text("SELECT auth_subject_id FROM public.identity_consume_auth_token(CAST(:token_hash AS text), CAST(:purpose AS auth_token_purpose), CAST(:now AS timestamptz))"),
+        {"token_hash": token_hash, "purpose": purpose.value, "now": now},
     )
     return result.scalar_one_or_none()
 
@@ -465,31 +474,21 @@ async def consume_magic_link(
     already-used one are indistinguishable to the caller — as they should be, and
     as they cannot be if either check happens in Python.
     """
-    result = await session.execute(
-        update(MagicLink)
-        .where(
-            and_(
-                MagicLink.token_hash == token_hash,
-                MagicLink.consumed_at.is_(None),
-                MagicLink.expires_at > now,
-            )
+    result = (
+        await session.execute(
+            text("SELECT * FROM public.identity_consume_magic_link(CAST(:token_hash AS text), CAST(:now AS timestamptz))"),
+            {"token_hash": token_hash, "now": now},
         )
-        .values(consumed_at=now)
-        .returning(
-            MagicLink.tenant_id,
-            MagicLink.client_id,
-            MagicLink.purpose,
-            MagicLink.target_ref,
-        )
-    )
-    row = result.one_or_none()
-    if row is None:
+    ).mappings().one_or_none()
+
+    if result is None:
         return None
+
     return RedeemedLink(
-        tenant_id=row.tenant_id,
-        client_id=row.client_id,
-        purpose=row.purpose.value if hasattr(row.purpose, "value") else str(row.purpose),
-        target_ref=row.target_ref,
+        tenant_id=result["tenant_id"],
+        client_id=result["client_id"],
+        purpose=result["purpose"],
+        target_ref=result["target_ref"],
     )
 
 

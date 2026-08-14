@@ -96,6 +96,12 @@ class Client(Base):
     activated_at: Mapped[datetime | None] = mapped_column(
         comment="First entry to active — the check-in anchor (FR-M8-023)"
     )
+    
+    # 🔒 S6 Portal Visibility Flag (default off)
+    client_nutrition_visibility: Mapped[bool] = mapped_column(
+        nullable=False, server_default=text("false"), comment="🔒 Whether this client sees nutrition data"
+    )
+
     archived_at: Mapped[datetime | None] = mapped_column(comment="Soft delete (FR-M1-010)")
     created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))

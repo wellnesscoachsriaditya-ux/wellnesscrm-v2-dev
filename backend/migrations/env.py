@@ -40,6 +40,7 @@ import app.modules.clinical.models as _clinical_models
 import app.modules.leads.models as _leads_models
 import app.modules.messaging.models as _messaging_models
 import app.modules.nutrition.models as _nutrition_models
+import app.modules.progress.models as _progress_models
 from app.kernel import Base
 from app.platform.config import get_settings
 
@@ -50,6 +51,7 @@ __all__ = [
     "_leads_models",
     "_messaging_models",
     "_nutrition_models",
+    "_progress_models",
 ]
 
 config = context.config
