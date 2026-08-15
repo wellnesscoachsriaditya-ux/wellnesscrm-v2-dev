@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from app.kernel.messaging import utc_now
 from app.modules.messaging import MessageRequest, schedule
+from app.platform.job_runner import JobRunner
 from app.worker import Worker
 from tests.integration.conftest import scope_to
 from tests.integration.messaging.conftest import SessionFactory, TenantFixture
@@ -54,14 +55,27 @@ async def _purge_swept_jobs(migrator_engine: AsyncEngine) -> AsyncIterator[None]
         )
 
 
-@pytest.fixture
-def worker(app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch) -> Worker:
-    """A worker whose transactions reach the throwaway database.
+@pytest.fixture(autouse=True)
+def worker_transaction(app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """A transaction bound to the throwaway database, and `app.worker` patched to it.
 
     🔒 **The safety-critical override.** `app.worker` calls
     `platform.db.transaction()`, which reads `.env` and would reach Supabase.
     Patching the name the module resolves at call time is what keeps this suite
     off a hosted database it has no business touching.
+
+    ⚠️ **`autouse`, and that is the point.** This used to live inside the
+    `worker` fixture, so a test constructing its own `Worker(...)` kept the real
+    `transaction` — which is what `test_the_scheduler_can_be_turned_off` did.
+
+    ⚠️ **Returned as well as patched, because patching alone is not enough.**
+    `JobRunner.__init__` takes `transaction_factory: TransactionFactory =
+    transaction` — a default argument bound at *import* time to
+    `platform.db.transaction`. Rebinding `app.worker.transaction` afterwards
+    cannot reach it, so any test that goes through `Worker._tick()` (which calls
+    `JobRunner.tick()`) must inject the factory explicitly. `job_runner.py` says
+    so at the `TransactionFactory` definition: "Injected so tests can supply one
+    bound to a test engine."
     """
     factory = async_sessionmaker(app_engine, expire_on_commit=False)
 
@@ -79,7 +93,16 @@ def worker(app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch) -> Worker:
             await session.close()
 
     monkeypatch.setattr("app.worker.transaction", transaction)
-    return Worker(poll_interval_seconds=60)
+    return transaction
+
+
+@pytest.fixture
+def worker(worker_transaction: Any) -> Worker:
+    """A worker with the scheduler on, transacting against the test database."""
+    return Worker(
+        poll_interval_seconds=60,
+        runner=JobRunner(transaction_factory=worker_transaction),
+    )
 
 
 async def _queue_due(session_for: SessionFactory, tenant: TenantFixture) -> uuid.UUID:
@@ -208,13 +231,17 @@ async def test_one_tenants_failure_does_not_stop_the_others(
 
 
 async def test_the_scheduler_can_be_turned_off(
-    app_engine: AsyncEngine, session_for: SessionFactory, tenant_a: TenantFixture
+    session_for: SessionFactory, tenant_a: TenantFixture, worker_transaction: Any
 ) -> None:
     """⚠️ For a deployment running more than one worker: exactly one may sweep,
     or two schedulers race to queue the same messages. The idempotency key makes
     that harmless, but "harmless" is not the same as "intended"."""
     await _queue_due(session_for, tenant_a)
-    worker = Worker(poll_interval_seconds=60, run_scheduler=False)
+    worker = Worker(
+        poll_interval_seconds=60,
+        run_scheduler=False,
+        runner=JobRunner(transaction_factory=worker_transaction),
+    )
 
     # ⚠️ `_tick`, the internal step, rather than `run()`: the poll loop would
     # sleep out its interval and this test is about one pass.
