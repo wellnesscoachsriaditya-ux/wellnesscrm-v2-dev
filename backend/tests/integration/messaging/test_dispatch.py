@@ -20,7 +20,6 @@ from app.kernel.messaging import (
     DispatchStatus,
     ScheduledState,
     SuppressionReason,
-    utc_now,
 )
 from app.kernel.models import TransportType
 from app.kernel.notifications import DeliveryStatus
@@ -242,7 +241,9 @@ async def test_a_paused_client_suppresses_with_a_reason(
 ) -> None:
     """🔒 FR-M8-005, and DB §11.5's own example: a message scheduled Monday for
     Friday must be suppressed if the client is paused on Wednesday."""
-    message_id = await _queue(session_for, tenant_a, scheduled_for=PINNED_NOW - timedelta(minutes=1))
+    message_id = await _queue(
+        session_for, tenant_a, scheduled_for=PINNED_NOW - timedelta(minutes=1)
+    )
     await set_client_stage(
         migrator_engine,
         tenant_id=tenant_a.tenant_id,
