@@ -47,6 +47,9 @@ from tests.integration.messaging.conftest import (
 pytestmark = pytest.mark.asyncio
 
 
+PINNED_NOW = datetime(2026, 8, 14, 6, 30, tzinfo=UTC)
+
+
 async def _queue(
     session_for: SessionFactory,
     tenant: TenantFixture,
@@ -64,7 +67,7 @@ async def _queue(
             request=MessageRequest(
                 template_code=template_code,
                 occasion=occasion,
-                scheduled_for=scheduled_for or datetime(2026, 8, 14, 6, 30, tzinfo=UTC),
+                scheduled_for=scheduled_for or PINNED_NOW,
                 source_module="tests",
                 client_id=tenant.client_id,
                 variables=variables
@@ -92,7 +95,7 @@ async def _dispatch(
             session,
             tenant_id=tenant.tenant_id,
             scheduled_message_id=message_id,
-            now=now or datetime(2026, 8, 14, 6, 30, tzinfo=UTC),
+            now=now or PINNED_NOW,
         )
     async with session_for(tenant.tenant_id) as session:
         row = await session.get(ScheduledMessage, message_id)
@@ -239,7 +242,7 @@ async def test_a_paused_client_suppresses_with_a_reason(
 ) -> None:
     """🔒 FR-M8-005, and DB §11.5's own example: a message scheduled Monday for
     Friday must be suppressed if the client is paused on Wednesday."""
-    message_id = await _queue(session_for, tenant_a, scheduled_for=utc_now() - timedelta(minutes=1))
+    message_id = await _queue(session_for, tenant_a, scheduled_for=PINNED_NOW - timedelta(minutes=1))
     await set_client_stage(
         migrator_engine,
         tenant_id=tenant_a.tenant_id,
@@ -514,7 +517,7 @@ async def test_a_stale_check_in_expires_rather_than_arriving_late(
         tenant_a,
         template_code="checkin_nudge",
         occasion="checkin:week32",
-        scheduled_for=utc_now() - timedelta(days=2),
+        scheduled_for=PINNED_NOW - timedelta(days=2),
         variables={"client_name": "Anjali Rao", "portal_url": "https://portal.example.test"},
     )
 
@@ -529,7 +532,7 @@ async def test_a_late_plan_delivery_is_still_sent(
 ) -> None:
     """A plan a practitioner approved is still wanted late — the template
     declares no staleness tolerance, and that is the difference."""
-    message_id = await _queue(session_for, tenant_a, scheduled_for=utc_now() - timedelta(days=5))
+    message_id = await _queue(session_for, tenant_a, scheduled_for=PINNED_NOW - timedelta(days=5))
     row = await _dispatch(session_for, tenant_a, message_id)
 
     assert row.state is ScheduledState.DISPATCHED
@@ -572,7 +575,7 @@ async def test_the_same_occasion_queues_once(
             request=MessageRequest(
                 template_code="plan_delivered",
                 occasion="plan_version:7",
-                scheduled_for=utc_now(),
+                scheduled_for=PINNED_NOW,
                 source_module="tests",
                 client_id=tenant_a.client_id,
                 variables={
