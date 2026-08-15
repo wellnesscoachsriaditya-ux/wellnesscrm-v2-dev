@@ -1569,6 +1569,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portal/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Drain the client's offline queue
+         * @description Apply a batch of queued operations — API §12.4, FR-M7-012, EC-M7-05.
+         *
+         *     🔒 **Four guarantees, and each is a line of code below rather than a hope:**
+         *
+         *     1. **A single bad operation never fails the batch.** Every operation runs
+         *        inside its own ``SAVEPOINT``. Without one, a constraint violation aborts
+         *        the request's transaction and PostgreSQL refuses every subsequent
+         *        statement — so one replayed log would discard a week of queued data,
+         *        which is the exact failure this endpoint exists to prevent.
+         *     2. **``duplicate`` is a success state.** Decided by the unique index, not by
+         *        a prior read: two replays of one queue arriving together would both pass
+         *        a ``SELECT`` and both insert.
+         *     3. **Client logs are never discarded.** An operation that cannot be applied
+         *        comes back ``rejected`` with a code the PWA can branch on, so it stays
+         *        queued rather than vanishing.
+         *     4. **``plan_changed`` is answered from the snapshot hash** (DDR-12), so the
+         *        PWA refreshes deliberately instead of swapping content under the reader.
+         *
+         *     🔒 **The client is the token's subject.** Nothing in the request body can
+         *     name a client, and ``AdherencePayload`` / ``MeasurementPayload`` refuse
+         *     unknown keys, so a payload carrying ``client_id`` is rejected rather than
+         *     ignored. Pattern C then confines every write at the database.
+         */
+        post: operations["portalSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portal/today": {
         parameters: {
             query?: never;
@@ -4116,6 +4157,80 @@ export interface components {
              * @enum {string}
              */
             to_stage: "lead" | "contacted" | "consultation_scheduled" | "active" | "paused" | "churned";
+        };
+        /**
+         * SyncOperation
+         * @description One queued action from the client's device.
+         *
+         *     ⚠️ **``payload`` is an untyped object here, deliberately.** A discriminated
+         *     union would make FastAPI reject the *whole request* with a 422 when one
+         *     operation's payload is malformed — and API §12.4 guarantee 1 says "a single
+         *     bad operation never fails the batch". The payload is parsed inside the
+         *     per-operation savepoint instead, where a failure becomes that operation's
+         *     ``rejected`` result and the rest of the week's queue still applies.
+         */
+        SyncOperation: {
+            /**
+             * Client Timestamp
+             * Format: date-time
+             */
+            client_timestamp: string;
+            /**
+             * Op Id
+             * Format: uuid
+             */
+            op_id: string;
+            /** Payload */
+            payload?: Record<string, never>;
+            /** Type */
+            type: string;
+        };
+        /**
+         * SyncRequest
+         * @description API §12.4's request body.
+         */
+        SyncRequest: {
+            /** Known Plan Hash */
+            known_plan_hash?: string | null;
+            /** Operations */
+            operations?: components["schemas"]["SyncOperation"][];
+        };
+        /**
+         * SyncResponse
+         * @description API §12.4's 200.
+         *
+         *     🔒 ``plan_changed`` tells the PWA to refresh rather than silently swapping
+         *     content while the client is reading it (EC-M7-03).
+         */
+        SyncResponse: {
+            /** Current Plan Hash */
+            current_plan_hash: string | null;
+            /** Plan Changed */
+            plan_changed: boolean;
+            /** Results */
+            results: components["schemas"]["SyncResult"][];
+        };
+        /**
+         * SyncResult
+         * @description What became of one operation.
+         *
+         *     🔒 ``error`` carries a stable machine-readable code (API §16.1), never
+         *     prose: the PWA branches on it to decide whether to drop the operation from
+         *     its queue or retry it, and a localisable sentence cannot be branched on.
+         */
+        SyncResult: {
+            /** Error */
+            error?: string | null;
+            /**
+             * Op Id
+             * Format: uuid
+             */
+            op_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "applied" | "duplicate" | "rejected";
         };
         /**
          * TagColour
@@ -6996,6 +7111,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    portalSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncResponse"];
                 };
             };
             /** @description Validation Error */

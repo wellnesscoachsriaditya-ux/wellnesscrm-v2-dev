@@ -405,9 +405,15 @@ def _replay_upgrades(source: str) -> dict[str, set[str]]:
     ``add_column`` in a later revision lands after the ``create_table`` it
     extends, and a ``drop_column`` after the column it removes.
 
-    ⚠️ Names only, and only these three operations. A column renamed with
-    ``alter_column`` would go unnoticed; nothing in the chain does that, and the
-    check would have to grow if something ever did.
+    ⚠️ Names only, and only these four operations. Anything else that changes a
+    column's *name* would go unnoticed, and the check would have to grow again.
+
+    ⚠️ ``alter_column(..., new_column_name=...)`` was added when revision
+    ``0026`` performed the chain's first rename. Without it the replay kept the
+    old name and reported the model as drifted — a false positive on a correct
+    migration, which is exactly how a drift check gets weakened rather than
+    fixed. The rename is read as "discard the old name, add the new one",
+    because that is what it does to a column set.
     """
     tables: dict[str, set[str]] = {}
 
@@ -444,8 +450,24 @@ def _replay_upgrades(source: str) -> dict[str, set[str]]:
                 dropped = _string_arg(call, 1)
                 if dropped is not None:
                     tables.setdefault(table_name, set()).discard(dropped)
+            elif operation == "alter_column":
+                renamed_to = _keyword_string(call, "new_column_name")
+                previous = _string_arg(call, 1)
+                if renamed_to is not None and previous is not None:
+                    columns = tables.setdefault(table_name, set())
+                    columns.discard(previous)
+                    columns.add(renamed_to)
 
     return tables
+
+
+def _keyword_string(call: ast.Call, name: str) -> str | None:
+    """A string-literal keyword argument, or ``None``."""
+    for keyword in call.keywords:
+        if keyword.arg == name and isinstance(keyword.value, ast.Constant):
+            value = keyword.value.value
+            return value if isinstance(value, str) else None
+    return None
 
 
 def test_the_replay_follows_additive_revisions() -> None:
@@ -471,10 +493,34 @@ def test_the_replay_follows_additive_revisions() -> None:
         def downgrade():
             op.add_column("t", sa.Column("b"))
             op.drop_column("t", "c")
+
+        def upgrade():
+            op.alter_column("t", "a", new_column_name="renamed")
+
+        def downgrade():
+            op.alter_column("t", "renamed", new_column_name="a")
         """
     )
 
-    assert _replay_upgrades(source) == {"t": {"a", "c"}}
+    assert _replay_upgrades(source) == {"t": {"renamed", "c"}}
+
+
+def test_the_replay_ignores_an_alter_that_is_not_a_rename() -> None:
+    """``alter_column`` is mostly used for types and nullability.
+
+    ⚠️ Only the ``new_column_name`` form touches the column *set*. Treating every
+    ``alter_column`` as a rename would drop a column from the replay on any type
+    change and report drift that is not there.
+    """
+    source = textwrap.dedent(
+        """
+        def upgrade():
+            op.create_table("t", sa.Column("a"))
+            op.alter_column("t", "a", nullable=False)
+        """
+    )
+
+    assert _replay_upgrades(source) == {"t": {"a"}}
 
 
 def test_migration_columns_match_models(all_migrations_source: str) -> None:

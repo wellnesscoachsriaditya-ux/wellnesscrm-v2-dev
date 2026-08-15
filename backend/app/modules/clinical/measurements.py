@@ -96,6 +96,7 @@ async def record(
     body_fat_pct: Decimal | None = None,
     notes: str | None = None,
     confirmed_implausible: bool = False,
+    idempotency_key: str | None = None,
 ) -> Measurement:
     """Record a dated measurement — FR-M3-011, FR-M3-013, EC-M3-02.
 
@@ -109,9 +110,21 @@ async def record(
     (EC-M3-05). There is deliberately no upsert here: overwriting would discard
     the disagreement, which is itself clinically interesting.
 
+    Args:
+        idempotency_key: 🔒 The client-generated key a replayed ``/portal/sync``
+            batch deduplicates on (migration ``0024``). ``None`` for a
+            practitioner entry, which is deliberately *unconstrained*: two
+            readings for one client on one day is a clinical decision, not a
+            duplicate, and the index is partial so it never sees them.
+
     Raises:
         ValidationError: The value is outside what a measurement can be, or is
             implausible and unconfirmed.
+        IntegrityError: 🔒 On a replayed key for this client.
+            ``uq_measurements__client_idempotency`` decides, not a prior read —
+            a ``SELECT`` then ``INSERT`` can lose a race between two replays
+            arriving together. Not caught here: the caller decides whether a
+            replay is an error (API §12.4 says it is not) and how to report it.
     """
     if measured_on > now().date():
         raise ValidationError(
@@ -150,6 +163,7 @@ async def record(
         recorded_by_user_id=recorded_by_user_id,
         is_flagged_implausible=flagged,
         notes=notes,
+        idempotency_key=idempotency_key,
     )
     session.add(measurement)
     await session.flush()

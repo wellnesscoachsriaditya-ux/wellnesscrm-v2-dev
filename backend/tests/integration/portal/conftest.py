@@ -203,6 +203,12 @@ async def portal_clients(
                 for statement in (
                     "DELETE FROM adherence_logs WHERE tenant_id = :t",
                     "DELETE FROM measurements WHERE tenant_id = :t",
+                    # ⚠️ `/portal/sync` writes measurements, which publish
+                    # `MeasurementRecorded`, which the timeline subscribes to.
+                    # A teardown that missed these would fail on the client
+                    # delete *after* the assertions passed, reading as a flaky
+                    # suite rather than a fixture that had fallen behind.
+                    "DELETE FROM timeline_events WHERE tenant_id = :t",
                     "DELETE FROM assessment_responses WHERE tenant_id = :t",
                     "DELETE FROM plan_items WHERE tenant_id = :t",
                     "DELETE FROM plan_slots WHERE tenant_id = :t",
@@ -379,6 +385,18 @@ def practitioner_actor(fixture: PortalClient) -> Actor:
     )
 
 
+def anonymous_actor() -> Actor:
+    """No credential at all.
+
+    🔒 Stated explicitly rather than relying on the harness's default. A test
+    that reaches an endpoint anonymously *after* another helper has set an actor
+    would otherwise be calling it as that actor and asserting nothing — which is
+    precisely how an "anonymous is refused" test passes while the endpoint is
+    wide open.
+    """
+    return Actor.anonymous()
+
+
 def operator_actor() -> Actor:
     """A platform operator — the second wrong realm.
 
@@ -537,6 +555,32 @@ async def suspend_tenant(migrator_engine: AsyncEngine, *, tenant_id: uuid.UUID) 
             text("UPDATE tenants SET status = 'suspended', suspended_at = now() WHERE id = :t"),
             {"t": tenant_id},
         )
+
+
+async def rows_for(migrator_engine: AsyncEngine, *, table: str, fixture: PortalClient) -> list[Any]:
+    """Every row of ``table`` belonging to one client, read out of band.
+
+    🔒 Read through ``migrator_engine`` on purpose. The point of a sync
+    assertion is *what is actually in the database*, and reading it back through
+    the same client-scoped connection the write used would make a row invisible
+    for the same reason it was refused — a leak and a correct rejection would
+    look identical.
+    """
+    async with migrator_engine.begin() as connection:
+        await scope_to(connection, fixture.tenant_id)
+        result = await connection.execute(
+            text(f"SELECT * FROM {table} WHERE client_id = :c ORDER BY id"),
+            {"c": fixture.client_id},
+        )
+        return list(result.mappings().all())
+
+
+async def adherence_rows(migrator_engine: AsyncEngine, *, fixture: PortalClient) -> list[Any]:
+    return await rows_for(migrator_engine, table="adherence_logs", fixture=fixture)
+
+
+async def measurement_rows(migrator_engine: AsyncEngine, *, fixture: PortalClient) -> list[Any]:
+    return await rows_for(migrator_engine, table="measurements", fixture=fixture)
 
 
 @pytest.fixture

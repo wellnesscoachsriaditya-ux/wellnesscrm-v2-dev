@@ -5254,6 +5254,135 @@
         "title": "StageChangeRequest",
         "type": "object"
       },
+      "SyncOperation": {
+        "description": "One queued action from the client's device.\n\n⚠️ **``payload`` is an untyped object here, deliberately.** A discriminated\nunion would make FastAPI reject the *whole request* with a 422 when one\noperation's payload is malformed — and API §12.4 guarantee 1 says \"a single\nbad operation never fails the batch\". The payload is parsed inside the\nper-operation savepoint instead, where a failure becomes that operation's\n``rejected`` result and the rest of the week's queue still applies.",
+        "properties": {
+          "client_timestamp": {
+            "format": "date-time",
+            "title": "Client Timestamp",
+            "type": "string"
+          },
+          "op_id": {
+            "format": "uuid",
+            "title": "Op Id",
+            "type": "string"
+          },
+          "payload": {
+            "title": "Payload",
+            "type": "object"
+          },
+          "type": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "op_id",
+          "type",
+          "client_timestamp"
+        ],
+        "title": "SyncOperation",
+        "type": "object"
+      },
+      "SyncRequest": {
+        "description": "API §12.4's request body.",
+        "properties": {
+          "known_plan_hash": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Known Plan Hash"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/SyncOperation"
+            },
+            "maxItems": 100,
+            "title": "Operations",
+            "type": "array"
+          }
+        },
+        "title": "SyncRequest",
+        "type": "object"
+      },
+      "SyncResponse": {
+        "description": "API §12.4's 200.\n\n🔒 ``plan_changed`` tells the PWA to refresh rather than silently swapping\ncontent while the client is reading it (EC-M7-03).",
+        "properties": {
+          "current_plan_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Plan Hash"
+          },
+          "plan_changed": {
+            "title": "Plan Changed",
+            "type": "boolean"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SyncResult"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results",
+          "plan_changed",
+          "current_plan_hash"
+        ],
+        "title": "SyncResponse",
+        "type": "object"
+      },
+      "SyncResult": {
+        "description": "What became of one operation.\n\n🔒 ``error`` carries a stable machine-readable code (API §16.1), never\nprose: the PWA branches on it to decide whether to drop the operation from\nits queue or retry it, and a localisable sentence cannot be branched on.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "op_id": {
+            "format": "uuid",
+            "title": "Op Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "applied",
+              "duplicate",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "op_id",
+          "status"
+        ],
+        "title": "SyncResult",
+        "type": "object"
+      },
       "TagColour": {
         "description": "The palette a tag may use — DB §5.4 (\"``color`` for UI\").\n\n🔒 **A named palette rather than free hex, deliberately.** Three reasons, in\norder of weight:\n\n1. **Contrast is a guarantee, not a hope.** Every value here maps to a design\n   token whose contrast is asserted by ``tokens/contrast.test.ts`` (NFR-060).\n   A practitioner picking ``#ffff00`` would produce a tag nobody can read,\n   and no test anywhere would catch it.\n2. ADR-03 — raw colour values live in the design system and nowhere else.\n   Free hex in the database is that rule broken through the back door.\n3. A closed set survives a theme change. Hex does not: a dark mode added\n   later has to re-interpret every value a user ever chose.\n\n⚠️ 🟡 The *set* is PROPOSED. DB §5.4 names the column and stops there, so\nthese eight are my choice — enough to group a caseload without becoming a\ndecision the practitioner has to make carefully.",
         "enum": [
@@ -10121,6 +10250,48 @@
         "summary": "Retire a tag",
         "tags": [
           "collaboration"
+        ]
+      }
+    },
+    "/api/v1/portal/sync": {
+      "post": {
+        "description": "Apply a batch of queued operations — API §12.4, FR-M7-012, EC-M7-05.\n\n🔒 **Four guarantees, and each is a line of code below rather than a hope:**\n\n1. **A single bad operation never fails the batch.** Every operation runs\n   inside its own ``SAVEPOINT``. Without one, a constraint violation aborts\n   the request's transaction and PostgreSQL refuses every subsequent\n   statement — so one replayed log would discard a week of queued data,\n   which is the exact failure this endpoint exists to prevent.\n2. **``duplicate`` is a success state.** Decided by the unique index, not by\n   a prior read: two replays of one queue arriving together would both pass\n   a ``SELECT`` and both insert.\n3. **Client logs are never discarded.** An operation that cannot be applied\n   comes back ``rejected`` with a code the PWA can branch on, so it stays\n   queued rather than vanishing.\n4. **``plan_changed`` is answered from the snapshot hash** (DDR-12), so the\n   PWA refreshes deliberately instead of swapping content under the reader.\n\n🔒 **The client is the token's subject.** Nothing in the request body can\nname a client, and ``AdherencePayload`` / ``MeasurementPayload`` refuse\nunknown keys, so a payload carrying ``client_id`` is rejected rather than\nignored. Pattern C then confines every write at the database.",
+        "operationId": "portalSync",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Drain the client's offline queue",
+        "tags": [
+          "portal"
         ]
       }
     },

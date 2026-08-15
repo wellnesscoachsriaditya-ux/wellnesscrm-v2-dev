@@ -38,7 +38,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Request
@@ -49,16 +49,20 @@ from pydantic import (
     SerializerFunctionWrapHandler,
     model_serializer,
 )
+from pydantic import (
+    ValidationError as PayloadError,
+)
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.kernel.authz import DataScope, register_action
 from app.kernel.clients import ClientStage
-from app.kernel.clinical import ResponseStatus
+from app.kernel.clinical import MeasurementSource, ResponseStatus
 from app.kernel.context import UserRole, get_context
-from app.kernel.errors import AuthenticationError
+from app.kernel.errors import AppError, AuthenticationError, ErrorType
 from app.kernel.models import Tenant, TenantStatus
-from app.kernel.nutrition import format_measure
+from app.kernel.nutrition import MealSlotType, format_measure
 from app.modules.clients import Client, get_client
 from app.modules.clinical import (
     AssessmentResponse,
@@ -66,15 +70,25 @@ from app.modules.clinical import (
     list_responses,
     measurement_history,
     preferred_per_date,
+    record_measurement,
 )
 from app.modules.nutrition import (
     IssuedPlan,
+    PlanSlot,
     ResolvedPlanVersion,
     current_issued_plan_for_client,
     resolve_plan_version,
 )
+from app.modules.progress import (
+    AdherenceValue,
+    assert_within_window,
+    log_adherence,
+)
 from app.platform.http.authz import requires
-from app.platform.http.pipeline import get_session, realm_router
+from app.platform.http.pipeline import get_session, realm_router, record_audit
+from app.platform.logging import get_logger
+
+logger = get_logger(__name__)
 
 #: 🔒 API §4 — a ``Decimal`` leaves as a string, never as a JSON number. A
 #: silently rounded clinical figure is a defect, not a rounding artefact.
@@ -105,6 +119,26 @@ PORTAL_TODAY_READ = register_action(
     is_read=True,
 )
 
+#: 🔒 The offline queue drain (API §12.4, FR-M7-012).
+#:
+#: ⚠️ **One action for a batch that writes two different resources.** The
+#: alternative — declaring `adherence.log` and `measurement.record` and checking
+#: each per operation — would put an authorization decision inside a loop, which
+#: is where they get forgotten. The authority being exercised is "this client may
+#: sync their own queue"; *which* resources that covers is the operation
+#: dispatch's business, and every row it writes is confined by Pattern C
+#: regardless of what the loop does.
+#:
+#: Audited, unlike `portal.read_today`: this writes. The counts go in the audit
+#: row so a support question ("did their Tuesday logs arrive?") is answerable
+#: without reading the logs themselves.
+PORTAL_SYNC = register_action(
+    "portal.sync",
+    roles={UserRole.CLIENT},
+    data_scope=DataScope.TENANT_PII,
+    audit_metadata_keys={"applied", "duplicate", "rejected"},
+)
+
 
 # ─── Tunable rules ───────────────────────────────────────────────────────
 
@@ -127,6 +161,55 @@ SUSPENDED_NOTICE = (
 #: EC-M7-06 — a paused engagement. Read-only, and phrased as a pause rather than
 #: a problem.
 PAUSED_NOTICE = "Your programme is paused, so logging is turned off for now."
+
+#: 🟡 **PROPOSED batch cap: 100 operations** (API §12.4). "A larger queue syncs
+#: in pages", so exceeding it is a request the client must reshape — a 422 on the
+#: envelope, not a per-operation rejection. That is the one validation failure
+#: here that legitimately fails the whole batch, because there is no batch to
+#: apply until the client splits it.
+MAX_BATCH_OPERATIONS = 100
+
+#: The operation types ``/portal/sync`` understands.
+#:
+#: 🔒 ``adherence.log`` is named in API §12.4's example. 🟡 ``measurement.log`` is
+#: **PROPOSED**: §12.4 shows one type and does not enumerate the rest, but
+#: migration ``0024`` exists solely to give measurements the idempotency key
+#: "``/portal/sync`` replays against", so the queue is specified to carry them
+#: and only the name was left open. Named by symmetry with the one type that is
+#: written down.
+OP_ADHERENCE = "adherence.log"
+OP_MEASUREMENT = "measurement.log"
+
+#: 🔒 The per-operation outcomes, API §12.4. ``duplicate`` is a **success**
+#: state — replaying a queue is expected, not an error.
+STATUS_APPLIED = "applied"
+STATUS_DUPLICATE = "duplicate"
+STATUS_REJECTED = "rejected"
+
+#: 🔒 The unique indexes that mean "this operation has already been applied".
+#:
+#: ⚠️ Matched by name rather than by catching every ``IntegrityError``. A foreign
+#: key violation is also an ``IntegrityError`` and is *our* defect, not a replay;
+#: reporting it as ``duplicate`` would tell the client their data is safely
+#: stored when it was discarded.
+_REPLAY_CONSTRAINTS: frozenset[str] = frozenset(
+    {
+        "uq_adherence_logs__idempotency",
+        "uq_measurements__client_idempotency",
+    }
+)
+
+#: What a client is told when their portal is read-only (EC-M7-06, EC-M7-08).
+#: 🔒 The same code for a paused client and a suspended tenant — a client must
+#: not be able to tell their own pause from their practitioner's account state.
+ERROR_READ_ONLY = "portal_read_only"
+
+#: An operation naming a type this server does not implement.
+ERROR_UNSUPPORTED_TYPE = "unsupported_operation_type"
+
+#: 🔒 An operation that failed for a reason that is not the client's fault. The
+#: client keeps it queued and retries; nothing is silently dropped (EC-M7-05).
+ERROR_NOT_APPLIED = "not_applied"
 
 
 # ─── Wire shapes ─────────────────────────────────────────────────────────
@@ -279,6 +362,104 @@ class TodayResponse(BaseModel):
     notice: str | None
 
 
+# ─── Sync wire shapes — API §12.4 ────────────────────────────────────────
+
+
+class SyncOperation(BaseModel):
+    """One queued action from the client's device.
+
+    ⚠️ **``payload`` is an untyped object here, deliberately.** A discriminated
+    union would make FastAPI reject the *whole request* with a 422 when one
+    operation's payload is malformed — and API §12.4 guarantee 1 says "a single
+    bad operation never fails the batch". The payload is parsed inside the
+    per-operation savepoint instead, where a failure becomes that operation's
+    ``rejected`` result and the rest of the week's queue still applies.
+    """
+
+    op_id: uuid.UUID
+    type: str = Field(min_length=1, max_length=64)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    #: 🔒 When the client acted, from their device clock. Kept alongside server
+    #: time rather than instead of it (API §12.3).
+    client_timestamp: datetime
+
+
+class SyncRequest(BaseModel):
+    """API §12.4's request body."""
+
+    #: 🟡 Capped at 100 (see :data:`MAX_BATCH_OPERATIONS`). An empty list is
+    #: **valid**: a PWA that comes online with nothing queued still needs to ask
+    #: whether its cached plan is current, and refusing that would push clients
+    #: into a second round trip on the connection §12.2 exists to protect.
+    operations: list[SyncOperation] = Field(default_factory=list, max_length=MAX_BATCH_OPERATIONS)
+    #: 🔒 DDR-12 / EC-M7-03 — what the device believes it has cached.
+    known_plan_hash: str | None = Field(default=None, max_length=128)
+
+
+class SyncResult(BaseModel):
+    """What became of one operation.
+
+    🔒 ``error`` carries a stable machine-readable code (API §16.1), never
+    prose: the PWA branches on it to decide whether to drop the operation from
+    its queue or retry it, and a localisable sentence cannot be branched on.
+    """
+
+    op_id: uuid.UUID
+    status: Literal["applied", "duplicate", "rejected"]
+    error: str | None = None
+
+
+class SyncResponse(BaseModel):
+    """API §12.4's 200.
+
+    🔒 ``plan_changed`` tells the PWA to refresh rather than silently swapping
+    content while the client is reading it (EC-M7-03).
+    """
+
+    results: list[SyncResult]
+    plan_changed: bool
+    current_plan_hash: str | None
+
+
+class AdherencePayload(BaseModel):
+    """API §12.3's fields, as they arrive inside a sync operation.
+
+    🔒 ``model_config`` forbids extra keys. A payload carrying ``client_id`` or
+    ``tenant_id`` is refused outright rather than ignored — silently dropping an
+    authority field teaches a client that sending it is harmless, and the next
+    reader of this code has to prove it still is.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    logged_for_date: date
+    slot_type: MealSlotType
+    adherence: AdherenceValue
+    slot_id: uuid.UUID | None = None
+
+
+class MeasurementPayload(BaseModel):
+    """What the portal's weight tile queues — API §12.1 ``/portal/measurements``.
+
+    ⚠️ ``height_cm`` is absent. Height is captured once at assessment
+    (FR-M3-012) and is not something the one-tap weight flow collects; accepting
+    it here would let the offline queue rewrite a figure every BMI depends on.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    measured_on: date
+    weight_kg: Decimal | None = None
+    waist_cm: Decimal | None = None
+    hip_cm: Decimal | None = None
+    body_fat_pct: Decimal | None = None
+    #: 🔒 EC-M3-02's second step. A value outside the plausible range is refused
+    #: once and accepted when the client confirms it — a real 180 kg client
+    #: exists, and a queue that cannot carry the confirmation would refuse them
+    #: forever.
+    confirmed_implausible: bool = False
+
+
 # ─── The endpoint ────────────────────────────────────────────────────────
 
 
@@ -357,6 +538,274 @@ async def portal_today(request: Request) -> TodayResponse:
         capabilities=capabilities,
         notice=notice,
     )
+
+
+@router.post(
+    "/sync",
+    summary="Drain the client's offline queue",
+    operation_id="portalSync",
+)
+@requires(PORTAL_SYNC)
+async def portal_sync(payload: SyncRequest, request: Request) -> SyncResponse:
+    """Apply a batch of queued operations — API §12.4, FR-M7-012, EC-M7-05.
+
+    🔒 **Four guarantees, and each is a line of code below rather than a hope:**
+
+    1. **A single bad operation never fails the batch.** Every operation runs
+       inside its own ``SAVEPOINT``. Without one, a constraint violation aborts
+       the request's transaction and PostgreSQL refuses every subsequent
+       statement — so one replayed log would discard a week of queued data,
+       which is the exact failure this endpoint exists to prevent.
+    2. **``duplicate`` is a success state.** Decided by the unique index, not by
+       a prior read: two replays of one queue arriving together would both pass
+       a ``SELECT`` and both insert.
+    3. **Client logs are never discarded.** An operation that cannot be applied
+       comes back ``rejected`` with a code the PWA can branch on, so it stays
+       queued rather than vanishing.
+    4. **``plan_changed`` is answered from the snapshot hash** (DDR-12), so the
+       PWA refreshes deliberately instead of swapping content under the reader.
+
+    🔒 **The client is the token's subject.** Nothing in the request body can
+    name a client, and ``AdherencePayload`` / ``MeasurementPayload`` refuse
+    unknown keys, so a payload carrying ``client_id`` is rejected rather than
+    ignored. Pattern C then confines every write at the database.
+    """
+    session = get_session(request)
+    actor = get_context().actor
+    tenant_id = actor.require_tenant()
+    client_id = actor.require_subject()
+
+    client = await get_client(session, tenant_id=tenant_id, client_id=client_id)
+    if client.archived_at is not None:
+        raise AuthenticationError(
+            message="This link is no longer active.",
+            action="Contact your practitioner to regain access.",
+        )
+
+    tenant = await _load_tenant(session, tenant_id=tenant_id)
+    issued = await current_issued_plan_for_client(session, tenant_id=tenant_id, client_id=client_id)
+    current_hash = issued.content_hash if issued is not None else None
+
+    # 🔒 EC-M7-06 / EC-M7-08 — a read-only portal accepts no writes, and says so
+    # per operation with a 200. A 403 here would let a client infer their
+    # practitioner's account state from the status code alone.
+    capabilities, _ = _capabilities_for(client, tenant)
+    writable = capabilities.can_log_adherence
+
+    results: list[SyncResult] = []
+    for operation in payload.operations:
+        if not writable:
+            results.append(_rejected(operation, ERROR_READ_ONLY))
+            continue
+        results.append(
+            await _apply_operation(
+                session,
+                operation,
+                tenant_id=tenant_id,
+                client_id=client_id,
+                today=_today_for(tenant),
+                plan_version_id=issued.version.id if issued is not None else None,
+            )
+        )
+
+    tally = {status: 0 for status in (STATUS_APPLIED, STATUS_DUPLICATE, STATUS_REJECTED)}
+    for result in results:
+        tally[result.status] += 1
+    record_audit(request, metadata=tally)
+
+    return SyncResponse(
+        results=results,
+        # 🔒 A client that sent no hash is not told its plan changed — it has
+        # nothing cached to invalidate, and a spurious `true` would make a fresh
+        # install refetch a plan it is already about to fetch.
+        plan_changed=(
+            payload.known_plan_hash is not None and payload.known_plan_hash != current_hash
+        ),
+        current_plan_hash=current_hash,
+    )
+
+
+# ─── Operation dispatch ──────────────────────────────────────────────────
+
+
+async def _apply_operation(
+    session: AsyncSession,
+    operation: SyncOperation,
+    *,
+    tenant_id: uuid.UUID,
+    client_id: uuid.UUID,
+    today: date,
+    plan_version_id: uuid.UUID | None,
+) -> SyncResult:
+    """Apply one operation inside its own savepoint — guarantee 1.
+
+    ⚠️ **The savepoint is what makes the guarantee true**, not the ``try``. A
+    failed ``INSERT`` puts PostgreSQL's transaction into an aborted state, and
+    catching the Python exception does not clear it — every later statement then
+    fails with "current transaction is aborted", so operation 3 would poison
+    operations 4 through 100. ``begin_nested()`` issues a real ``SAVEPOINT`` and
+    rolls back to it, leaving the outer transaction usable.
+
+    ⚠️ Rolling back also expunges the pending ORM object the failed operation
+    added, so it cannot be re-flushed at commit and resurrect the failure after
+    every result has been decided.
+    """
+    try:
+        async with session.begin_nested():
+            await _dispatch(
+                session,
+                operation,
+                tenant_id=tenant_id,
+                client_id=client_id,
+                today=today,
+                plan_version_id=plan_version_id,
+            )
+    except IntegrityError as exc:
+        if _is_replay(exc):
+            # 🔒 Guarantee 2 — the queue was replayed, which is expected.
+            return SyncResult(op_id=operation.op_id, status=STATUS_DUPLICATE)
+        # Not a replay: our defect, not the client's. Reported as rejected so the
+        # client keeps the operation queued (guarantee 3), and logged so it is
+        # visible to us rather than only to them.
+        logger.warning(
+            "Sync operation failed on an unexpected constraint",
+            extra={"operation_type": operation.type},
+        )
+        return _rejected(operation, ERROR_NOT_APPLIED)
+    except PayloadError:
+        # 🔒 A malformed or unknown-field payload. Rejected as *this* operation,
+        # never as the batch — which is why `SyncOperation.payload` is untyped.
+        return _rejected(operation, ErrorType.VALIDATION_FAILED.value)
+    except AppError as exc:
+        # A domain rule refused it — a date outside the backdating window, an
+        # implausible weight awaiting confirmation, a slot that is not theirs.
+        return _rejected(operation, exc.error_type.value)
+
+    return SyncResult(op_id=operation.op_id, status=STATUS_APPLIED)
+
+
+async def _dispatch(
+    session: AsyncSession,
+    operation: SyncOperation,
+    *,
+    tenant_id: uuid.UUID,
+    client_id: uuid.UUID,
+    today: date,
+    plan_version_id: uuid.UUID | None,
+) -> None:
+    """Route one operation to the module that owns its table.
+
+    🔒 ``op_id`` **is** the idempotency key. API §13.1 says ``/portal/sync`` is
+    keyed "per-operation ``op_id``", and both tables already carry a uniqueness
+    boundary scoped to the client — so a replayed queue collides on exactly the
+    row it would have duplicated, and two clients sending the same op_id do not
+    collide at all.
+    """
+    key = str(operation.op_id)
+
+    if operation.type == OP_ADHERENCE:
+        logged = AdherencePayload.model_validate(operation.payload)
+        assert_within_window(logged.logged_for_date, today=today)
+        await log_adherence(
+            session,
+            tenant_id=tenant_id,
+            client_id=client_id,
+            logged_for_date=logged.logged_for_date,
+            slot_type=logged.slot_type.value,
+            adherence=logged.adherence,
+            idempotency_key=key,
+            client_timestamp=operation.client_timestamp,
+            plan_slot_id=await _own_slot_id(session, tenant_id=tenant_id, slot_id=logged.slot_id),
+            # 🔒 Server-resolved. A client-supplied version id would let them
+            # attribute a log to a plan they were never issued.
+            plan_version_id=plan_version_id,
+        )
+        return
+
+    if operation.type == OP_MEASUREMENT:
+        fields = MeasurementPayload.model_validate(operation.payload)
+        await record_measurement(
+            session,
+            tenant_id=tenant_id,
+            client_id=client_id,
+            measured_on=fields.measured_on,
+            # 🔒 `CLIENT`, always. EC-M3-05 keeps a practitioner's and a client's
+            # value for one date apart, and the display-precedence rule reads
+            # this column — a client's queue must never claim to be the
+            # practitioner's reading.
+            source=MeasurementSource.CLIENT,
+            recorded_by_user_id=None,
+            weight_kg=fields.weight_kg,
+            waist_cm=fields.waist_cm,
+            hip_cm=fields.hip_cm,
+            body_fat_pct=fields.body_fat_pct,
+            confirmed_implausible=fields.confirmed_implausible,
+            idempotency_key=key,
+        )
+        return
+
+    raise UnsupportedOperationError(operation.type)
+
+
+class UnsupportedOperationError(AppError):
+    """🔒 An operation type this server does not implement.
+
+    ⚠️ An :class:`AppError` rather than a bare exception, so it flows through the
+    same ``rejected`` path as every other refusal. A newer PWA queuing a type an
+    older deployment has never heard of must get a per-operation answer, not a
+    500 that discards the batch around it.
+    """
+
+    error_type = ErrorType.VALIDATION_FAILED
+    status_code = 422
+
+    def __init__(self, operation_type: str) -> None:
+        super().__init__(
+            message="This app version queued something the server does not understand.",
+            action="Update the app and try again.",
+            details={"operation_type": operation_type},
+        )
+
+
+async def _own_slot_id(
+    session: AsyncSession, *, tenant_id: uuid.UUID, slot_id: uuid.UUID | None
+) -> uuid.UUID | None:
+    """Confirm a slot belongs to this client's plan, or drop it.
+
+    🔒 **Confirmed by Pattern C, not by a join written here.** ``plan_slots``
+    carries a client-realm policy (migration ``0025``), so this ``SELECT``
+    returns nothing for a slot on someone else's plan — the same query, a
+    different answer, decided by the database.
+
+    ⚠️ An unrecognised slot **degrades to ``None``** rather than rejecting the
+    operation. ``slot_type`` is the field that survives plan revision (API
+    §12.3), and a client logging breakfast against a slot the practitioner
+    deleted this morning has still eaten breakfast. Losing the slot reference is
+    the correct outcome; losing the log is not.
+    """
+    if slot_id is None:
+        return None
+    found = await session.scalar(
+        select(PlanSlot.id).where(PlanSlot.tenant_id == tenant_id, PlanSlot.id == slot_id)
+    )
+    return found
+
+
+def _is_replay(exc: IntegrityError) -> bool:
+    """Whether this violation is a replayed operation rather than a defect.
+
+    ⚠️ Matched on the constraint name PostgreSQL reports. The alternative —
+    treating every ``IntegrityError`` as a duplicate — would tell a client their
+    data was stored whenever any constraint failed, which is the one lie this
+    endpoint must not tell.
+    """
+    diagnostic = getattr(getattr(exc, "orig", None), "diag", None)
+    name = getattr(diagnostic, "constraint_name", None)
+    return name in _REPLAY_CONSTRAINTS
+
+
+def _rejected(operation: SyncOperation, error: str) -> SyncResult:
+    return SyncResult(op_id=operation.op_id, status=STATUS_REJECTED, error=error)
 
 
 # ─── Assembly ────────────────────────────────────────────────────────────

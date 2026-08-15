@@ -21,6 +21,8 @@ import pytest
 
 _MIGRATIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
 _REVISION = _MIGRATIONS / "20260815_0025_portal_client_realm_rls.py"
+_ADHERENCE_SHAPE = _MIGRATIONS / "20260815_0026_adherence_logs_to_spec.py"
+_ADHERENCE_POLICY = _MIGRATIONS / "20260815_0027_adherence_logs_policy_roles.py"
 
 #: 🔒 Every table reachable from ``/portal/*``. A table added to the portal's
 #: read path without a policy here is a table where two clients of one practice
@@ -134,3 +136,99 @@ def test_the_downgrade_restores_what_it_found(source: str) -> None:
     for table in GUARDED_TABLES:
         assert re.search(rf"\b{table}\b", downgrade) or "_ALL_TABLES" in downgrade
     assert "DROP FUNCTION IF EXISTS portal_client_id()" in downgrade
+
+
+# ─── 0026 — the shape /portal/sync writes ────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def adherence_shape() -> str:
+    if not _ADHERENCE_SHAPE.is_file():
+        pytest.fail(f"revision is missing: {_ADHERENCE_SHAPE}")
+    return _ADHERENCE_SHAPE.read_text(encoding="utf-8")
+
+
+def test_the_adherence_columns_api_12_3_sends_all_exist(adherence_shape: str) -> None:
+    """🔒 API §12.3's payload, column by column.
+
+    A missing one is not a cosmetic gap: ``/portal/sync`` would have nowhere to
+    put the value and would either drop it silently or fail the operation.
+    """
+    for column in ("logged_for_date", "slot_type", "adherence", "plan_slot_id", "plan_version_id"):
+        assert f'"{column}"' in adherence_shape, f"{column} is missing from adherence_logs"
+
+
+def test_the_guessed_score_column_is_gone(adherence_shape: str) -> None:
+    """🔒 A 0–100 score cannot express ``skipped``.
+
+    A skipped meal and a meal not followed are different clinical facts, and any
+    scale collapses them. Revision ``2eb56b8913d5`` invented the column; DB §12.1
+    never had it.
+    """
+    upgrade = adherence_shape.split("def upgrade", 1)[1].split("def downgrade", 1)[0]
+    assert 'op.drop_column("adherence_logs", "score")' in upgrade
+    assert "ck_adherence_logs__score_range" in upgrade
+
+
+def test_the_idempotency_boundary_is_not_touched(adherence_shape: str) -> None:
+    """🔒 UNIQUE(client_id, idempotency_key) is the replay guarantee.
+
+    ⚠️ Asserted as an *absence*. Widening it to the tenant would let one client's
+    sync suppress another's log; narrowing it would let a replayed queue
+    duplicate. The safest change to a working uniqueness boundary is none.
+    """
+    assert "drop_constraint" not in adherence_shape.replace(
+        'op.drop_constraint("ck_adherence_logs__score_range", "adherence_logs", type_="check")', ""
+    )
+    assert "uq_adherence_logs__idempotency" not in adherence_shape.split("def upgrade", 1)[1]
+
+
+def test_slot_type_stays_text(adherence_shape: str) -> None:
+    """🔒 ``kernel.nutrition.MealSlotType`` binds this: the vocabulary is 🟡
+    PROPOSED (FR-M4-025) and the database type is created by the slice that also
+    needs it for ``foods.meal_suitability``. Creating it here would commit a
+    vocabulary Validation Gate G1 has not settled."""
+    upgrade = adherence_shape.split("def upgrade", 1)[1].split("def downgrade", 1)[0]
+    assert "meal_slot_type" not in upgrade
+    assert '"slot_type"' in upgrade and "sa.Text()" in upgrade
+
+
+# ─── 0027 — the policy role scope ────────────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def adherence_policy() -> str:
+    if not _ADHERENCE_POLICY.is_file():
+        pytest.fail(f"revision is missing: {_ADHERENCE_POLICY}")
+    return _ADHERENCE_POLICY.read_text(encoding="utf-8")
+
+
+def test_the_tenant_policy_applies_to_every_role(adherence_policy: str) -> None:
+    """🔒 The defect ``0025`` introduced and this revision fixes.
+
+    ``FORCE ROW LEVEL SECURITY`` binds the table's owner, and a role with no
+    permissive policy sees nothing. Scoping the Pattern A policy ``TO app_user``
+    therefore locked ``app_migrator`` out of a table it maintains — silently,
+    because "no rows" is indistinguishable from "empty table".
+
+    Every other Pattern A policy in the schema omits the ``TO`` clause. This one
+    must too.
+    """
+    assert '_POLICY = "adherence_logs__tenant_isolation"' in adherence_policy
+
+    upgrade = adherence_policy.split("def upgrade", 1)[1].split("def downgrade", 1)[0]
+    assert "CREATE POLICY {_POLICY} ON adherence_logs" in upgrade
+    assert "current_tenant_id()" in upgrade
+    # 🔒 The whole point of the revision: no role list on the permissive policy.
+    assert "TO app_user" not in upgrade
+
+
+def test_the_client_policy_keeps_its_role_scope(adherence_policy: str) -> None:
+    """🔒 The asymmetry is deliberate and stated.
+
+    A *restrictive* client policy applying to the owner would confine
+    ``app_migrator`` to one client, and its work — data migration, DPDP erasure,
+    fixture teardown — spans every client in a tenant. Only ``0027``'s permissive
+    policy is widened; the Pattern C policy from ``0025`` is not mentioned.
+    """
+    assert "adherence_logs__client_realm" not in adherence_policy.split("def upgrade", 1)[1]
