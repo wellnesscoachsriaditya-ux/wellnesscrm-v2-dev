@@ -658,6 +658,37 @@ async def test_update_cannot_remove_the_last_contact_method(
         await session.rollback()
 
 
+async def test_update_toggles_nutrition_visibility(
+    app_engine: AsyncEngine, seeded_client: tuple[uuid.UUID, uuid.UUID]
+) -> None:
+    """The practitioner-controlled flag."""
+    tenant_id, client_id = seeded_client
+    sessions = async_sessionmaker(bind=app_engine, expire_on_commit=False)
+    async with sessions() as session:
+        await scope_to(await session.connection(), tenant_id)
+
+        initial = await get_client(session, tenant_id=tenant_id, client_id=client_id)
+        assert initial.client_nutrition_visibility is False
+
+        enabled = await update_client(
+            session,
+            tenant_id=tenant_id,
+            client_id=client_id,
+            payload=ClientUpdate(client_nutrition_visibility=True),
+        )
+        assert enabled.client_nutrition_visibility is True
+
+        disabled = await update_client(
+            session,
+            tenant_id=tenant_id,
+            client_id=client_id,
+            payload=ClientUpdate(client_nutrition_visibility=False),
+        )
+        assert disabled.client_nutrition_visibility is False
+
+        await session.rollback()
+
+
 async def test_update_leaves_stage_alone(
     app_engine: AsyncEngine, seeded_client: tuple[uuid.UUID, uuid.UUID]
 ) -> None:
