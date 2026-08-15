@@ -72,6 +72,7 @@ from app.platform.http.routers.nutrition_plan_items import slot_router as plan_s
 from app.platform.http.routers.nutrition_plans import plan_read_router
 from app.platform.http.routers.nutrition_plans import plan_router as client_plans_router
 from app.platform.http.routers.nutrition_plans import version_router as plan_version_router
+from app.platform.http.routers.portal import router as portal_router
 from app.platform.http.routers.public_forms import router as public_forms_router
 from app.platform.http.routers.timeline import router as timeline_router
 from app.platform.http.routers.webhooks import router as webhooks_router
@@ -335,8 +336,12 @@ def create_app() -> FastAPI:
     # `verify_route_authorization` below aborts startup if that stops being true.
     app.include_router(webhooks_router)
 
-    # Note: Portal (clients querying their own plans, logging metrics) will use a
-    # separate realm and router hierarchy in M6.
+    # 🔒 M7 / S6 — the client realm. The only router in the application whose
+    # actor is a client rather than a practitioner, and the first consumer of
+    # Pattern C row-level security (migration 0025). Isolation between two
+    # clients of one practice is enforced in the database; nothing about that
+    # depends on this line being in the right place.
+    app.include_router(portal_router)
 
     # 🔒 ADR-05 — last, after every router is registered, so it sees the whole
     # route table. A route that declares no authorization action, declares one

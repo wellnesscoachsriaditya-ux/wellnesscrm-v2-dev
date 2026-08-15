@@ -323,6 +323,35 @@
         "title": "BulkReassignResponse",
         "type": "object"
       },
+      "Capabilities": {
+        "description": "🔒 API §12.6 — what the client may do, stated rather than inferred.\n\nThe UI must never have to work this out from a stage, a status or an error it\nhappened to receive. Every portal response carries this object.",
+        "properties": {
+          "can_log_adherence": {
+            "title": "Can Log Adherence",
+            "type": "boolean"
+          },
+          "can_log_measurements": {
+            "title": "Can Log Measurements",
+            "type": "boolean"
+          },
+          "can_upload": {
+            "title": "Can Upload",
+            "type": "boolean"
+          },
+          "can_view_plan": {
+            "title": "Can View Plan",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "can_log_adherence",
+          "can_log_measurements",
+          "can_upload",
+          "can_view_plan"
+        ],
+        "title": "Capabilities",
+        "type": "object"
+      },
       "CheckinFrequency": {
         "description": "DB §11.7 — FR-M8-022.",
         "enum": [
@@ -2927,6 +2956,36 @@
         "title": "MessageHistoryResponse",
         "type": "object"
       },
+      "NextAppointment": {
+        "properties": {
+          "meeting_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meeting Link"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "starts_at",
+          "mode"
+        ],
+        "title": "NextAppointment",
+        "type": "object"
+      },
       "NoteResponse": {
         "description": "One note — FR-M1-007, \"with timestamp and author\".",
         "properties": {
@@ -4274,6 +4333,34 @@
         "title": "PortalTarget",
         "type": "object"
       },
+      "PractitionerCard": {
+        "description": "Who the client is working with.\n\n⚠️ The **practice** name, not the practitioner's personal one. A client is\nengaged with the practice, and `clients.owner_user_id` can be reassigned\n(FR-M1-009) without the client's relationship changing.\n\n⏳ ``branding`` is null: no branding table exists yet (API §12.2 marks it\noptional).",
+        "properties": {
+          "branding": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branding"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PractitionerCard",
+        "type": "object"
+      },
       "PreferenceResponse": {
         "description": "One preference row — DB §11.8.",
         "properties": {
@@ -4470,6 +4557,25 @@
           "is_sample"
         ],
         "title": "PreviewResponse",
+        "type": "object"
+      },
+      "ProgressTeaser": {
+        "description": "The one number worth putting on a landing page.\n\n``weight_change_kg`` is negative for a loss. ⚠️ No band, no label and no\njudgement — the same restraint ``kernel.clinical`` applies to BMI, and for\nthe same reason: OD-08 is unresolved.",
+        "properties": {
+          "period_days": {
+            "title": "Period Days",
+            "type": "integer"
+          },
+          "weight_change_kg": {
+            "title": "Weight Change Kg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "weight_change_kg",
+          "period_days"
+        ],
+        "title": "ProgressTeaser",
         "type": "object"
       },
       "PublicConsentNotice": {
@@ -5412,6 +5518,216 @@
           "page"
         ],
         "title": "TimelineResponse",
+        "type": "object"
+      },
+      "TodayAdherence": {
+        "description": "Whether this slot has been logged today.\n\n⏳ **Always unlogged.** DB §12.1 specifies ``plan_slot_id`` and ``slot_type``\non ``adherence_logs``; migration ``2eb56b8913d5`` built neither, so nothing\nin the schema can say *which* slot a log belongs to. Reporting a day-level\nscore against every slot would be a fabricated per-meal answer, which is\nworse than an honest \"not yet\". The slice that adds the logging endpoint adds\nthe columns, and this reads them without the shape changing.",
+        "properties": {
+          "logged": {
+            "default": false,
+            "title": "Logged",
+            "type": "boolean"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "TodayAdherence",
+        "type": "object"
+      },
+      "TodayItem": {
+        "type": "object"
+      },
+      "TodayPlan": {
+        "properties": {
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "day_number": {
+            "title": "Day Number",
+            "type": "integer"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/TodaySlot"
+            },
+            "title": "Slots",
+            "type": "array"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version_id",
+          "content_hash",
+          "day_number",
+          "slots"
+        ],
+        "title": "TodayPlan",
+        "type": "object"
+      },
+      "TodayPrompts": {
+        "properties": {
+          "assessment_pending_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Pending Id"
+          },
+          "weight_due": {
+            "title": "Weight Due",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "weight_due",
+          "assessment_pending_id"
+        ],
+        "title": "TodayPrompts",
+        "type": "object"
+      },
+      "TodayResponse": {
+        "description": "API §12.2 — the single most important endpoint in the portal.",
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/Capabilities"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "next_appointment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextAppointment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TodayPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "practitioner": {
+            "$ref": "#/components/schemas/PractitionerCard"
+          },
+          "progress_teaser": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProgressTeaser"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompts": {
+            "$ref": "#/components/schemas/TodayPrompts"
+          }
+        },
+        "required": [
+          "date",
+          "plan",
+          "prompts",
+          "progress_teaser",
+          "next_appointment",
+          "practitioner",
+          "capabilities",
+          "notice"
+        ],
+        "title": "TodayResponse",
+        "type": "object"
+      },
+      "TodaySlot": {
+        "properties": {
+          "adherence": {
+            "$ref": "#/components/schemas/TodayAdherence"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TodayItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "slot_id": {
+            "format": "uuid",
+            "title": "Slot Id",
+            "type": "string"
+          },
+          "slot_type": {
+            "title": "Slot Type",
+            "type": "string"
+          },
+          "target_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Time"
+          }
+        },
+        "required": [
+          "slot_id",
+          "slot_type",
+          "label",
+          "items",
+          "adherence"
+        ],
+        "title": "TodaySlot",
         "type": "object"
       },
       "TokenResponse": {
@@ -9805,6 +10121,28 @@
         "summary": "Retire a tag",
         "tags": [
           "collaboration"
+        ]
+      }
+    },
+    "/api/v1/portal/today": {
+      "get": {
+        "description": "The aggregate — ADR-A09, API §12.2.\n\n🔒 The client is read from the verified token, never from a parameter, and\nevery read below runs inside a transaction whose ``app.actor_id`` is that\nclient. Pattern C makes the two agree at the database rather than here.",
+        "operationId": "portalToday",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodayResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Everything the portal's landing view needs",
+        "tags": [
+          "portal"
         ]
       }
     },

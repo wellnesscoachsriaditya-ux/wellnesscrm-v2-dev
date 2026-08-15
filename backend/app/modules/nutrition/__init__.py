@@ -43,10 +43,12 @@ from app.modules.nutrition.models import (
 )
 from app.modules.nutrition.plans import (
     PLAN_SOURCE_BLANK,
+    IssuedPlan,
     add_day,
     add_item,
     add_slot,
     create_plan,
+    current_issued_plan_for_client,
     discard_plan_version,
     issue_plan_version,
     list_plan_versions,
@@ -79,6 +81,7 @@ __all__ = [
     "FoodNutrient",
     "FoodPortion",
     "FoodSearchMiss",
+    "IssuedPlan",
     "Meal",
     "MealItem",
     "MeasureUnit",
@@ -96,6 +99,7 @@ __all__ = [
     "add_slot",
     "create_custom_food",
     "create_plan",
+    "current_issued_plan_for_client",
     "discard_plan_version",
     "issue_plan_version",
     "list_plan_versions",

@@ -1569,6 +1569,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portal/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Everything the portal's landing view needs
+         * @description The aggregate — ADR-A09, API §12.2.
+         *
+         *     🔒 The client is read from the verified token, never from a parameter, and
+         *     every read below runs inside a transaction whose ``app.actor_id`` is that
+         *     client. Pattern C makes the two agree at the database rather than here.
+         */
+        get: operations["portalToday"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/auth/login": {
         parameters: {
             query?: never;
@@ -2080,6 +2104,23 @@ export interface components {
             moved: number;
             /** Requested */
             requested: number;
+        };
+        /**
+         * Capabilities
+         * @description 🔒 API §12.6 — what the client may do, stated rather than inferred.
+         *
+         *     The UI must never have to work this out from a stage, a status or an error it
+         *     happened to receive. Every portal response carries this object.
+         */
+        Capabilities: {
+            /** Can Log Adherence */
+            can_log_adherence: boolean;
+            /** Can Log Measurements */
+            can_log_measurements: boolean;
+            /** Can Upload */
+            can_upload: boolean;
+            /** Can View Plan */
+            can_view_plan: boolean;
         };
         /**
          * CheckinFrequency
@@ -3210,6 +3251,18 @@ export interface components {
             items: components["schemas"]["DispatchResponse"][];
             page: components["schemas"]["HistoryPageInfo"];
         };
+        /** NextAppointment */
+        NextAppointment: {
+            /** Meeting Link */
+            meeting_link?: string | null;
+            /** Mode */
+            mode: string;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+        };
         /**
          * NoteResponse
          * @description One note — FR-M1-007, "with timestamp and author".
@@ -3655,6 +3708,25 @@ export interface components {
             type: string;
         };
         /**
+         * PractitionerCard
+         * @description Who the client is working with.
+         *
+         *     ⚠️ The **practice** name, not the practitioner's personal one. A client is
+         *     engaged with the practice, and `clients.owner_user_id` can be reassigned
+         *     (FR-M1-009) without the client's relationship changing.
+         *
+         *     ⏳ ``branding`` is null: no branding table exists yet (API §12.2 marks it
+         *     optional).
+         */
+        PractitionerCard: {
+            /** Branding */
+            branding?: {
+                [key: string]: string;
+            } | null;
+            /** Name */
+            name: string;
+        };
+        /**
          * PreferenceResponse
          * @description One preference row — DB §11.8.
          */
@@ -3707,6 +3779,20 @@ export interface components {
             transport: components["schemas"]["TransportType"];
             /** Version */
             version: number;
+        };
+        /**
+         * ProgressTeaser
+         * @description The one number worth putting on a landing page.
+         *
+         *     ``weight_change_kg`` is negative for a loss. ⚠️ No band, no label and no
+         *     judgement — the same restraint ``kernel.clinical`` applies to BMI, and for
+         *     the same reason: OD-08 is unresolved.
+         */
+        ProgressTeaser: {
+            /** Period Days */
+            period_days: number;
+            /** Weight Change Kg */
+            weight_change_kg: string;
         };
         /**
          * PublicConsentNotice
@@ -4192,6 +4278,84 @@ export interface components {
             /** Items */
             items: components["schemas"]["TimelineEntryResponse"][];
             page: components["schemas"]["TimelinePageInfo"];
+        };
+        /**
+         * TodayAdherence
+         * @description Whether this slot has been logged today.
+         *
+         *     ⏳ **Always unlogged.** DB §12.1 specifies ``plan_slot_id`` and ``slot_type``
+         *     on ``adherence_logs``; migration ``2eb56b8913d5`` built neither, so nothing
+         *     in the schema can say *which* slot a log belongs to. Reporting a day-level
+         *     score against every slot would be a fabricated per-meal answer, which is
+         *     worse than an honest "not yet". The slice that adds the logging endpoint adds
+         *     the columns, and this reads them without the shape changing.
+         */
+        TodayAdherence: {
+            /**
+             * Logged
+             * @default false
+             */
+            logged: boolean;
+            /** Value */
+            value?: string | null;
+        };
+        TodayItem: Record<string, never>;
+        /** TodayPlan */
+        TodayPlan: {
+            /** Content Hash */
+            content_hash: string | null;
+            /** Day Number */
+            day_number: number;
+            /** Slots */
+            slots: components["schemas"]["TodaySlot"][];
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+        };
+        /** TodayPrompts */
+        TodayPrompts: {
+            /** Assessment Pending Id */
+            assessment_pending_id: string | null;
+            /** Weight Due */
+            weight_due: boolean;
+        };
+        /**
+         * TodayResponse
+         * @description API §12.2 — the single most important endpoint in the portal.
+         */
+        TodayResponse: {
+            capabilities: components["schemas"]["Capabilities"];
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            next_appointment: components["schemas"]["NextAppointment"] | null;
+            /** Notice */
+            notice: string | null;
+            plan: components["schemas"]["TodayPlan"] | null;
+            practitioner: components["schemas"]["PractitionerCard"];
+            progress_teaser: components["schemas"]["ProgressTeaser"] | null;
+            prompts: components["schemas"]["TodayPrompts"];
+        };
+        /** TodaySlot */
+        TodaySlot: {
+            adherence: components["schemas"]["TodayAdherence"];
+            /** Items */
+            items: components["schemas"]["TodayItem"][];
+            /** Label */
+            label: string;
+            /**
+             * Slot Id
+             * Format: uuid
+             */
+            slot_id: string;
+            /** Slot Type */
+            slot_type: string;
+            /** Target Time */
+            target_time?: string | null;
         };
         /**
          * TokenResponse
@@ -6841,6 +7005,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    portalToday: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TodayResponse"];
                 };
             };
         };

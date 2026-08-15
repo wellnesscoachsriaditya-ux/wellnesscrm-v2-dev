@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -188,6 +189,77 @@ async def list_plans_for_client(
         )
         for plan in plans
     ]
+
+
+@dataclass(frozen=True, slots=True)
+class IssuedPlan:
+    """The plan a client is currently following, and the hash of its content.
+
+    🔒 ``content_hash`` comes from ``plan_snapshots``, not from re-hashing what
+    a read computed. DDR-12 makes the hash the portal's cache key (FR-M7-011,
+    EC-M7-03): if it were derived on read, a corrected curated food would change
+    it and every client's service worker would discard a plan that had not
+    actually been revised.
+
+    ⚠️ ``content_hash`` is nullable because ``issue_plan_version`` writes the
+    snapshot in the same transaction as the state change, but an issued version
+    from before that write existed would have none. A missing hash means "do not
+    cache", which is the safe reading.
+    """
+
+    plan: DietPlan
+    version: DietPlanVersion
+    content_hash: str | None
+
+
+async def current_issued_plan_for_client(
+    session: AsyncSession, *, tenant_id: uuid.UUID, client_id: uuid.UUID
+) -> IssuedPlan | None:
+    """The one plan a client should see — API §12.2's input.
+
+    🔒 **Issued only.** A draft is the practitioner's working copy; showing one
+    to a client would put unreviewed content in front of them, which is the
+    inverse of FR-M4-001's "practitioner always approves".
+
+    🔒 **Archived plans are excluded**, and a client with no issued plan returns
+    ``None`` rather than raising — EC-M7-02 requires a meaningful empty state,
+    not a 404 on the portal's landing route.
+
+    ⚠️ Newest issue wins when a client somehow holds two live plans. DDR-11
+    supersedes the previous version *within* a plan, but nothing stops a
+    practitioner creating a second plan, and "the most recently issued one" is
+    the only answer a client would recognise.
+    """
+    row = (
+        await session.execute(
+            select(DietPlan, DietPlanVersion)
+            .join(DietPlanVersion, DietPlanVersion.id == DietPlan.current_version_id)
+            .where(
+                DietPlan.tenant_id == tenant_id,
+                DietPlan.client_id == client_id,
+                DietPlan.archived_at.is_(None),
+                DietPlanVersion.tenant_id == tenant_id,
+                DietPlanVersion.state == PlanState.issued,
+            )
+            .order_by(DietPlanVersion.issued_at.desc().nullslast())
+            .limit(1)
+        )
+    ).first()
+
+    if row is None:
+        return None
+
+    plan, version = row
+    content_hash = (
+        await session.execute(
+            select(PlanSnapshot.content_hash).where(
+                PlanSnapshot.tenant_id == tenant_id,
+                PlanSnapshot.plan_version_id == version.id,
+            )
+        )
+    ).scalar_one_or_none()
+
+    return IssuedPlan(plan=plan, version=version, content_hash=content_hash)
 
 
 async def _claim_draft(
