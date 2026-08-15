@@ -89,10 +89,10 @@ async def _dispatch(
     """Run the engine once, then re-read the row it acted on."""
     async with session_for(tenant.tenant_id) as session:
         await dispatch_scheduled(
-            session, 
-            tenant_id=tenant.tenant_id, 
-            scheduled_message_id=message_id, 
-            now=now or datetime(2026, 8, 14, 6, 30, tzinfo=UTC)
+            session,
+            tenant_id=tenant.tenant_id,
+            scheduled_message_id=message_id,
+            now=now or datetime(2026, 8, 14, 6, 30, tzinfo=UTC),
         )
     async with session_for(tenant.tenant_id) as session:
         row = await session.get(ScheduledMessage, message_id)

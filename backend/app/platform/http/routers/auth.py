@@ -424,7 +424,7 @@ async def request_portal_access(payload: PortalAccessRequest, request: Request) 
             session,
             tenant_id=client.tenant_id,
             client_id=client.client_id,
-            purpose=LinkPurpose.PORTAL_LOGIN,
+            purpose=LinkPurpose.PORTAL,
             target_ref=None,
             transport=TransportType.WHATSAPP,
             now=now_ts,

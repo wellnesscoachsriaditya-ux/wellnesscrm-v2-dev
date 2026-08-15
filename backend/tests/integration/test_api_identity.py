@@ -7,33 +7,47 @@ proving that ANONYMOUS_SCOPE can successfully call the SECURITY DEFINER function
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any
 
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
+
+from app.kernel.tenancy import TenantScope
+from app.platform.http.pipeline import (
+    configure_transaction_provider,
+    get_transaction_provider,
+)
 
 pytestmark = pytest.mark.isolation
 
 
-@pytest.fixture
-def client(app_engine: AsyncEngine) -> AsyncIterator[TestClient]:
-    """The real application, configured for testing."""
+@pytest_asyncio.fixture
+async def client(app_engine: AsyncEngine) -> AsyncIterator[TestClient]:
+    """The real application, wired to use the test database engine.
+
+    The pipeline's ``PublicRoute`` opens a transaction via
+    ``get_transaction_provider()``.  To make public routes use the test
+    database (which has the SECURITY DEFINER functions from migration 0022),
+    we install a test transaction provider that creates sessions from
+    ``app_engine`` instead of the application's own engine.
+    """
     from app.main import create_app
-    from app.platform.http import pipeline
-    from sqlalchemy.ext.asyncio import async_sessionmaker
 
     factory = async_sessionmaker(app_engine, expire_on_commit=False)
-    original = pipeline._database_transaction
+    original_provider = get_transaction_provider()
 
-    async def _test_tx() -> AsyncIterator[AsyncSession]:
-        async with factory() as session:
-            async with session.begin():
-                yield session
+    @asynccontextmanager
+    async def _test_provider(_scope: TenantScope) -> AsyncIterator[Any]:
+        async with factory() as session, session.begin():
+            yield session
 
-    pipeline._database_transaction = _test_tx
+    configure_transaction_provider(_test_provider)  # type: ignore[arg-type]
     app = create_app()
     yield TestClient(app, raise_server_exceptions=False)
-    pipeline._database_transaction = original
+    configure_transaction_provider(original_provider)
 
 
 def test_public_registration_succeeds(client: TestClient) -> None:

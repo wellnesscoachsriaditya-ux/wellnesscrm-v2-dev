@@ -531,7 +531,7 @@ async def resend_portal_access(request: Request, client_id: uuid.UUID) -> Respon
         session,
         tenant_id=client.tenant_id,
         client_id=client.id,
-        purpose=LinkPurpose.PORTAL_LOGIN,
+        purpose=LinkPurpose.PORTAL,
         target_ref=None,
         transport=transport,
         now=now_ts,
