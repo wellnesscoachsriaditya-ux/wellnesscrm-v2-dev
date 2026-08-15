@@ -341,11 +341,27 @@ class Measurement(Base):
         comment="EC-M3-02 — accepted after confirmation, flagged for review",
     )
     notes: Mapped[str | None] = mapped_column(Text)
+    #: 🔒 S6 — deduplicates a replayed `/portal/sync` batch. NULL for
+    #: practitioner-entered measurements, which are deliberately unconstrained:
+    #: two readings for one client on one day is a clinical decision, not a
+    #: duplicate.
+    idempotency_key: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
 
     __table_args__ = (
         # 🔒 DB §7.5 — the trend read (FR-M3-014).
         Index("ix_measurements__client_date", "client_id", text("measured_on DESC")),
+        # 🔒 S6 — a retried sync must not write a second weight. Scoped to the
+        # client, because two clients generate keys on their own devices and a
+        # global index would let one silently suppress the other's measurement.
+        Index(
+            "uq_measurements__client_idempotency",
+            "tenant_id",
+            "client_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+        ),
         # 🔒 DB §7.5's CHECK bounds. `kernel.clinical.assert_storable` refuses
         # the same values earlier and names the field; this is what holds if a
         # future caller forgets to ask.
