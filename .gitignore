@@ -47,3 +47,6 @@ Thumbs.db
 scratch/
 
 .claude/settings.local.json
+*.env
+credentials.json
+.credentials
