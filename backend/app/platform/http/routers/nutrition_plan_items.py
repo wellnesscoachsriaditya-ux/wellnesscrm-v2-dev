@@ -76,6 +76,11 @@ class SlotPatch(BaseModel):
     custom_label: str | None = Field(default=None, max_length=120)
     target_time: str | None = Field(default=None, max_length=32)
     sort_order: int | None = Field(default=None, ge=1)
+    #: 🔒 Locking a slot fixes its nutrition as a constraint the budget subtracts
+    #: (ADR-A07) and marks every item inside it effectively locked. A
+    #: practitioner can always unlock — there is no super-lock (Approved). Sent
+    #: only when the caller means to change it; omitted leaves the lock as it was.
+    is_locked: bool | None = None
 
 
 class ItemCreateRequest(BaseModel):
@@ -108,6 +113,10 @@ class ItemPatch(BaseModel):
     notes: str | None = Field(default=None, max_length=2000)
     client_note: str | None = Field(default=None, max_length=2000)
     sort_order: int | None = Field(default=None, ge=1)
+    #: 🔒 Locking an item fixes its nutrition as a constraint the budget
+    #: subtracts (ADR-A07); recalculation redistributes the remainder across the
+    #: unlocked items without ever touching a locked one. Always unlockable.
+    is_locked: bool | None = None
 
 
 class ItemResponse(BaseModel):
@@ -211,7 +220,7 @@ async def patch_day(
 
 
 @slot_router.patch(
-    "/{slot_id}", summary="Rename, retime or reorder a slot", operation_id="planSlotUpdate"
+    "/{slot_id}", summary="Rename, retime, reorder or lock a slot", operation_id="planSlotUpdate"
 )
 @requires(NUTRITION_PLANS_WRITE)
 async def patch_slot(
@@ -316,7 +325,7 @@ async def create_item(
 
 
 @item_router.patch(
-    "/{item_id}", summary="Change a quantity, measure or note", operation_id="planItemUpdate"
+    "/{item_id}", summary="Change a quantity, measure, note or lock", operation_id="planItemUpdate"
 )
 @requires(NUTRITION_PLANS_WRITE)
 async def patch_item(

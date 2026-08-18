@@ -1298,6 +1298,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/app/nutrition/foods/{food_id}/portions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Food Portions
+         * @description The household measures a food can be added in (FR-M4-011, AC-M4-003).
+         *
+         *     🔒 The plan builder needs a ``measure_unit_id`` to add an item, and a food
+         *     carries several ("katori", "cup", "piece"). This is where the builder learns
+         *     them, and their gram equivalents, so the quantity a practitioner types in a
+         *     household measure resolves the same way the server later computes it.
+         */
+        get: operations["listFoodPortions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/app/plan-days/{day_id}": {
         parameters: {
             query?: never;
@@ -1352,7 +1377,7 @@ export interface paths {
         delete: operations["planItemRemove"];
         options?: never;
         head?: never;
-        /** Change a quantity, measure or note */
+        /** Change a quantity, measure, note or lock */
         patch: operations["planItemUpdate"];
         trace?: never;
     };
@@ -1378,7 +1403,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Rename, retime or reorder a slot
+         * Rename, retime, reorder or lock a slot
          * @description FR-M4-025 — add, rename, remove and reorder.
          */
         patch: operations["planSlotUpdate"];
@@ -2996,6 +3021,23 @@ export interface components {
             tenant_id: string | null;
         };
         /**
+         * FoodPortionResponse
+         * @description One household measure a food can be entered in — FR-M4-011.
+         */
+        FoodPortionResponse: {
+            /** Gram Weight */
+            gram_weight: string;
+            /** Is Default */
+            is_default: boolean;
+            /**
+             * Measure Unit Id
+             * Format: uuid
+             */
+            measure_unit_id: string;
+            /** Measure Unit Name */
+            measure_unit_name: string;
+        };
+        /**
          * GoalType
          * @description What the client is trying to achieve — DB §7.4, PRD §9.5.
          *
@@ -3099,6 +3141,8 @@ export interface components {
         ItemPatch: {
             /** Client Note */
             client_note?: string | null;
+            /** Is Locked */
+            is_locked?: boolean | null;
             /** Measure Unit Id */
             measure_unit_id?: string | null;
             /** Notes */
@@ -4116,6 +4160,8 @@ export interface components {
         SlotPatch: {
             /** Custom Label */
             custom_label?: string | null;
+            /** Is Locked */
+            is_locked?: boolean | null;
             slot_type?: components["schemas"]["MealSlotType"] | null;
             /** Sort Order */
             sort_order?: number | null;
@@ -6578,6 +6624,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FoodItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listFoodPortions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                food_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodPortionResponse"][];
                 };
             };
             /** @description Validation Error */

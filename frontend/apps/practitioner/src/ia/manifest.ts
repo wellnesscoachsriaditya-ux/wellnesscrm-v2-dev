@@ -5,6 +5,8 @@ import { ClientList } from '../screens/ClientList'
 import { Dashboard } from '../screens/Dashboard'
 import { Leads } from '../screens/Leads'
 import { Messages } from '../screens/Messages'
+import { Plans } from '../screens/Plans'
+import { PlanBuilder } from '../screens/PlanBuilder'
 import { placeholder } from '../screens/Placeholder'
 import {
   appointmentsIcon,
@@ -92,14 +94,14 @@ export const ia = defineIa({
       label: 'Plans',
       permission: 'plans.read',
       nav: { order: 4, icon: plansIcon },
-      view: placeholder('S4', 'Nutrition plans and the templates they are built from.'),
+      view: Plans,
     },
     {
       id: 'plan-detail',
       path: '/plans/:planId',
       label: 'Plan',
       parent: 'plans',
-      view: placeholder('S4', 'One plan: meals, portions, totals against the client’s budget.'),
+      view: PlanBuilder,
     },
 
     // ─── M6 Appointments ──────────────────────────────────────────────────

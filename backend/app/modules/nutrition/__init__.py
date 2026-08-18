@@ -8,6 +8,7 @@ from app.modules.nutrition.actions import (
 )
 from app.modules.nutrition.catalogue import (
     create_custom_food,
+    list_food_portions,
     record_search_miss,
     search_foods,
 )
@@ -102,6 +103,7 @@ __all__ = [
     "current_issued_plan_for_client",
     "discard_plan_version",
     "issue_plan_version",
+    "list_food_portions",
     "list_plan_versions",
     "list_plans_for_client",
     "load_plan",

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from decimal import Decimal
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,8 +18,38 @@ from app.kernel.errors import ValidationError
 from app.modules.nutrition.models import (
     Food,
     FoodAlias,
+    FoodPortion,
     FoodSearchMiss,
+    MeasureUnit,
 )
+
+
+async def list_food_portions(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    food_id: uuid.UUID,
+) -> Sequence[tuple[uuid.UUID, str, Decimal, bool]]:
+    """The household measures a food can be entered in — FR-M4-011.
+
+    🔒 Read under the same Pattern B RLS as :func:`search_foods`, so a tenant's
+    custom food's portions are visible to that tenant and the curated ones to
+    everyone; ``measure_units`` is platform-only (Pattern D) and joins freely.
+    The default measure sorts first, which is the one the builder pre-selects.
+    """
+    stmt = (
+        select(
+            FoodPortion.measure_unit_id,
+            MeasureUnit.name,
+            FoodPortion.gram_weight,
+            FoodPortion.is_default,
+        )
+        .join(MeasureUnit, MeasureUnit.id == FoodPortion.measure_unit_id)
+        .where(FoodPortion.food_id == food_id)
+        .order_by(FoodPortion.is_default.desc(), MeasureUnit.name)
+    )
+    result = await session.execute(stmt)
+    return [tuple(row) for row in result.all()]
 
 
 async def search_foods(

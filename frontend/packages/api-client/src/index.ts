@@ -194,7 +194,55 @@ export interface RequestOptions {
   >
   /** JSON request body. Serialised here so callers never set Content-Type. */
   body?: unknown
+  /**
+   * Extra request headers, merged after the defaults.
+   *
+   * 🔒 This is how a caller sends `If-Match` for optimistic concurrency
+   * (ADR-14): the plan aggregate is versioned by a counter, and a mutation must
+   * state the revision it believes it is editing. Merged last, so a caller adds
+   * to the defaults rather than having to reconstruct them — but it means a
+   * caller *could* override `Authorization`, which no call site has reason to.
+   */
+  headers?: Record<string, string>
   signal?: AbortSignal
+}
+
+// ─── Session credential — ADR-A02 ─────────────────────────────────────────
+//
+// 🔒 The access token is held in module scope, not in `localStorage`: anything
+// in storage is readable by any script the page loads, and ADR-A02 keeps the
+// access token in memory for exactly that reason. It is sent as a bearer header
+// (`Authorization: Bearer …`), which is what
+// `app.platform.identity.authentication.bearer_token` reads — never a cookie,
+// never a query parameter. Where the *refresh* token lives is the app's
+// decision, made in its AuthProvider; this layer only knows the access token
+// and how to ask for a new one.
+let accessToken: string | null = null
+
+type RefreshHandler = () => Promise<string | null>
+let refreshHandler: RefreshHandler | null = null
+let refreshing = false
+
+/** Set (or clear, with `null`) the bearer token sent on every request. */
+export function setAccessToken(token: string | null): void {
+  accessToken = token
+}
+
+export function getAccessToken(): string | null {
+  return accessToken
+}
+
+/**
+ * Register the callback that renews an expired access token.
+ *
+ * 🔒 On a 401 the client invokes this **once** and retries the request with the
+ * token it returns (DDR-05 — the refresh rotates). Left unset, a 401 surfaces to
+ * the caller unchanged, which is why installing it is the AuthProvider's job and
+ * not this module's default: a refresh implemented before a session exists could
+ * only be guesswork, and a client with no session must behave exactly as before.
+ */
+export function configureRefreshHandler(handler: RefreshHandler | null): void {
+  refreshHandler = handler
 }
 
 const DEFAULT_BASE_URL = '/api'
@@ -264,19 +312,41 @@ export function createApiClient(options: ApiClientOptions = {}) {
     }
 
     const hasBody = init.body !== undefined
-    const response = await transport()(url.toString(), {
-      method: (method as string).toUpperCase(),
-      headers: {
-        Accept: 'application/json',
-        ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
-      },
-      ...(hasBody ? { body: JSON.stringify(init.body) } : {}),
-      ...(init.signal ? { signal: init.signal } : {}),
-      // 🔒 ADR-A02 — the refresh token is an HttpOnly cookie. `same-origin`
-      // rather than `include`: the API is same-origin by design, and `include`
-      // would send credentials to any base URL someone misconfigures.
-      credentials: 'same-origin',
-    })
+    const send = (token: string | null) =>
+      transport()(url.toString(), {
+        method: (method as string).toUpperCase(),
+        headers: {
+          Accept: 'application/json',
+          ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+          // 🔒 The bearer credential, when a session exists. Omitted entirely
+          // otherwise, so an unauthenticated call sends no empty `Authorization`.
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          // Caller headers last — this is where `If-Match` lands (ADR-14).
+          ...(init.headers ?? {}),
+        },
+        ...(hasBody ? { body: JSON.stringify(init.body) } : {}),
+        ...(init.signal ? { signal: init.signal } : {}),
+        // 🔒 ADR-A02 — the refresh token is an HttpOnly cookie. `same-origin`
+        // rather than `include`: the API is same-origin by design, and `include`
+        // would send credentials to any base URL someone misconfigures.
+        credentials: 'same-origin',
+      })
+
+    let response = await send(accessToken)
+
+    // 🔒 One silent renewal on expiry (ADR-A02, DDR-05). A 401 is the only
+    // status a refresh can address; anything else is returned untouched. The
+    // `refreshing` guard stops the refresh call's own failure from recursing,
+    // and the whole block is inert until an AuthProvider registers a handler.
+    if (response.status === 401 && refreshHandler !== null && !refreshing) {
+      refreshing = true
+      try {
+        const renewed = await refreshHandler()
+        if (renewed !== null) response = await send(renewed)
+      } finally {
+        refreshing = false
+      }
+    }
 
     return (await decode(response)) as ResponseOf<P, M>
   }

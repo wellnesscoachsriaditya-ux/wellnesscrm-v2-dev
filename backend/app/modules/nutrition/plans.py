@@ -888,8 +888,9 @@ async def update_slot(
     custom_label: str | None | object = _UNSET,
     target_time: str | None | object = _UNSET,
     sort_order: int | object = _UNSET,
+    is_locked: bool | object = _UNSET,
 ) -> PlanSlot:
-    """Rename, retime or reorder a slot — FR-M4-025.
+    """Rename, retime, reorder or lock a slot — FR-M4-025.
 
     🔒 Renaming sets ``custom_label``, not ``slot_type``. The type is structural
     (it is what the food log and the PDF group by); the label is what the
@@ -918,6 +919,10 @@ async def update_slot(
     # a TypeError, which would surface as a 500 for a caller mistake.
     if isinstance(sort_order, int):
         slot.sort_order = sort_order
+    # 🔒 Locking is a boolean, so `isinstance(bool)` both narrows the union and
+    # ignores an explicit null — the same fail-closed guard the other fields use.
+    if isinstance(is_locked, bool):
+        slot.is_locked = is_locked
 
     await session.flush()
     return slot
@@ -1047,8 +1052,9 @@ async def update_item(
     notes: str | None | object = _UNSET,
     client_note: str | None | object = _UNSET,
     sort_order: int | object = _UNSET,
+    is_locked: bool | object = _UNSET,
 ) -> PlanItem:
-    """Change how much, in what measure, or where in the slot.
+    """Change how much, in what measure, where in the slot, or its lock.
 
     ⚠️ **The food itself cannot be changed.** Swapping ``food_id`` under a fixed
     id would be a substitution disguised as an edit — the practitioner removes
@@ -1078,6 +1084,10 @@ async def update_item(
         item.client_note = client_note  # type: ignore[assignment]
     if isinstance(sort_order, int):
         item.sort_order = sort_order
+    # 🔒 The item's own lock. The effective lock in a read also accounts for the
+    # slot's; here we set only what this item declares (`item_is_locked`).
+    if isinstance(is_locked, bool):
+        item.is_locked = is_locked
 
     await session.flush()
     return item

@@ -12,6 +12,7 @@
 
 import { ErrorState, PageHeader, Spinner } from '@wellnesscrm/design-system'
 import { useIaLocation } from '@wellnesscrm/ia'
+import { useNavigate } from 'react-router-dom'
 import { ClientAccessPanel, type GrantView } from '../components/clients/ClientAccessPanel'
 import { ClientLifecyclePanel } from '../components/clients/ClientLifecyclePanel'
 import { ClientNotesPanel, type NoteView } from '../components/clients/ClientNotesPanel'
@@ -58,6 +59,8 @@ import {
   useDocuments,
 } from '../features/clients/useClinical'
 import { useCurrentSession } from '../features/session/useCurrentSession'
+import { ClientPlansPanel } from '../components/nutrition/ClientPlansPanel'
+import { useClientPlans } from '../features/nutrition/useClientPlans'
 import type { Grant, Note, Tag } from '../features/clients/collaborationApi'
 import type { TimelineEntry, TimelineEventType } from '../features/clients/timelineApi'
 import type {
@@ -257,6 +260,8 @@ export function ClientDetail() {
   const documentsData = useDocuments(clientId)
   
   const { session } = useCurrentSession()
+  const navigate = useNavigate()
+  const plans = useClientPlans(clientId)
 
   if (loading) {
     return (
@@ -365,6 +370,29 @@ export function ClientDetail() {
         documents={documentsData.documents.map(toClientDocumentView)}
         loading={documentsData.loading}
         error={documentsData.error}
+      />
+
+      {/* 🔒 M4 — the Plans entry point from Client 360. The panel lists this
+        * client's plans and creates new ones; opening one navigates to the
+        * builder at `/plans/:planId`. The 402 refusal at the plan's client
+        * ceiling surfaces as `createError` in the API's own words. */}
+      <ClientPlansPanel
+        plans={plans.plans.map((summary) => ({
+          planId: summary.plan.id,
+          title: summary.plan.title,
+          state: summary.version?.state ?? null,
+          versionNumber: summary.version?.version_number ?? null,
+        }))}
+        loading={plans.loading}
+        error={plans.error}
+        creating={plans.creating}
+        createError={plans.createError}
+        onCreate={(title) => {
+          void plans.create({ title }).then((created) => {
+            if (created !== null) navigate(`/plans/${created.planId}`)
+          })
+        }}
+        onOpen={(planId) => navigate(`/plans/${planId}`)}
       />
 
       {/* 🔒 FR-M1-007 / FR-M3-020. `currentUserId` is what makes the edit

@@ -113,6 +113,8 @@ function stubRoutes(...routes: Route[]) {
     if (url.includes('/measurements')) return jsonResponse([])
     if (url.includes('/consultation-notes')) return jsonResponse([])
     if (url.includes('/documents')) return jsonResponse([])
+    // The Client 360 Plans panel lists this client's plans on mount (M4).
+    if (url.includes('/plans')) return jsonResponse([])
     // ⚠️ Before `/messages`, because `/messages/pending` contains both and the
     // pending list is an array while the history is an envelope — the same trap
     // `/timeline/filters` sets above.

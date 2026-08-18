@@ -2306,6 +2306,36 @@
         "title": "FoodItemResponse",
         "type": "object"
       },
+      "FoodPortionResponse": {
+        "description": "One household measure a food can be entered in — FR-M4-011.",
+        "properties": {
+          "gram_weight": {
+            "title": "Gram Weight",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "measure_unit_id": {
+            "format": "uuid",
+            "title": "Measure Unit Id",
+            "type": "string"
+          },
+          "measure_unit_name": {
+            "title": "Measure Unit Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "measure_unit_id",
+          "measure_unit_name",
+          "gram_weight",
+          "is_default"
+        ],
+        "title": "FoodPortionResponse",
+        "type": "object"
+      },
       "GoalType": {
         "description": "What the client is trying to achieve — DB §7.4, PRD §9.5.\n\n⚠️ 🟡 **PROPOSED**, and taken verbatim from PRD §9.5's own proposed list so\nthat a Gate G4 revision has one place to land.",
         "enum": [
@@ -2531,6 +2561,17 @@
               }
             ],
             "title": "Client Note"
+          },
+          "is_locked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Locked"
           },
           "measure_unit_id": {
             "anyOf": [
@@ -5122,6 +5163,17 @@
               }
             ],
             "title": "Custom Label"
+          },
+          "is_locked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Locked"
           },
           "slot_type": {
             "anyOf": [
@@ -9353,6 +9405,54 @@
         ]
       }
     },
+    "/api/v1/app/nutrition/foods/{food_id}/portions": {
+      "get": {
+        "description": "The household measures a food can be added in (FR-M4-011, AC-M4-003).\n\n🔒 The plan builder needs a ``measure_unit_id`` to add an item, and a food\ncarries several (\"katori\", \"cup\", \"piece\"). This is where the builder learns\nthem, and their gram equivalents, so the quantity a practitioner types in a\nhousehold measure resolves the same way the server later computes it.",
+        "operationId": "listFoodPortions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "food_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Food Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FoodPortionResponse"
+                  },
+                  "title": "Response Listfoodportions",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Food Portions",
+        "tags": [
+          "nutrition-catalogue"
+        ]
+      }
+    },
     "/api/v1/app/plan-days/{day_id}": {
       "patch": {
         "operationId": "planDayUpdate",
@@ -9596,7 +9696,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Change a quantity, measure or note",
+        "summary": "Change a quantity, measure, note or lock",
         "tags": [
           "nutrition-plans"
         ]
@@ -9717,7 +9817,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Rename, retime or reorder a slot",
+        "summary": "Rename, retime, reorder or lock a slot",
         "tags": [
           "nutrition-plans"
         ]
