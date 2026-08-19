@@ -18,6 +18,9 @@ from typing import Literal
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+#: 🔒 RFC 7518 §3.2 — HS256 keys must be at least as long as the hash output.
+_MIN_SIGNING_KEY_BYTES = 32
+
 
 class Environment(StrEnum):
     """Deployment environment. Drives fail-safe defaults, not feature flags."""
@@ -69,9 +72,12 @@ class Settings(BaseSettings):
     # token presented to an operator endpoint must fail *signature verification*,
     # not merely a claim check — realm confusion becomes cryptographically
     # impossible rather than a conditional someone can forget.
-    jwt_secret_practitioner: SecretStr = SecretStr("dev-only-practitioner-key")
-    jwt_secret_client: SecretStr = SecretStr("dev-only-client-key")
-    jwt_secret_operator: SecretStr = SecretStr("dev-only-operator-key")
+    # 🔒 At least 32 bytes even as placeholders, so local development exercises
+    # the same key size production requires and PyJWT does not warn on every
+    # token issued in the test suite.
+    jwt_secret_practitioner: SecretStr = SecretStr("dev-only-practitioner-key-0123456789abcdef")
+    jwt_secret_client: SecretStr = SecretStr("dev-only-client-key-0123456789abcdef")
+    jwt_secret_operator: SecretStr = SecretStr("dev-only-operator-key-0123456789abcdef")
 
     access_token_ttl_minutes: int = Field(default=15, ge=1, le=60)
     refresh_token_ttl_days: int = Field(default=30, ge=1, le=90)
@@ -80,11 +86,58 @@ class Settings(BaseSettings):
     # (EC-M7-01) is a routine path, not an error path.
     magic_link_ttl_minutes: int = Field(default=20, ge=5, le=30)
 
+    # ─── Audit ───────────────────────────────────────────────────────────
+    # 🔒 Salt for hashing client IPs into the audit trail (NFR-033). An IP is
+    # personal data under the DPDP Act and audit rows are retained for years, so
+    # the raw value is never stored. The salt must be stable for the retention
+    # period — rotating it makes historical rows incomparable — and secret: the
+    # IPv4 space is 2^32, so an unsalted hash is reversed in seconds.
+    audit_ip_salt: SecretStr = SecretStr("dev-only-audit-salt")
+
     # ─── Supabase (infrastructure, not a backend — ADR-02) ───────────────
     supabase_url: str | None = None
     supabase_anon_key: SecretStr | None = None
     supabase_service_key: SecretStr | None = None
     supabase_storage_bucket: str = "wellnesscrm-files"
+
+    # ─── Messaging transports (M8, S5) ───────────────────────────────────
+    #
+    # 🔒 **An adapter is registered only when its credentials are present.** The
+    # entry point reads these and wires whatever this deployment can actually
+    # reach; a WhatsApp adapter with no access token would turn every plan
+    # delivery into a failed attempt with a retry schedule.
+    #
+    # ⚠️ Every one of these is `None` by default and none has a working
+    # fallback. NFR-034 forbids secrets in source control, and a default that
+    # happened to work would be a default that sends somewhere in a
+    # misconfigured deployment.
+    #
+    # 🔒 With nothing configured, the engine runs on the `logged` transport,
+    # which records every attempt and sends nothing. That is the state S5 ships
+    # in until Meta Business Verification lands, and it is a real deployment mode
+    # rather than a degraded one.
+    whatsapp_phone_number_id: str | None = None
+    whatsapp_access_token: SecretStr | None = None
+    whatsapp_api_base_url: str = "https://graph.facebook.com"
+    whatsapp_api_version: str = "v21.0"
+    whatsapp_template_language: str = "en"
+    #: 🔒 Meta's app secret, used to verify `X-Hub-Signature-256` (API §11.3).
+    #: ⚠️ Without it the webhook rejects every request: an unverified webhook is
+    #: an unauthenticated write endpoint, and failing closed is the only safe
+    #: direction for one that can move a delivery status.
+    whatsapp_webhook_secret: SecretStr | None = None
+    #: The token Meta echoes during webhook registration (the `GET` challenge).
+    whatsapp_verify_token: SecretStr | None = None
+
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from_address: str | None = None
+    #: ⚠️ There is no plaintext option. Credentials and a client's address would
+    #: otherwise cross the network in the clear, and a "TLS optional" flag is one
+    #: somebody eventually sets wrong.
+    smtp_use_tls: bool = True
 
     # ─── Worker ──────────────────────────────────────────────────────────
     worker_poll_interval_seconds: int = Field(default=60, ge=1, le=300)
@@ -126,6 +179,9 @@ class Settings(BaseSettings):
             ("JWT_SECRET_PRACTITIONER", self.jwt_secret_practitioner),
             ("JWT_SECRET_CLIENT", self.jwt_secret_client),
             ("JWT_SECRET_OPERATOR", self.jwt_secret_operator),
+            # 🔒 A placeholder salt makes every audit IP hash reversible by
+            # anyone who has read this file.
+            ("AUDIT_IP_SALT", self.audit_ip_salt),
         ):
             if secret.get_secret_value().startswith(dev_key_prefix):
                 problems.append(f"{name} is still the development placeholder")
@@ -142,6 +198,22 @@ class Settings(BaseSettings):
                 "the three realm signing keys must all differ "
                 "(identical keys defeat realm separation — Arch §6.1)"
             )
+
+        # 🔒 RFC 7518 §3.2 — an HMAC-SHA256 key shorter than the 32-byte hash it
+        # feeds reduces the effective security of every token signed with it.
+        # Checked here rather than trusted: a short key produces a token that
+        # verifies perfectly and is simply easier to forge, so nothing downstream
+        # would ever notice.
+        for name, secret in (
+            ("JWT_SECRET_PRACTITIONER", self.jwt_secret_practitioner),
+            ("JWT_SECRET_CLIENT", self.jwt_secret_client),
+            ("JWT_SECRET_OPERATOR", self.jwt_secret_operator),
+        ):
+            if len(secret.get_secret_value().encode()) < _MIN_SIGNING_KEY_BYTES:
+                problems.append(
+                    f"{name} must be at least {_MIN_SIGNING_KEY_BYTES} bytes "
+                    "(RFC 7518 §3.2 for HS256)"
+                )
 
         if not self.app_base_url.startswith("https://"):
             problems.append("APP_BASE_URL must use HTTPS outside local development")

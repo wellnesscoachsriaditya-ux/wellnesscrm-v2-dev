@@ -2,9 +2,10 @@ import { MobileShell } from '@wellnesscrm/design-system'
 import type { MobileNavItem } from '@wellnesscrm/design-system'
 import { IaProvider, IaRoutes, navItemsFor, useIaLocation } from '@wellnesscrm/ia'
 import type { IaNavItem } from '@wellnesscrm/ia'
-import { BrowserRouter } from 'react-router-dom'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { ia } from './ia/manifest'
 import { NotFound } from './screens/NotFound'
+import { PublicEnquiryForm } from './screens/PublicEnquiryForm'
 
 /**
  * Narrow IA nav items to the bottom bar's stricter shape.
@@ -52,9 +53,33 @@ function Shell() {
 export function App() {
   return (
     <BrowserRouter>
-      <IaProvider ia={ia}>
-        <Shell />
-      </IaProvider>
+      <Routes>
+        {/* 🔒 S2 Slice H — the public enquiry form, deliberately *outside*
+          * `IaProvider` and `MobileShell`.
+          *
+          * The IA manifest describes a signed-in client's four destinations
+          * (NFR-057), and a prospect is not a signed-in client: they have no
+          * account, and no Today, Progress or Messages to reach. Registering
+          * this path in the manifest would either add a fifth tab or add a
+          * route with `nav: undefined` whose screen still rendered inside a
+          * bottom bar of dead ends.
+          *
+          * ⚠️ It lives in this build rather than a fourth app because Arch §4.1
+          * fixes the app list at three, and because the constraint that decides
+          * a prospect's experience — mid-range Android, 4G, NFR-002's 2.5s — is
+          * the same constraint this build is already the strictest against. The
+          * path matches the server-built share URL (`_share_url`, `/enquire/
+          * {slug}`), which is what a practitioner pastes into their bio. */}
+        <Route path="/enquire/:tenantSlug" element={<PublicEnquiryForm />} />
+        <Route
+          path="*"
+          element={
+            <IaProvider ia={ia}>
+              <Shell />
+            </IaProvider>
+          }
+        />
+      </Routes>
     </BrowserRouter>
   )
 }

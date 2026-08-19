@@ -1,0 +1,135 @@
+/* WellnessCRM — Premium Coach visual layer.
+ *
+ * Extends the design-system tokens (never replaces them). Adds the richer
+ * palette, surfaces, gradients and motion the redesigned Coach portal needs.
+ * Every value lives here as a token so nothing is scattered across components.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Make the whole design system speak Manrope, cohesively. */
+  --wc-font-sans: 'Manrope', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* ── Ink / navy (sidebar, mobile header) ── */
+  --p-ink-900: #06131f;
+  --p-ink-800: #0a1c2c;
+  --p-ink-700: #0e2537;
+  --p-ink-600: #143046;
+  --p-ink-glass: rgba(255, 255, 255, 0.06);
+  --p-ink-glass-2: rgba(255, 255, 255, 0.1);
+  --p-ink-text: #e7eef2;
+  --p-ink-muted: #93a6b3;
+
+  /* ── Canvas / surface ── */
+  --p-canvas: #f4f7f5;
+  --p-canvas-2: #eef2f0;
+  --p-surface: #ffffff;
+  --p-surface-2: #f8faf9;
+  --p-border: #e6ebe8;
+  --p-border-strong: #d6ddd9;
+
+  /* ── Text ── */
+  --p-text: #0f2233;
+  --p-text-2: #4b5b67;
+  --p-text-3: #7c8a94;
+
+  /* ── Brand emerald ── */
+  --p-emerald: #10b981;
+  --p-emerald-600: #059669;
+  --p-emerald-700: #047857;
+  --p-emerald-ink: #065f46;
+  --p-emerald-soft: #e7f8f0;
+  --p-emerald-grad: linear-gradient(135deg, #10b981 0%, #059669 100%);
+
+  /* ── Accents (icon containers, status, charts) ── */
+  --p-amber: #f59e0b;
+  --p-amber-ink: #92620a;
+  --p-amber-soft: #fef4e2;
+  --p-blue: #3b82f6;
+  --p-blue-ink: #1d4ed8;
+  --p-blue-soft: #e6efff;
+  --p-violet: #8b5cf6;
+  --p-violet-ink: #6d28d9;
+  --p-violet-soft: #efeafe;
+  --p-coral: #f43f5e;
+  --p-coral-ink: #be123c;
+  --p-coral-soft: #ffe9ec;
+  --p-teal: #14b8a6;
+  --p-teal-ink: #0f766e;
+  --p-teal-soft: #d9f6f1;
+
+  /* ── Geometry ── */
+  --p-r-sm: 10px;
+  --p-r-md: 14px;
+  --p-r-lg: 18px;
+  --p-r-xl: 22px;
+  --p-r-2xl: 28px;
+
+  /* ── Shadows ── */
+  --p-shadow-xs: 0 1px 2px rgba(15, 34, 51, 0.04);
+  --p-shadow-sm: 0 2px 8px rgba(15, 34, 51, 0.05), 0 1px 2px rgba(15, 34, 51, 0.04);
+  --p-shadow-md: 0 8px 24px rgba(15, 34, 51, 0.07), 0 2px 6px rgba(15, 34, 51, 0.04);
+  --p-shadow-lg: 0 18px 44px rgba(9, 21, 33, 0.12), 0 6px 14px rgba(9, 21, 33, 0.06);
+  --p-ring: 0 0 0 4px rgba(16, 185, 129, 0.16);
+
+  /* ── Motion ── */
+  --p-fast: 140ms;
+  --p-normal: 200ms;
+  --p-slow: 320ms;
+  --p-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  --p-sidebar-w: 264px;
+  --p-topbar-h: 72px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--p-canvas);
+  color: var(--p-text);
+  font-family: var(--wc-font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.p-app *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.p-app *::-webkit-scrollbar-thumb {
+  background: rgba(15, 34, 51, 0.14);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Entrance animation used across premium surfaces. */
+@keyframes p-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes p-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

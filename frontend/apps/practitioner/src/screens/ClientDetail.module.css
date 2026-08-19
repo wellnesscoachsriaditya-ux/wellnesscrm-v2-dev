@@ -1,0 +1,79 @@
+.page { display: flex; flex-direction: column; gap: 20px; animation: p-rise 0.4s var(--p-ease) both; }
+.back {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  border: 0; background: none; cursor: pointer; font-family: inherit; font-weight: 600;
+  color: var(--p-text-2); font-size: 0.85rem; padding: 4px 6px; border-radius: 8px;
+}
+.back:hover { color: var(--p-emerald-700); background: var(--p-emerald-soft); }
+
+/* Hero */
+.hero {
+  background: linear-gradient(135deg, var(--p-ink-800) 0%, var(--p-ink-900) 100%);
+  color: var(--p-ink-text); border-radius: var(--p-r-2xl); padding: 26px 28px;
+  display: flex; gap: 22px; align-items: center; flex-wrap: wrap;
+  box-shadow: var(--p-shadow-lg); position: relative; overflow: hidden;
+}
+.hero::after {
+  content: ''; position: absolute; right: -60px; top: -60px; width: 220px; height: 220px;
+  background: radial-gradient(circle, rgba(16,185,129,.28), transparent 70%); pointer-events: none;
+}
+.heroAvatar {
+  width: 84px; height: 84px; border-radius: 24px; flex-shrink: 0;
+  background: var(--p-emerald-grad); color: #fff; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 2rem; font-weight: 800; box-shadow: 0 10px 24px rgba(16,185,129,.35);
+}
+.heroMain { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1; z-index: 1; }
+.heroName { font-size: 1.7rem; font-weight: 800; margin: 0; color: #fff; letter-spacing: -0.01em; }
+.heroPills { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.heroMeta { display: flex; gap: 16px; flex-wrap: wrap; color: var(--p-ink-muted); font-size: 0.85rem; }
+.heroMetaItem { display: inline-flex; align-items: center; gap: 6px; }
+.heroActions { display: flex; gap: 10px; z-index: 1; }
+.heroBtn {
+  display: inline-flex; align-items: center; gap: 7px; padding: 10px 16px; border-radius: 12px;
+  cursor: pointer; font-family: inherit; font-weight: 700; font-size: 0.85rem; border: 0;
+  background: var(--p-emerald-grad); color: #fff; box-shadow: 0 8px 20px rgba(16,185,129,.35); transition: transform var(--p-fast);
+}
+.heroBtn:hover { transform: translateY(-2px); }
+.heroBtnGhost {
+  display: inline-flex; align-items: center; gap: 7px; padding: 10px 16px; border-radius: 12px;
+  cursor: pointer; font-family: inherit; font-weight: 700; font-size: 0.85rem;
+  background: var(--p-ink-glass); color: var(--p-ink-text); border: 1px solid var(--p-ink-glass-2); transition: background var(--p-fast);
+}
+.heroBtnGhost:hover { background: var(--p-ink-glass-2); }
+.heroMinor { background: rgba(245,158,11,.2); color: #fbbf24; padding: 4px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+
+/* Sticky section nav */
+.sectionNav {
+  position: sticky; top: 76px; z-index: 20; display: flex; gap: 6px; overflow-x: auto;
+  background: rgba(244,247,245,.85); backdrop-filter: blur(10px);
+  padding: 8px; border-radius: 14px; border: 1px solid var(--p-border);
+}
+.sectionNav a {
+  padding: 8px 14px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; white-space: nowrap;
+  color: var(--p-text-2); text-decoration: none; transition: all var(--p-fast);
+}
+.sectionNav a:hover { background: var(--p-surface); color: var(--p-text); }
+
+/* Layout */
+.grid { display: grid; grid-template-columns: minmax(0,1fr) 340px; gap: 20px; align-items: start; }
+.main { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.rail { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 130px; }
+
+.group { display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 140px; }
+.groupHead { display: flex; align-items: center; gap: 10px; }
+.groupIcon { width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; }
+.groupTitle { font-size: 1.05rem; font-weight: 800; margin: 0; color: var(--p-text); }
+.railTitle { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--p-text-3); font-weight: 700; margin: 2px 0 -4px 2px; }
+
+@media (max-width: 1100px) {
+  .grid { grid-template-columns: 1fr; }
+  .rail { position: static; }
+}
+@media (max-width: 900px) {
+  .page { padding: 52px 14px 0; }
+  .hero { flex-direction: column; align-items: flex-start; text-align: left; padding: 22px; }
+  .heroActions { width: 100%; }
+  .heroBtn, .heroBtnGhost { flex: 1; justify-content: center; }
+  .sectionNav { top: 0; }
+  .rail { order: -1; }
+}

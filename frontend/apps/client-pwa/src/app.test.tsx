@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
 import { navItemsFor, validateIa } from '@wellnesscrm/ia'
 import { App } from './App'
 import { ia } from './ia/manifest'
@@ -37,5 +37,58 @@ describe('client PWA', () => {
   it('marks the landing route as the active tab', () => {
     render(<App />)
     expect(screen.getByRole('link', { current: 'page' })).toHaveTextContent('Today')
+  })
+})
+
+/**
+ * 🔒 S2 Slice H — the public enquiry form is served by this build but is *not*
+ * part of the client portal.
+ *
+ * The property under test is the composition in `App`, not the screen (which
+ * `PublicEnquiryForm.test.tsx` covers). A prospect has no account and no Today,
+ * Progress or Messages to reach; rendering the form inside `MobileShell` would
+ * hand them a bottom bar of four dead ends and imply they are already a client.
+ * That regression would look entirely reasonable in a diff — someone tidying the
+ * route into the IA manifest — and nothing else would catch it.
+ */
+describe('the public enquiry route', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    window.history.pushState({}, '', '/')
+  })
+
+  it('renders the form without the client’s navigation', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              form_id: '11111111-1111-1111-1111-111111111111',
+              practice_name: 'Priya’s Nutrition Studio',
+              title: 'Start your health journey',
+              intro_text: null,
+              consent: {
+                notice_id: '22222222-2222-2222-2222-222222222222',
+                title: 'Privacy notice',
+                body: 'We will use your details to contact you.',
+                version: '2026-08-01',
+              },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        ),
+      ),
+    )
+
+    window.history.pushState({}, '', '/enquire/demo-practice')
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
+      'Priya’s Nutrition Studio',
+    )
+    await waitFor(() => {
+      expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument()
+    })
   })
 })

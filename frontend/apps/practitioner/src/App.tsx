@@ -1,41 +1,58 @@
-import { AppShell } from '@wellnesscrm/design-system'
+import './premium/theme.css'
+import { Spinner, ToastProvider } from '@wellnesscrm/design-system'
 import { IaProvider, IaRoutes, navItemsFor, useIaLocation } from '@wellnesscrm/ia'
-import { BrowserRouter } from 'react-router-dom'
+import { BrowserRouter, useNavigate } from 'react-router-dom'
 import { ia } from './ia/manifest'
 import { NotFound } from './screens/NotFound'
+import { Login } from './screens/Login'
+import { AuthProvider, useAuth } from './features/auth/AuthProvider'
+import { PremiumShell } from './premium/AppShell'
 
 /**
- * The practitioner frame.
+ * The premium Coach frame.
  *
- * 🔒 Both the navigation and the active item come from the IA (NFR-057). There
- * is no hand-written nav array here, which is the whole mechanism: adding a
- * screen to the manifest adds it to this menu, and nothing else has to remember.
+ * 🔒 Navigation and the active item come from the IA (NFR-057) — the shell
+ * renders exactly `navItemsFor(ia)` as `<a>` links in declared order, with
+ * `aria-current` on the active one. No hand-written nav array.
  */
 function Shell() {
   const { activeNavId } = useIaLocation()
-
-  // ⏳ S1 replaces the predicate with the session's actual actions. Until a
-  // session exists there is nothing to filter on, and the API refuses anything
-  // the practitioner may not do regardless (NFR-032).
+  const { session, logout } = useAuth()
+  const navigate = useNavigate()
   const navItems = navItemsFor(ia)
 
   return (
-    <AppShell
-      brand="WellnessCRM"
+    <PremiumShell
       navItems={navItems}
       {...(activeNavId !== undefined ? { activeNavId } : {})}
+      user={{ name: 'Coach', practice: session?.role ?? 'Practitioner', role: session?.role ?? '' }}
+      onSignOut={() => void logout()}
+      onQuickAdd={() => navigate('/clients/new')}
     >
       <IaRoutes fallback={<NotFound />} />
-    </AppShell>
+    </PremiumShell>
   )
 }
 
-export function App() {
+function Gate() {
+  const { status } = useAuth()
+  if (status === 'loading') return <Spinner label="Loading your workspace…" />
+  if (status === 'anonymous') return <Login />
   return (
     <BrowserRouter>
       <IaProvider ia={ia}>
         <Shell />
       </IaProvider>
     </BrowserRouter>
+  )
+}
+
+export function App() {
+  return (
+    <ToastProvider>
+      <AuthProvider>
+        <Gate />
+      </AuthProvider>
+    </ToastProvider>
   )
 }

@@ -19,7 +19,10 @@ guarantee the whole tenancy model rests on.
 from __future__ import annotations
 
 import configparser
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -426,10 +429,38 @@ def test_readonly_role_is_not_created(roles_sql: str) -> None:
 def test_every_append_only_table_is_verified(verify_sql: str) -> None:
     """🔒 DDR-15 — audit and consent immutability is enforced by the *absence* of
     an UPDATE/DELETE grant, and nothing fails loudly when an absence is
-    accidentally filled in. This script is what notices."""
+    accidentally filled in. This script is what notices.
+
+    ⚠️ `usage_events` is append-only in design but deliberately absent, and must
+    stay absent: it retains UPDATE so a reconciliation pass can set
+    `is_reconciled`, and every other column is frozen by a trigger instead
+    (migration 0007). Listing it here would fail on the grant it is designed to
+    hold. `test_usage_events_is_protected_by_trigger_not_by_grant` covers it.
+    """
     executable = _executable(verify_sql)
-    for table in ("audit_log", "consent_records", "operator_actions"):
+    for table in ("audit_log", "consent_records", "operator_actions", "subscription_events"):
         assert f"'{table}'" in executable, f"{table} is append-only but is not verified"
+
+
+@pytest.mark.isolation
+def test_usage_events_is_protected_by_trigger_not_by_grant() -> None:
+    """🔒 The one append-only table a grant cannot fully protect — DB §14.5.
+
+    A grant cannot express "every column but one", so `usage_events` keeps UPDATE
+    for `is_reconciled` and a trigger rejects edits to everything else. This test
+    exists because the protection lives somewhere unusual: a reader checking
+    `002_verify_grants.sql` would find the table missing and reasonably conclude
+    it was forgotten.
+    """
+    migration = (_MIGRATIONS / "versions" / "20260808_0007_entitlements.py").read_text(
+        encoding="utf-8"
+    )
+    assert "usage_events__reject_material_edit" in migration
+    assert "trg_usage_events__immutable" in migration
+    # DELETE is still revoked — only UPDATE is retained.
+    assert re.search(r"REVOKE\s+DELETE\s+ON\s+TABLE\s+usage_events\s+FROM\s+app_user", migration)
+    # And the compensating-event rule is what makes the retained UPDATE safe.
+    assert "EC-M10-04" in migration
 
 
 def test_verification_checks_both_forbidden_privileges(verify_sql: str) -> None:
@@ -468,3 +499,77 @@ def test_ops_readme_states_the_running_order() -> None:
     assert "001_roles.sql" in text
     assert "alembic upgrade head" in text
     assert text.index("001_roles.sql") < text.index("alembic upgrade head")
+
+
+# ─── The gate must not be able to skip itself ────────────────────────────
+#
+# 🔒 AC-M0-003 spent all of S0 and most of S1 reporting "skipped", which is
+# green. These two tests protect the mechanism that ends that:
+# `REQUIRE_LIVE_DATABASE` turns a missing database into a failure.
+#
+# ⚠️ Both directions are asserted, and both matter. A gate that cannot fail in
+# CI protects nothing; a gate that always fails on a developer machine with no
+# PostgreSQL gets switched off, and a switched-off gate protects nothing either.
+# The flag must be the *only* difference between the two behaviours.
+#
+# These run the suite in a subprocess rather than inspecting the source, because
+# what needs protecting is the observable outcome — the exit code — not the
+# continued presence of a particular function name in a file.
+
+
+def _run_integration_suite(*, require: bool) -> subprocess.CompletedProcess[str]:
+    """Run `tests/integration` with no database configured.
+
+    🔒 The two connection variables are cleared explicitly. A developer who
+    happens to have a live database configured would otherwise run the real
+    suite here, which proves nothing about the fail-closed path.
+    """
+    env = dict(os.environ)
+    env.pop("TEST_DATABASE_URL", None)
+    env.pop("TEST_DATABASE_MIGRATION_URL", None)
+    if require:
+        env["REQUIRE_LIVE_DATABASE"] = "1"
+    else:
+        env.pop("REQUIRE_LIVE_DATABASE", None)
+
+    return subprocess.run(
+        # ⚠️ No `-q` here: `addopts` in pyproject.toml already sets it, and a
+        # second one means `-qq`, which suppresses the very summary line these
+        # assertions read.
+        [sys.executable, "-m", "pytest", "tests/integration", "--no-header"],
+        cwd=_BACKEND,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_require_flag_turns_a_missing_database_into_a_failure() -> None:
+    """🔒 With the flag set and no database, the suite must fail, not skip."""
+    result = _run_integration_suite(require=True)
+
+    assert result.returncode != 0, (
+        "REQUIRE_LIVE_DATABASE=1 with no database configured exited zero. "
+        "The isolation gate can silently skip itself in CI, which is the one "
+        "failure mode the flag exists to prevent.\n"
+        f"{result.stdout[-2000:]}"
+    )
+    assert "REQUIRE_LIVE_DATABASE" in result.stdout, (
+        "the suite failed, but not with the message naming the fix; a reader of "
+        f"the CI log would not know what to do:\n{result.stdout[-2000:]}"
+    )
+
+
+def test_suite_still_skips_without_the_flag() -> None:
+    """The other half — a machine with no PostgreSQL gets a green, skipped run."""
+    result = _run_integration_suite(require=False)
+
+    assert result.returncode == 0, (
+        "the integration suite fails when no database is configured. It must "
+        "skip, or developers without PostgreSQL cannot run the test suite at "
+        f"all:\n{result.stdout[-2000:]}"
+    )
+    assert (
+        "skipped" in result.stdout
+    ), f"expected skips without the require flag:\n{result.stdout[-2000:]}"

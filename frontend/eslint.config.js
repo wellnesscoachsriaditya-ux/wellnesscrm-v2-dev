@@ -57,6 +57,7 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/*.config.js',
       '**/api-client/generated/**',
+      '**/public/sw.js',
       // Ambient module declarations shared by every project. They belong to no
       // single tsconfig — each app pulls the directory into its own `include` —
       // so the type-aware parser cannot resolve a project for them. There is

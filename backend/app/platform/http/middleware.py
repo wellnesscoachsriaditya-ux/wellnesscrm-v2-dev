@@ -1,15 +1,19 @@
 """HTTP middleware — the front of the request pipeline.
 
-Arch §5.1 steps 1–2. Establishes request context and applies security headers
-for every request, including those that never reach a route.
+Arch §5.1 steps 1–2. Establishes request context, resolves the acting principal,
+and applies security headers for every request, including those that never reach
+a route.
 
 🔒 The pipeline is framework-level, not per-endpoint. A developer cannot forget
 to establish context, because no endpoint establishes it — this is the
 structural answer to V1's *"authentication, routing and permissions became
 difficult to maintain"*.
 
-Authentication, tenant resolution and authorization (steps 2–5) arrive in S1 and
-attach to this same pipeline.
+Authentication resolves here rather than in the route class because it needs the
+credential and not the route: the actor must be known before routing so that the
+access log, error handlers and rate limiting all see the same principal. Steps
+3–5 and 9 — tenancy, authorization, audit — need the route's declared action and
+therefore live in ``app.platform.http.pipeline``.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from app.kernel.context import RequestContext, context_scope, new_request_id
+from app.platform.http.pipeline import resolve_actor
 from app.platform.logging import get_logger
 
 logger = get_logger(__name__)
@@ -56,8 +61,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         ctx = RequestContext(
             request_id=request_id,
-            # Anonymous until S1's authentication middleware resolves an actor.
-            actor=RequestContext.anonymous().actor,
+            # 🔒 Arch §5.1 step 2. Anonymous throughout Slice A — the resolver is
+            # the seam Slice B replaces with token verification. Resolved before
+            # `context_scope` so the actor is visible to the access log and to
+            # every downstream component, not only to the endpoint.
+            actor=await resolve_actor(request),
             method=request.method,
             path=request.url.path,
             realm_prefix=_realm_prefix(request.url.path),

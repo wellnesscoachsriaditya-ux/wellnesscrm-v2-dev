@@ -109,6 +109,46 @@ describe('createApiClient', () => {
     expect(url.searchParams.has('cursor')).toBe(false)
   })
 
+  it('repeats a key for an array value rather than sending one comma-joined string', async () => {
+    // 🔒 API §6.2 specifies repeated keys (`?type=a&type=b`), which is what
+    // FastAPI decodes into a list. `String(['a','b'])` yields `'a,b'` — a single
+    // value the backend rejects as an invalid enum member, so the failure
+    // surfaces as a 422 on a filter the user picked from our own UI.
+    const { fetch, calls } = stubFetch({ items: [] })
+    const client = createApiClient({ baseUrl: '/api', fetch })
+
+    await client.request('get', '/api/v1/public/health', {
+      query: { type: ['note_added', 'stage_changed'], limit: 25 },
+    })
+
+    const url = new URL(calls[0]?.url ?? '')
+    expect(url.searchParams.getAll('type')).toEqual(['note_added', 'stage_changed'])
+    expect(url.searchParams.get('limit')).toBe('25')
+  })
+
+  it('omits an empty array entirely', async () => {
+    // An empty filter means "no filter". Sending `?type=` would be a request for
+    // events whose type is the empty string, which matches nothing — an empty
+    // timeline where the user expected everything.
+    const { fetch, calls } = stubFetch({ items: [] })
+    const client = createApiClient({ baseUrl: '/api', fetch })
+
+    await client.request('get', '/api/v1/public/health', { query: { type: [] } })
+
+    expect(new URL(calls[0]?.url ?? '').searchParams.has('type')).toBe(false)
+  })
+
+  it('drops undefined entries inside an array', async () => {
+    const { fetch, calls } = stubFetch({ items: [] })
+    const client = createApiClient({ baseUrl: '/api', fetch })
+
+    await client.request('get', '/api/v1/public/health', {
+      query: { type: ['note_added', undefined] },
+    })
+
+    expect(new URL(calls[0]?.url ?? '').searchParams.getAll('type')).toEqual(['note_added'])
+  })
+
   it('sends credentials so the ADR-A02 refresh cookie will be included', async () => {
     const { fetch, calls } = stubFetch({ status: 'ok' })
     const client = createApiClient({ baseUrl: '/api', fetch })
@@ -129,6 +169,65 @@ describe('createApiClient', () => {
     const headers = calls[0]?.init.headers as Record<string, string>
     expect(headers['Content-Type']).toBeUndefined()
     expect(headers.Accept).toBe('application/json')
+  })
+
+  it('substitutes path parameters into the generated template', async () => {
+    const { fetch, calls } = stubFetch({ id: 'abc' })
+    const client = createApiClient({ baseUrl: '/api', fetch })
+
+    await client.request('post', '/api/v1/app/clients/{client_id}/archive', {
+      path: { client_id: '11111111-2222-3333-4444-555555555555' },
+    })
+
+    expect(new URL(calls[0]?.url ?? '').pathname).toBe(
+      '/api/v1/app/clients/11111111-2222-3333-4444-555555555555/archive',
+    )
+  })
+
+  it('refuses to send a path with an unresolved placeholder', async () => {
+    // 🔒 The failure this prevents is a silent one: an unsubstituted template
+    // requests a URL containing a literal `{client_id}`, the API answers 404,
+    // and the screen reports "that client could not be found" — which sends
+    // the reader looking at the database rather than at the call site.
+    const { fetch, calls } = stubFetch({ id: 'abc' })
+    const client = createApiClient({ baseUrl: '/api', fetch })
+
+    await expect(
+      client.request('post', '/api/v1/app/clients/{client_id}/archive', {}),
+    ).rejects.toThrow(/Missing path parameter 'client_id'/)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('encodes a path parameter rather than concatenating it', async () => {
+    // A `/` or `?` in a value would otherwise change which endpoint is called.
+    const { fetch, calls } = stubFetch({ id: 'abc' })
+    const client = createApiClient({ baseUrl: '/api', fetch })
+
+    await client.request('post', '/api/v1/app/clients/{client_id}/archive', {
+      path: { client_id: 'a/../b' },
+    })
+
+    expect(new URL(calls[0]?.url ?? '').pathname).toBe('/api/v1/app/clients/a%2F..%2Fb/archive')
+  })
+
+  it('resolves the global fetch per request, not at construction', async () => {
+    // 🔒 A feature's `api.ts` calls `createApiClient()` at module scope, so it
+    // runs at import time. Capturing `globalThis.fetch` there would snapshot
+    // whatever was bound at that instant and silently bypass anything installed
+    // afterwards — a test's stub, or a production tracing/offline wrapper added
+    // during app start. The symptom is a real request escaping from a test.
+    const client = createApiClient({ baseUrl: '/api' })
+
+    const { fetch, calls } = stubFetch({ status: 'ok' })
+    const original = globalThis.fetch
+    globalThis.fetch = fetch as unknown as typeof globalThis.fetch
+    try {
+      await client.get('/api/v1/public/health')
+    } finally {
+      globalThis.fetch = original
+    }
+
+    expect(calls).toHaveLength(1)
   })
 })
 

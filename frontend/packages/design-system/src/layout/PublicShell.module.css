@@ -1,0 +1,44 @@
+/* PublicShell — the frame for a page shown to someone with no account.
+ *
+ * 🔒 Arch §4.2 / ADR-03. This exists as a design-system layer rather than as
+ * styling inside the enquiry screen because a feature app may not declare raw
+ * colour or spacing values, and because the next public page — magic-link
+ * redemption (FR-M0-005) — needs the same frame.
+ */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  /* `100dvh` after `100vh`: mobile browser chrome appears and disappears on
+   * scroll, and `100vh` alone leaves a short page's footer floating. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--wc-neutral-50);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  /* 🔒 The page is mobile-first (FR-M2-002) but is also opened on a laptop.
+   * Centring within a readable measure is what stops a four-field form
+   * stretching across a 27-inch monitor. */
+  width: 100%;
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: var(--wc-space-4);
+  /* Clear of the notch on an installed PWA, and of the home indicator. */
+  padding-top: max(var(--wc-space-4), env(safe-area-inset-top));
+  padding-bottom: calc(var(--wc-space-8) + env(safe-area-inset-bottom));
+}
+
+.main:focus {
+  outline: none;
+}
+
+.footer {
+  padding: var(--wc-space-4);
+  padding-bottom: calc(var(--wc-space-4) + env(safe-area-inset-bottom));
+  text-align: center;
+  font-size: var(--wc-font-size-xs);
+  color: var(--wc-neutral-600);
+}

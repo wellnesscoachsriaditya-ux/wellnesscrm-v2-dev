@@ -4,6 +4,1846 @@
  */
 
 export interface paths {
+    "/api/v1/app/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign out
+         * @description Revoke the current session (NFR-042).
+         *
+         *     🔒 Authorized, unlike the other authentication routes: this acts on an
+         *     existing session, so it needs to know whose. The session id comes from the
+         *     verified token, never from the request body — accepting one would let any
+         *     authenticated caller log out any other.
+         */
+        post: operations["authLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The current session
+         * @description Identify the caller from their verified token.
+         *
+         *     🔒 Read from the token, never from a parameter. An endpoint that accepted a
+         *     user id would let any authenticated caller ask about anyone.
+         *
+         *     ⚠️ Built in S2 Slice C rather than S1 because it had no consumer until the
+         *     notes UI needed to know who the author is — FR-M3-020's "editable by their
+         *     author" cannot be expressed in an interface that does not know who is
+         *     looking.
+         */
+        get: operations["authCurrentSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List, search and filter clients
+         * @description The client list — FR-M1-021/022, NFR-005 (≤300 ms).
+         *
+         *     🔒 **A practitioner sees only their own and their assigned clients**
+         *     (AC-M1-006); an owner sees the tenant (FR-M0-017). Applied as a predicate
+         *     inside the query, because a list filtered after the fact would page short and
+         *     leak totals.
+         *
+         *     ⚠️ **Stages are OR, tags are AND.** Ticking two stages means "either" — the
+         *     natural reading of a status filter. Ticking two tags means "both", because
+         *     tags are how a caseload is *narrowed*: "PCOS or post-natal" would return a
+         *     longer list than the practitioner started with, which is the opposite of what
+         *     choosing a second filter is for.
+         *
+         *     ⚠️ Archived clients are excluded by default (FR-M1-014, DB §22.2).
+         *     ``archived=only`` exists so a client archived by mistake can be found and
+         *     restored — without it the archive is a one-way door.
+         */
+        get: operations["clientsList"];
+        put?: never;
+        /**
+         * Create a client
+         * @description Create a client or lead — FR-M1-004, AC-M1-001.
+         *
+         *     🔒 Not metered. FR-M1-003 keeps leads unmetered at every stage before
+         *     ``active``, and EC-M2-06 requires a tenant at their limit to keep accepting
+         *     them. The entitlement binds on the transition to ``active`` (Slice B).
+         */
+        post: operations["clientsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reassign several clients to one practitioner
+         * @description Hand a departing practitioner's caseload over — EC-M1-04.
+         *
+         *     🔒 Owner-only, and **all or nothing**: one transaction, so a failure partway
+         *     rolls the whole batch back. A half-completed handover would split a caseload
+         *     between two practitioners with no record of the intent, and the practitioner
+         *     could not tell whether re-running it was safe.
+         *
+         *     ⚠️ ``moved`` may be lower than the number submitted — clients already owned
+         *     by the target are skipped, which in an overlapping selection is correct
+         *     rather than an error.
+         *
+         *     ⚠️ Registered *before* ``/{client_id}`` matters not at all here, because
+         *     FastAPI matches literal path segments ahead of parameters regardless of
+         *     declaration order across routers. Named anyway because a reader will wonder.
+         */
+        post: operations["clientsBulkReassign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/sort-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The orderings the list supports
+         * @description The sort vocabulary, so the UI does not hardcode it.
+         *
+         *     🔒 Every value here is index-backed (migration 0013). Serving the list from
+         *     the server is what keeps a dropdown from offering an ordering the database
+         *     would have to sort in memory — API §6.3's allowlist, expressed as data.
+         */
+        get: operations["clientsSortOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a client
+         * @description One client by id — API §7.1.
+         *
+         *     ⚠️ Archived clients are returned. AC-M1-007 requires archiving to remove them
+         *     from default *views* without deleting anything, and restoring one requires
+         *     being able to read it first.
+         */
+        get: operations["clientsRead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update a client
+         * @description Apply a partial edit — API §4.4.
+         *
+         *     🔒 ``If-Match`` is **required**. Two practitioners editing one client is
+         *     routine in a clinic, and without a precondition the second save silently
+         *     discards the first one's work with no error and no trace.
+         */
+        patch: operations["clientsUpdate"];
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who can see this client
+         * @description Grants on this client — EC-M0-04.
+         *
+         *     ``include_revoked`` surfaces the history EC-M1-04 requires be retained. Off
+         *     by default: a list mixing live and revoked rows invites a caller to forget
+         *     the difference.
+         */
+        get: operations["clientAccessList"];
+        put?: never;
+        /**
+         * Grant a colleague access to this client
+         * @description Share a client with a colleague — EC-M0-04.
+         *
+         *     🔒 Owner-only, twice over: the action's role gate and the check inside
+         *     ``assignments.grant_access``. Deliberately redundant, because a future route
+         *     that forgot the declaration would otherwise widen access silently.
+         */
+        post: operations["clientAccessGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/access/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a colleague's access
+         * @description Withdraw access — EC-M1-04.
+         *
+         *     🔒 Stamps ``revoked_at`` rather than deleting: "who could see this client
+         *     last March" is a question a DPDP access request can ask, and a deleted row
+         *     cannot answer it.
+         */
+        delete: operations["clientAccessRevoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a client
+         * @description Soft-delete a client — FR-M1-010, AC-M1-007.
+         *
+         *     🔒 Removes them from default views without deleting anything, and frees the
+         *     entitlement slot immediately if they were ``active``. The stage is preserved,
+         *     which is what lets :func:`restore_client` put them back where they were.
+         *
+         *     ⚠️ Takes no body. A reason has nowhere safe to go in this slice — see
+         *     ``transitions.archive``.
+         */
+        post: operations["clientsArchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every assessment for a client
+         * @description Newest first — FR-M3-007, AC-M3-007.
+         *
+         *     🔒 Includes in-progress administrations: EC-M3-01 requires the practitioner
+         *     to see completion status, which means seeing the unfinished row rather than
+         *     inferring it from an absence.
+         */
+        get: operations["assessmentList"];
+        put?: never;
+        /**
+         * Start or resume an assessment
+         * @description Resume the open assessment, or begin one — FR-M3-004/005/007.
+         *
+         *     🔒 **Resume is the default.** A client who leaves and returns gets their
+         *     answers back (AC-M3-001); a *new* administration is deliberate, because
+         *     FR-M3-007 keeps each one separately and an accidental one fragments the
+         *     history.
+         *
+         *     ⚠️ ``restart=true`` is how a repeat assessment is taken. It leaves any open
+         *     response untouched rather than closing it — an abandoned draft is evidence of
+         *     an abandonment (EC-M3-01), not something to tidy away.
+         */
+        post: operations["assessmentStartOrResume"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/assessments/{response_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One administration, under its own version
+         * @description FR-M3-003, FR-M3-008, AC-M3-003.
+         *
+         *     🔒 **Returns the definition the response was captured under**, not the
+         *     current one. That pairing is the whole of AC-M3-003: publish v2, and a v1
+         *     response still renders correctly because its structure travels with it.
+         */
+        get: operations["assessmentRead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Save progress
+         * @description Continuous save — FR-M3-005, AC-M3-001.
+         *
+         *     ⚠️ **Validation issues do not block the write.** They come back so the form
+         *     can show them; only submit refuses. A save that rejected a half-typed number
+         *     would lose the section around it.
+         */
+        patch: operations["assessmentSaveProgress"];
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/assessments/{response_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete an assessment
+         * @description Finish, project and record — FR-M3-004, DDR-08, API §7.3.
+         *
+         *     🔒 Three writes in one transaction: the completion, the DDR-08 projection
+         *     into ``client_nutrition_profile``, and a ``measurements`` row for the weight
+         *     the form captured. The timeline entry follows from the published event.
+         *
+         *     🔒 **Clinical sections are not required** (FR-M3-006, AC-M3-002). A refusal
+         *     here names the *non-clinical* fields that are missing, and nothing else.
+         *
+         *     ⚠️ ``derived`` is read back **after** the submit rather than computed from the
+         *     request: the weight became a `measurements` row inside
+         *     ``submit_response``, and deriving from the answer document instead would
+         *     produce a BMI that disagreed with the trend chart's first point.
+         */
+        post: operations["assessmentComplete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/checkin-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A client's check-in cadence
+         * @description FR-M8-022. ``null`` when the client has no schedule yet.
+         */
+        get: operations["clientCheckinScheduleRead"];
+        /**
+         * Configure or pause a client's check-ins
+         * @description FR-M8-022/024 — the cadence, and the pause that does not change the stage.
+         *
+         *     🔒 Pausing cancels anything already queued. A pause that left Friday's nudge
+         *     in the queue would send one more message after the practitioner asked us to
+         *     stop.
+         */
+        put: operations["clientCheckinScheduleUpdate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/consultation-notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A client's consultation notes
+         * @description Newest first — FR-M3-018.
+         */
+        get: operations["consultationNoteList"];
+        put?: never;
+        /**
+         * Record a consultation note
+         * @description FR-M3-018.
+         */
+        post: operations["consultationNoteCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/consultation-notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a consultation note
+         * @description 🔒 Author-only, including against the owner — FR-M3-020.
+         *
+         *     The edit is recorded in the audit log by the pipeline, which is the other
+         *     half of FR-M3-020.
+         */
+        patch: operations["consultationNoteEdit"];
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/consultation-notes/{note_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a consultation note
+         * @description Author, or the owner on their behalf. Never deleted — the grant revokes it.
+         */
+        post: operations["consultationNoteArchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A client's documents
+         * @description Newest report first — FR-M3-024.
+         */
+        get: operations["clientDocumentList"];
+        put?: never;
+        /**
+         * Attach an uploaded document
+         * @description FR-M3-024.
+         */
+        post: operations["clientDocumentAttach"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/documents/{document_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a document
+         * @description Detach from the active list. The bytes go with erasure, not with this.
+         */
+        post: operations["clientDocumentArchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/documents/{document_id}/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A short-lived URL for a document
+         * @description FR-M3-026, FR-M0-038, NFR-035.
+         *
+         *     🔒 **Its own audited action**, not part of `read`. A signed URL outlives the
+         *     request and leaks through logs, history and screenshots, so "who obtained the
+         *     bytes of this lab report" has to be answerable separately from "who listed
+         *     the documents".
+         *
+         *     ⚠️ ``authorize_download`` is passed in rather than imported by the module
+         *     (R5) — the port is ``kernel.storage.DownloadAuthorizer`` and this router is
+         *     the entry point permitted to supply it.
+         */
+        get: operations["clientDocumentUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A client's measurement trend
+         * @description Newest first — FR-M3-014, AC-M3-004.
+         *
+         *     ⚠️ **Every row by default, including same-date duplicates.** EC-M3-05 keeps
+         *     both a practitioner's and a client's value for one date; ``preferred_only``
+         *     applies the display rule without deleting anything, which is what a chart
+         *     wants and an audit does not.
+         */
+        get: operations["measurementList"];
+        put?: never;
+        /**
+         * Record a measurement
+         * @description FR-M3-011, FR-M3-013, EC-M3-02.
+         *
+         *     🔒 An implausible value comes back as a 422 carrying
+         *     ``details.requires_confirmation``; the UI confirms and resends with
+         *     ``confirm_implausible``. The row is then stored **and flagged**, because a
+         *     real 180 kg client exists and refusing to record them is useless exactly when
+         *     the record matters most.
+         */
+        post: operations["measurementRecord"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/message-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A client's message settings
+         * @description The client's own overrides *and* the practice defaults they layer on.
+         *
+         *     ⚠️ Both, deliberately: a screen showing an override without what it overrides
+         *     cannot explain itself.
+         */
+        get: operations["clientMessagePreferences"];
+        /**
+         * Change a client's message settings
+         * @description US-M8-06 — a per-client override, including an unsubscribe.
+         *
+         *     ⚠️ 🔒 **A client-initiated unsubscribe must also write the consent ledger.**
+         *     This is the practitioner-facing route and writes the preference only; the
+         *     portal's own withdrawal path (S6) writes both, because the preference
+         *     controls behaviour while the ledger is the legal record.
+         */
+        put: operations["clientMessagePreferenceUpdate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every message sent to a client
+         * @description FR-M8-011 — the delivery log for one client, newest first.
+         *
+         *     🔒 Every attempt, including failures and retries. A history that showed only
+         *     successes would hide the case AC-M8-007 exists for.
+         */
+        get: operations["clientMessageHistory"];
+        put?: never;
+        /**
+         * Send a message to a client
+         * @description Queue a practitioner-triggered message — the core loop's "message the client".
+         *
+         *     🔒 **Queues, never sends.** Suppression, quiet hours and the frequency cap are
+         *     applied at dispatch by the same engine that handles every automated message
+         *     (FR-M8-001). A practitioner cannot message a client who withdrew consent by
+         *     doing it by hand, which is the protection they actually want.
+         *
+         *     ⚠️ The occasion is the template plus the minute, so a double-tapped button
+         *     queues one message while a deliberate re-send a minute later queues another.
+         */
+        post: operations["clientMessageSend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/messages/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Messages queued for a client but not yet sent
+         * @description FR-M8-028 — what is about to be sent on the practitioner's behalf.
+         */
+        get: operations["clientPendingMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a client's notes
+         * @description The note thread, newest first — FR-M1-007.
+         *
+         *     🔒 Never reachable from the client realm (FR-M3-021): this router is
+         *     practitioner-only, the action permits practitioner roles alone, and
+         *     ``client_notes`` has no client-realm RLS policy.
+         */
+        get: operations["clientNotesList"];
+        put?: never;
+        /**
+         * Add a note to a client
+         * @description Append a note — FR-M1-007.
+         */
+        post: operations["clientNotesCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a note
+         * @description Take a note out of the thread — a soft delete (DB §22.2).
+         *
+         *     ⚠️ ``DELETE`` in HTTP terms, ``archived_at`` in the database. The verb
+         *     describes the caller's intent; nothing is destroyed, which is what AC-M1-007
+         *     requires of every user-facing removal.
+         */
+        delete: operations["clientNotesArchive"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a note
+         * @description Rewrite a note's body — FR-M3-020.
+         *
+         *     🔒 **Author only**, including against the tenant owner: the note carries an
+         *     author's name, so only they may change what it says. The owner's remedy for a
+         *     note that should not stand is to remove it, which is recorded as their act.
+         *
+         *     🔒 The edit is audited by the pipeline, which is what satisfies FR-M3-020's
+         *     "with edits recorded in the audit log" — a framework-written entry cannot be
+         *     forgotten.
+         */
+        patch: operations["clientNotesUpdate"];
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/nutrition-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The typed projection of the latest assessment
+         * @description DDR-08's read side — what planning will actually use.
+         *
+         *     ⚠️ ``null`` when no assessment has been completed. That is a real state, not
+         *     an error: a client added by hand has no profile until somebody fills the form
+         *     in, and a 404 would make "not yet assessed" indistinguishable from "no such
+         *     client".
+         */
+        get: operations["nutritionProfileRead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reassign the owning practitioner
+         * @description Move a client to a different owning practitioner — EC-M1-04.
+         *
+         *     ⚠️ **One client at a time.** EC-M1-04 describes reassigning a departing
+         *     practitioner's caseload in bulk; that needs a selection UI and an answer for
+         *     what happens when 40 of 50 succeed. Slice E owns it, alongside the list that
+         *     would drive the selection.
+         */
+        post: operations["clientOwnerReassign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a client's diet plans
+         * @description Every plan for one client — API §8.1.
+         */
+        get: operations["planList"];
+        put?: never;
+        /**
+         * Create a diet plan
+         * @description Create a plan and its first draft version — API §8.2, FR-M4-032.
+         *
+         *     🔒 Both, atomically. A plan with no version is not a state a practitioner can
+         *     use, so the API never produces one. A second draft on the same plan is
+         *     refused by ``uq_diet_plan_versions__one_draft`` with a 409.
+         */
+        post: operations["planCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/portal-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get portal access status
+         * @description Read a client's portal access status.
+         */
+        get: operations["clientsGetPortalAccess"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/portal-access/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grant portal access and send magic link
+         * @description Grant portal access and send a magic link to the client.
+         */
+        post: operations["clientsResendPortalAccess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore an archived client
+         * @description Bring an archived client back — EC-M1-02, AC-M1-007.
+         *
+         *     🔒 Returns them to the stage they were archived at. A returning client is
+         *     reactivated in place; there is never a second record.
+         *
+         *     🔒 Returns **402** when the restored stage is ``active`` and the plan is at
+         *     its ceiling (EC-M1-06) — archiving frees a slot, so restoring takes one back.
+         */
+        post: operations["clientsRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change a client's lifecycle stage
+         * @description Move a client between stages — ADR-A06, FR-M1-015.
+         *
+         *     🔒 Returns **402** with the limit, the usage, the plan and the upgrade path
+         *     when the move enters ``active`` at the plan's ceiling (FR-M1-002). The error
+         *     envelope carries everything the UI needs to explain the refusal, so there is
+         *     no second request to make.
+         *
+         *     🔒 AC-M1-003 — converting a lead keeps the record, its identifier and all its
+         *     prior history, because this changes a column rather than moving a row.
+         */
+        post: operations["clientsChangeStage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a client's tags */
+        get: operations["clientTagsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Apply a tag to a client
+         * @description Apply a tag — idempotent, and ``PUT`` for exactly that reason.
+         *
+         *     Applying a label twice is indistinguishable from applying it once, so the
+         *     second call has nothing to report. Refusing it would make the UI's tag toggle
+         *     behave differently depending on how fast the practitioner clicks.
+         */
+        put: operations["clientTagsAttach"];
+        post?: never;
+        /**
+         * Remove a tag from a client
+         * @description Remove a tag — a real delete, and the one place in the module that is true.
+         *
+         *     The junction row asserts "this client carries this label"; withdrawn, it
+         *     records nothing that happened. Compare ``client_assignments``, revoked rather
+         *     than deleted precisely because *it* records a decision.
+         */
+        delete: operations["clientTagsDetach"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A client's unified timeline
+         * @description Reverse-chronological, cursor-paginated — FR-M1-018, NFR-006.
+         *
+         *     🔒 One indexed query regardless of how many modules feed the timeline, which
+         *     is the whole point of DDR-06's materialised projection and what keeps the
+         *     800 ms budget from eroding as S3–S6 add producers.
+         *
+         *     ⚠️ Repeated ``event_type`` params are OR within the field (API §6.2). An
+         *     absent one means everything — including event types this build cannot yet
+         *     produce, which is harmless: they simply match nothing.
+         */
+        get: operations["clientTimelineList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/clients/{client_id}/timeline/filters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The event types worth filtering by
+         * @description The filter list FR-M1-019 drives.
+         *
+         *     🔒 **Only event types something can actually produce.** ``timeline_event_type``
+         *     declares the full S3–S6 vocabulary up front (one enum migration rather than
+         *     nine), so offering every member would give a practitioner filters like "Plan
+         *     issued" that always return nothing — which reads as a broken timeline rather
+         *     than an unbuilt feature.
+         *
+         *     ⚠️ Client-scoped in its path but not in its content: it lists what *the
+         *     system* can produce, not what this client has. Making it depend on the
+         *     client's own history would mean a filter appearing and disappearing as
+         *     events age out, and a `SELECT DISTINCT` on every timeline load.
+         */
+        get: operations["clientTimelineFilters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/enquiries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List enquiries
+         * @description Every enquiry, newest first — API §7.2.
+         *
+         *     ⚠️ **Newest first, unlike the needs-response view.** This is the archive a
+         *     practitioner searches ("did she ever contact us?"); that one is a work queue
+         *     where the oldest is the most urgent. Same rows, opposite ordering, because
+         *     they answer opposite questions.
+         */
+        get: operations["enquiriesList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/enquiries/needs-response": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Enquiries awaiting a response
+         * @description 🔒 The work queue — FR-M2-011, AC-M2-005. **Oldest first.**
+         *
+         *     US-M2-03 is "so none are forgotten", and M2.2 prices a forgotten enquiry at
+         *     ₹2,500–4,000/month of recurring revenue. The oldest unanswered enquiry is the
+         *     most urgent one; a queue that buried it under today's arrivals would be the
+         *     failure this view exists to prevent.
+         *
+         *     ⚠️ Registered before ``/{submission_id}/respond`` matters not at all —
+         *     FastAPI matches literal segments ahead of parameters regardless of
+         *     declaration order. Named because a reader will wonder.
+         */
+        get: operations["enquiriesNeedsResponse"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/enquiries/{submission_id}/respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark an enquiry as answered
+         * @description Clear an enquiry from the needs-response queue — FR-M2-011.
+         *
+         *     🔒 **The row-level check runs here, not in the module.** ``enquiry.respond``
+         *     carries no ``owner_or_assigned`` policy because a submission has no
+         *     ``owner_user_id`` for one to inspect. So the client behind the enquiry is
+         *     loaded through ``clients.load_for_access`` and authorized explicitly — which
+         *     is what stops a practitioner clearing a colleague's enquiry (AC-M1-006).
+         *
+         *     ⚠️ ``leads`` could not do this itself: R3 forbids it importing ``clients``,
+         *     and the access model belongs to ``clients``. The router is the one layer
+         *     permitted to see both.
+         *
+         *     🔒 Idempotent — a second call keeps the original responder and timestamp.
+         */
+        post: operations["enquiriesMarkResponded"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/enquiry-forms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's enquiry form
+         * @description The practitioner's own form — API §7.2, FR-M2-001.
+         *
+         *     ⚠️ **A list, though MVP has exactly one.** API §7.2 names the endpoint
+         *     ``GET /app/enquiry-forms`` and FR-M2-012 makes several per tenant a Phase 2
+         *     feature. Returning a list now means the frontend's type does not change when
+         *     the second form arrives — a bare object would make that a breaking change to
+         *     the generated client.
+         *
+         *     🔒 Creates the form on first read if the tenant has none. See
+         *     ``leads.ensure_form``: doing it here rather than at registration keeps the
+         *     identity path from importing a domain module.
+         */
+        get: operations["enquiryFormsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/enquiry-forms/{form_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit the enquiry form
+         * @description Change the form's heading, introduction, or whether it accepts enquiries.
+         *
+         *     🔒 **Deactivating is how a practitioner closes their books** — EC-M2-07's
+         *     other half. The form 404s publicly while every submission it ever took stays
+         *     intact; migration 0015 revokes DELETE so there is no way to do otherwise.
+         *
+         *     ⚠️ No ``If-Match``. A form has one editor in the launch persona's practice and
+         *     the fields are independent — a lost update here costs a re-typed sentence,
+         *     where on a client record it would cost clinical data. ``PATCH /app/clients``
+         *     requires a precondition for that reason; this deliberately does not.
+         */
+        patch: operations["enquiryFormsUpdate"];
+        trace?: never;
+    };
+    "/api/v1/app/messaging/failures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent delivery failures across the practice
+         * @description AC-M8-007 — terminal failures, in one place a practitioner will look.
+         */
+        get: operations["messageFailures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/messaging/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The practice's message-type settings
+         * @description FR-M8-027 — the tenant-wide toggles and quiet hours.
+         */
+        get: operations["messagePreferenceList"];
+        /**
+         * Change a practice-wide message setting
+         * @description FR-M8-027 — disable a non-essential message type across the practice.
+         *
+         *     🔒 An essential template is refused here, before the write, so the
+         *     practitioner reads a sentence rather than a constraint violation. The
+         *     database carries the same rule, which is what makes it true regardless of
+         *     which path reaches the table.
+         */
+        put: operations["messagePreferenceUpdate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/messaging/scheduled/{scheduled_message_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a message that has not been sent
+         * @description FR-M8-028's other half.
+         *
+         *     ⚠️ Only a `pending` message can be cancelled. There is no "unsend": once the
+         *     engine has handed a message to a transport, the honest record is the delivery
+         *     log, and an endpoint that appeared to undo it would misinform the
+         *     practitioner about what their client saw.
+         */
+        post: operations["messageCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/messaging/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every message type this practice can send
+         * @description The eight MVP message types — FR-M8-013…020, FR-M8-026.
+         */
+        get: operations["messageTemplateList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/messaging/templates/{code}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A message template as the client will receive it
+         * @description 🔒 FR-M8-026 — "as their clients will receive it".
+         *
+         *     Rendered by :func:`modules.messaging.render`, the same function the dispatch
+         *     path uses. A preview produced by different code would be a preview of
+         *     something else, which is precisely the reassurance this requirement is for.
+         *
+         *     ⚠️ With no ``client_id`` the values are illustrative and ``is_sample`` says
+         *     so. Without that flag a practitioner could reasonably believe they were
+         *     looking at a real client's message.
+         */
+        get: operations["messageTemplatePreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/nutrition/foods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Foods
+         * @description Search the food catalogue (FR-M4-008, AC-M4-003, AC-M4-009).
+         */
+        get: operations["searchFoods"];
+        put?: never;
+        /**
+         * Create Custom Food
+         * @description Create a new custom food for this tenant (FR-M4-012, FR-M4-013).
+         */
+        post: operations["createCustomFood"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/nutrition/foods/{food_id}/portions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Food Portions
+         * @description The household measures a food can be added in (FR-M4-011, AC-M4-003).
+         *
+         *     🔒 The plan builder needs a ``measure_unit_id`` to add an item, and a food
+         *     carries several ("katori", "cup", "piece"). This is where the builder learns
+         *     them, and their gram equivalents, so the quantity a practitioner types in a
+         *     household measure resolves the same way the server later computes it.
+         */
+        get: operations["listFoodPortions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/plan-days/{day_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename a day */
+        patch: operations["planDayUpdate"];
+        trace?: never;
+    };
+    "/api/v1/app/plan-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a food to a slot
+         * @description FR-M4-024 — the plan's actual content.
+         */
+        post: operations["planItemAdd"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/plan-items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Take an item out of a slot
+         * @description 🔒 Refused at the database for a non-draft version — see :func:`delete_slot`.
+         */
+        delete: operations["planItemRemove"];
+        options?: never;
+        head?: never;
+        /** Change a quantity, measure, note or lock */
+        patch: operations["planItemUpdate"];
+        trace?: never;
+    };
+    "/api/v1/app/plan-slots/{slot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a slot and its items
+         * @description 🔒 Refused at the database for a non-draft version.
+         *
+         *     ``plan_slots__delete_draft_only`` (migration 0020) is a ``RESTRICTIVE``
+         *     policy, so the row is invisible to a ``DELETE`` unless its version is a
+         *     draft — independently of the service's own ``assert_draft``.
+         */
+        delete: operations["planSlotRemove"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename, retime, reorder or lock a slot
+         * @description FR-M4-025 — add, rename, remove and reorder.
+         */
+        patch: operations["planSlotUpdate"];
+        trace?: never;
+    };
+    "/api/v1/app/plan-versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a plan version with its nutrition and budget
+         * @description 🔒 API §8.3 — every nutrition figure and ``resolved_grams`` server-computed.
+         *
+         *     The client never converts a portion or sums a nutrient. A mismatch between
+         *     what is displayed and what is stored would be a clinical defect, not a
+         *     presentation bug (NFR-072).
+         */
+        get: operations["planVersionRead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a draft's metadata and targets
+         * @description Title, goal, validity, notes and targets — API §8.3.
+         */
+        patch: operations["planVersionUpdate"];
+        trace?: never;
+    };
+    "/api/v1/app/plan-versions/{version_id}/days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a day to a draft
+         * @description FR-M4-026 — a plan grows a day at a time.
+         */
+        post: operations["planDayAdd"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/plan-versions/{version_id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discard a draft
+         * @description 🔒 A state, not a delete. DDR-11 keeps the record of what was tried.
+         */
+        post: operations["planVersionDiscard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/plan-versions/{version_id}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a draft plan version
+         * @description 🔒 The only path from ``draft`` to ``issued`` — API §8.6.
+         *
+         *     ⚠️ The snapshot this freezes is still Slice 1.3's placeholder rather than the
+         *     resolved plan; rewriting it against the resolver is its own slice. The route
+         *     is moved here from the old ``/app/nutrition/plans/...`` prefix so that every
+         *     plan operation sits under the paths API §8.1 specifies.
+         */
+        post: operations["planVersionIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/plan-versions/{version_id}/slots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a meal slot to a day
+         * @description FR-M4-025 — practitioners add, rename, remove and reorder slots.
+         */
+        post: operations["planSlotAdd"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a plan and its version history
+         * @description 🔒 AC-M4-008 — a revision is issued while the prior version stays retrievable.
+         */
+        get: operations["planRead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tenant's tags
+         * @description Every live tag, alphabetical and case-insensitively ordered.
+         */
+        get: operations["tagsList"];
+        put?: never;
+        /**
+         * Create a tag
+         * @description Define a tag — FR-M1-008.
+         *
+         *     🔒 Refuses a duplicate case-insensitively: a practitioner with "PCOS" who
+         *     types "pcos" means the tag they already have, and a second one would split
+         *     their caseload across two labels that look identical in a filter.
+         */
+        post: operations["tagsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/app/tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Retire a tag
+         * @description Retire a tag — a soft delete.
+         *
+         *     ⚠️ Leaves its applications in place, so a tag retired by mistake can be
+         *     brought back with its clients intact. The name is released for reuse, because
+         *     ``uq_tags__tenant_name`` is partial on the archive flag.
+         */
+        delete: operations["tagsArchive"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portal/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Drain the client's offline queue
+         * @description Apply a batch of queued operations — API §12.4, FR-M7-012, EC-M7-05.
+         *
+         *     🔒 **Four guarantees, and each is a line of code below rather than a hope:**
+         *
+         *     1. **A single bad operation never fails the batch.** Every operation runs
+         *        inside its own ``SAVEPOINT``. Without one, a constraint violation aborts
+         *        the request's transaction and PostgreSQL refuses every subsequent
+         *        statement — so one replayed log would discard a week of queued data,
+         *        which is the exact failure this endpoint exists to prevent.
+         *     2. **``duplicate`` is a success state.** Decided by the unique index, not by
+         *        a prior read: two replays of one queue arriving together would both pass
+         *        a ``SELECT`` and both insert.
+         *     3. **Client logs are never discarded.** An operation that cannot be applied
+         *        comes back ``rejected`` with a code the PWA can branch on, so it stays
+         *        queued rather than vanishing.
+         *     4. **``plan_changed`` is answered from the snapshot hash** (DDR-12), so the
+         *        PWA refreshes deliberately instead of swapping content under the reader.
+         *
+         *     🔒 **The client is the token's subject.** Nothing in the request body can
+         *     name a client, and ``AdherencePayload`` / ``MeasurementPayload`` refuse
+         *     unknown keys, so a payload carrying ``client_id`` is rejected rather than
+         *     ignored. Pattern C then confines every write at the database.
+         */
+        post: operations["portalSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portal/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Everything the portal's landing view needs
+         * @description The aggregate — ADR-A09, API §12.2.
+         *
+         *     🔒 The client is read from the verified token, never from a parameter, and
+         *     every read below runs inside a transaction whose ``app.actor_id`` is that
+         *     client. Pattern C makes the two agree at the database rather than here.
+         */
+        get: operations["portalToday"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in
+         * @description 🔒 One error for every failure mode (NFR-043).
+         */
+        post: operations["authLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a new password
+         * @description 🔒 Revokes every session for the account (NFR-042).
+         */
+        post: operations["authPasswordResetConfirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/password-reset/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a password reset
+         * @description 🔒 202 with an identical body whether or not the address is known.
+         */
+        post: operations["authPasswordResetRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate the session
+         * @description 🔒 DDR-05 — rotate, and revoke the family on reuse.
+         *
+         *     Public because a caller with an expired access token must still be able to
+         *     renew; the refresh token is the credential being presented.
+         */
+        post: operations["authRefresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register a practice
+         * @description Create a tenant and its owner (FR-M0-001).
+         *
+         *     🔒 201 with the same body whether the address was free or already taken. The
+         *     difference is which email the address receives — confirmation, or a "someone
+         *     tried to register with your address" notice (API §2.2).
+         */
+        post: operations["authRegister"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/auth/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm an email address
+         * @description Redeem a verification token and sign the user in (FR-M0-002).
+         */
+        post: operations["authVerifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/forms/{tenant_slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The public enquiry form
+         * @description The form a shareable link resolves to — FR-M2-001, API §11.1.
+         *
+         *     🔒 **404 for unknown, inactive and suspended alike** (EC-M2-07). API §11.1 is
+         *     explicit that a suspended tenant returns 404 "with a neutral message — never
+         *     'this practitioner hasn't paid'". Distinguishing the cases would publish a
+         *     fact about someone's business that nobody asked us to publish.
+         *
+         *     ⚠️ Runs with **no tenant scope**. Resolving the slug is what establishes the
+         *     tenant, so the read happens under migration 0015's ``enquiry_forms__public_read``
+         *     policy — the only tenant-less read in the codebase, and one whose row API §11.1
+         *     calls "effectively public information".
+         */
+        get: operations["publicEnquiryForm"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/forms/{tenant_slug}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit an enquiry
+         * @description Accept an enquiry — FR-M2-005, API §11.2.
+         *
+         *     🔒 **202 with an identical body in every accepted case.** New client, matched
+         *     client (EC-M2-02), or silently-dropped spam (EC-M2-03) — one response. The
+         *     two refusals that *are* visible are the ones the submitter can act on: a 403
+         *     for declined consent (EC-M2-04) and a 422 for a malformed mobile (EC-M2-01).
+         *
+         *     🔒 **Never metered** (EC-M2-06, FR-M1-003). A tenant at their client limit
+         *     still accepts enquiries; the limit binds at conversion to `active`.
+         */
+        post: operations["publicEnquirySubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/health": {
         parameters: {
             query?: never;
@@ -52,10 +1892,773 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/portal/access/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem a portal link
+         * @description Exchange a magic link for a client session (FR-M0-005).
+         *
+         *     🔒 Single use and expiry are enforced by the redeeming UPDATE (DDR-04), so
+         *     two taps on the same link cannot both open a session.
+         */
+        post: operations["portalAccessRedeem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/portal/access/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a portal link
+         * @description 🔒 Self-service link re-request (EC-M7-01).
+         *
+         *     ⚠️ **On the critical path, not an error path.** With a 15–30 minute expiry, a
+         *     client opening a WhatsApp message an hour later *will* need a new link, and
+         *     this must never require the practitioner.
+         *
+         *     🔒 Always 202 with an identical body. Anything else makes this a
+         *     client-enumeration oracle against a practitioner's client list.
+         */
+        post: operations["portalAccessRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/webhooks/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Provider webhook verification challenge
+         * @description Meta's one-time registration handshake.
+         *
+         *     🔒 Echoes the challenge **only** when the token matches the configured one.
+         *     Echoing unconditionally would let anyone register our endpoint against their
+         *     own app and start feeding it callbacks.
+         *
+         *     ⚠️ Returns 403 rather than 401 on a mismatch, because Meta treats 403 as
+         *     "verification failed" and shows it in their console; a 401 is reported as a
+         *     transport error and sends the operator looking in the wrong place.
+         */
+        get: operations["webhookVerify"];
+        put?: never;
+        /**
+         * Provider delivery-status callback
+         * @description Accept a delivery receipt, queue it, and acknowledge.
+         *
+         *     🔒 The signature is checked against the **raw body**, before it is parsed.
+         *     JSON round-tripping changes key order and whitespace, and the signature is
+         *     over the bytes the provider sent.
+         *
+         *     🔒 A failure returns 401 with no body (API §11.3). No detail: an unsigned
+         *     caller learns only that it was refused.
+         */
+        post: operations["webhookReceive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AcceptedResponse
+         * @description 🔒 The deliberately uninformative acknowledgement.
+         *
+         *     Returned by password reset whether or not the address is registered. The
+         *     message is phrased conditionally — "if an account exists" — so it is honest
+         *     in both cases rather than implying an account was found.
+         */
+        AcceptedResponse: {
+            /**
+             * Message
+             * @default If an account exists for that address, a reset link is on its way.
+             */
+            message: string;
+        };
+        /**
+         * ActivityLevel
+         * @description Habitual activity, for requirement estimation — DB §7.4.
+         *
+         *     ⚠️ 🟡 **PROPOSED.** DB §7.4 names the column and its type and stops there.
+         *     These five are the standard Harris-Benedict / Mifflin-St Jeor activity
+         *     multipliers' labels, which is what the column exists to feed — but the
+         *     wording a practitioner sees is a §9 review question (Gate G4).
+         * @enum {string}
+         */
+        ActivityLevel: "sedentary" | "light" | "moderate" | "active" | "very_active";
+        /**
+         * ActorType
+         * @description Who performed an action, for audit attribution (DB §15.1).
+         * @enum {string}
+         */
+        ActorType: "practitioner" | "client" | "operator" | "system" | "anonymous";
+        /** AnswerIssueResponse */
+        AnswerIssueResponse: {
+            /** Field Id */
+            field_id: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * ArchivedFilter
+         * @description Whether archived clients appear — FR-M1-014.
+         *
+         *     🔒 DB §22.2: "Archived clients — excluded from lists, search, entitlement
+         *     count, all messaging." So ``EXCLUDE`` is the default and the partial indexes
+         *     carry the predicate.
+         *
+         *     ⚠️ ``ONLY`` exists because a practitioner who archived somebody by mistake
+         *     needs to find them to restore them (EC-M1-02), and a client who cannot be
+         *     found cannot be restored. Without it the archive is a one-way door.
+         * @enum {string}
+         */
+        ArchivedFilter: "exclude" | "only" | "include";
+        /**
+         * AssessmentCompletionResponse
+         * @description What completing an assessment produced — API §7.3.
+         *
+         *     🔒 Three things in one response because they are one transaction: the
+         *     administration, the DDR-08 projection it wrote, and what is derived from the
+         *     measurement it recorded. A practitioner who submits a form needs to see that
+         *     the projection actually picked the answers up (AC-M3-002's "usable for
+         *     planning"), and a second round trip to find out is a second chance to not
+         *     bother.
+         */
+        AssessmentCompletionResponse: {
+            assessment: components["schemas"]["AssessmentResponseBody"];
+            derived: components["schemas"]["DerivedMetricsResponse"];
+            nutrition_profile: components["schemas"]["NutritionProfileResponse"] | null;
+        };
+        /**
+         * AssessmentResponseBody
+         * @description One administration — FR-M3-007.
+         *
+         *     ⚠️ ``completion_percent`` counts **non-clinical sections only**. A coach who
+         *     skipped every clinical section legitimately reads 100%, because "usable for
+         *     planning" is decided by the projection, not by how many boxes were filled.
+         */
+        AssessmentResponseBody: {
+            /** Answers */
+            answers: Record<string, never>;
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /** Completed At */
+            completed_at: string | null;
+            completed_by: components["schemas"]["ActorType"] | null;
+            /** Completed Sections */
+            completed_sections: string[];
+            /** Completion Percent */
+            completion_percent: string;
+            definition: components["schemas"]["DefinitionResponse"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            status: components["schemas"]["ResponseStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * AssessmentSummary
+         * @description An administration in a list — FR-M3-007, AC-M3-007.
+         *
+         *     ⚠️ No answers. The list is for choosing which administration to open, and
+         *     shipping every answer set would put a client's full history in a response
+         *     that is rendered as five rows.
+         */
+        AssessmentSummary: {
+            /** Completed At */
+            completed_at: string | null;
+            completed_by: components["schemas"]["ActorType"] | null;
+            /** Definition Code */
+            definition_code: string;
+            /** Definition Version */
+            definition_version: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            status: components["schemas"]["ResponseStatus"];
+        };
+        /**
+         * AttachDocumentRequest
+         * @description Label an already-confirmed upload — FR-M3-024.
+         *
+         *     🔒 The upload itself went through ``platform.storage``: type and size
+         *     allowlists (EC-M3-04) and the tenant quota (EC-M3-07) were applied *before*
+         *     any bytes moved, which is the only moment refusing is free.
+         */
+        AttachDocumentRequest: {
+            /** Description */
+            description?: string | null;
+            /** Document Date */
+            document_date?: string | null;
+            /** Document Type */
+            document_type: string;
+            /**
+             * File Id
+             * Format: uuid
+             */
+            file_id: string;
+        };
+        /**
+         * BulkReassignRequest
+         * @description Hand several clients to one practitioner — EC-M1-04.
+         */
+        BulkReassignRequest: {
+            /** Client Ids */
+            client_ids: string[];
+            /**
+             * Owner User Id
+             * Format: uuid
+             */
+            owner_user_id: string;
+        };
+        /**
+         * BulkReassignResponse
+         * @description What actually moved.
+         *
+         *     ⚠️ ``moved`` can be lower than the number of ids submitted, and that is not
+         *     a partial failure: clients already owned by the target are skipped, which in
+         *     an overlapping bulk selection is the correct outcome rather than an error.
+         */
+        BulkReassignResponse: {
+            /** Moved */
+            moved: number;
+            /** Requested */
+            requested: number;
+        };
+        /**
+         * Capabilities
+         * @description 🔒 API §12.6 — what the client may do, stated rather than inferred.
+         *
+         *     The UI must never have to work this out from a stage, a status or an error it
+         *     happened to receive. Every portal response carries this object.
+         */
+        Capabilities: {
+            /** Can Log Adherence */
+            can_log_adherence: boolean;
+            /** Can Log Measurements */
+            can_log_measurements: boolean;
+            /** Can Upload */
+            can_upload: boolean;
+            /** Can View Plan */
+            can_view_plan: boolean;
+        };
+        /**
+         * CheckinFrequency
+         * @description DB §11.7 — FR-M8-022.
+         * @enum {string}
+         */
+        CheckinFrequency: "weekly" | "fortnightly" | "monthly";
+        /**
+         * CheckinScheduleRequest
+         * @description Configure or pause a client's check-ins.
+         */
+        CheckinScheduleRequest: {
+            /** Day Of Week */
+            day_of_week?: number | null;
+            /** @default weekly */
+            frequency: components["schemas"]["CheckinFrequency"];
+            /**
+             * Is Paused
+             * @default false
+             */
+            is_paused: boolean;
+            /**
+             * Time Of Day
+             * Format: time
+             * @default 09:00:00
+             */
+            time_of_day: string;
+        };
+        /**
+         * CheckinScheduleResponse
+         * @description A client's check-in cadence — FR-M8-022…024.
+         */
+        CheckinScheduleResponse: {
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /** Day Of Week */
+            day_of_week: number | null;
+            frequency: components["schemas"]["CheckinFrequency"];
+            /** Is Paused */
+            is_paused: boolean;
+            /** Last Generated For */
+            last_generated_for: string | null;
+            /** Next Due On */
+            next_due_on: string | null;
+            /**
+             * Time Of Day
+             * Format: time
+             */
+            time_of_day: string;
+        };
+        /**
+         * ClientCreateRequest
+         * @description FR-M1-004 — name plus one contact method is the whole requirement.
+         *
+         *     🔒 Everything else is optional. A practitioner capturing a lead mid-call has
+         *     a name and a number; a form demanding more is a form they abandon, and
+         *     NFR-011 budgets the whole interaction at three steps.
+         */
+        ClientCreateRequest: {
+            /** City */
+            city?: string | null;
+            /** Date Of Birth */
+            date_of_birth?: string | null;
+            dietary_class?: components["schemas"]["DietaryClass"] | null;
+            /** Email */
+            email?: string | null;
+            /** Full Name */
+            full_name: string;
+            /** Mobile */
+            mobile?: string | null;
+            /** Owner User Id */
+            owner_user_id?: string | null;
+            /**
+             * Preferred Language
+             * @default en
+             */
+            preferred_language: string;
+            sex?: components["schemas"]["SexType"] | null;
+            /** Source */
+            source?: string | null;
+            /** Source Detail */
+            source_detail?: string | null;
+            /**
+             * Stage
+             * @default lead
+             * @enum {string}
+             */
+            stage: "lead" | "contacted" | "consultation_scheduled" | "active" | "paused" | "churned";
+        };
+        /**
+         * ClientDocumentResponse
+         * @description A document's metadata. The bytes are fetched separately (FR-M0-038).
+         */
+        ClientDocumentResponse: {
+            /** Archived At */
+            archived_at: string | null;
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /** Document Date */
+            document_date: string | null;
+            /** Document Type */
+            document_type: string;
+            /**
+             * File Id
+             * Format: uuid
+             */
+            file_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            uploaded_by: components["schemas"]["ActorType"];
+        };
+        /**
+         * ClientListItemResponse
+         * @description One row of the client list — API §7.1.
+         *
+         *     🔒 ``owner_name`` is denormalised into the response to avoid an N+1 (API
+         *     §7.1) and because Principle 3 makes it the server's job to supply what the
+         *     client renders rather than something the UI resolves per row.
+         *
+         *     ⏳ ``is_at_risk``, ``last_activity_at`` and ``active_plan_version_id`` are
+         *     absent. API §7.1 lists them and DDR-13 requires at-risk state to be
+         *     *precomputed* into ``client_daily_metrics`` — a table S7 creates. Computing
+         *     them live is the read-time aggregation DDR-13 exists to reject, and shipping
+         *     a field that is permanently ``false`` would be worse than its absence.
+         */
+        ClientListItemResponse: {
+            /** Archived At */
+            archived_at: string | null;
+            /** City */
+            city: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            dietary_class: components["schemas"]["DietaryClass"] | null;
+            /** Email */
+            email: string | null;
+            /** Full Name */
+            full_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Mobile */
+            mobile: string | null;
+            /** Owner Name */
+            owner_name: string | null;
+            /**
+             * Owner User Id
+             * Format: uuid
+             */
+            owner_user_id: string;
+            stage: components["schemas"]["ClientStage"];
+            /** Tags */
+            tags: components["schemas"]["ClientTagSummary"][];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ClientListResponse
+         * @description API §5.1's collection envelope.
+         */
+        ClientListResponse: {
+            /** Items */
+            items: components["schemas"]["ClientListItemResponse"][];
+            page: components["schemas"]["ClientPageInfo"];
+        };
+        /**
+         * ClientPageInfo
+         * @description Where the next page resumes — API §6.1.
+         */
+        ClientPageInfo: {
+            /** Has More */
+            has_more: boolean;
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /**
+         * ClientPatch
+         * @description A partial edit — API §4.4.
+         *
+         *     ⚠️ **No ``stage``** (ADR-A06). Present-and-null is a meaningful edit here
+         *     (clearing an email), so the model distinguishes "absent" from "null" via
+         *     ``model_fields_set`` rather than treating ``None`` as "unchanged".
+         */
+        ClientPatch: {
+            /** City */
+            city?: string | null;
+            /** Client Nutrition Visibility */
+            client_nutrition_visibility?: boolean | null;
+            /** Date Of Birth */
+            date_of_birth?: string | null;
+            dietary_class?: components["schemas"]["DietaryClass"] | null;
+            /** Email */
+            email?: string | null;
+            /** Full Name */
+            full_name?: string | null;
+            /** Mobile */
+            mobile?: string | null;
+            /** Preferred Language */
+            preferred_language?: string | null;
+            sex?: components["schemas"]["SexType"] | null;
+        };
+        /**
+         * ClientResponse
+         * @description One client, as the practitioner realm sees it — API §7.1.
+         */
+        ClientResponse: {
+            /** Activated At */
+            activated_at: string | null;
+            /** Archived At */
+            archived_at: string | null;
+            /** City */
+            city: string | null;
+            /** Client Nutrition Visibility */
+            client_nutrition_visibility: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Date Of Birth */
+            date_of_birth: string | null;
+            dietary_class: components["schemas"]["DietaryClass"] | null;
+            /** Email */
+            email: string | null;
+            /** Full Name */
+            full_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Minor */
+            is_minor: boolean | null;
+            /** Mobile */
+            mobile: string | null;
+            /**
+             * Owner User Id
+             * Format: uuid
+             */
+            owner_user_id: string;
+            /** Preferred Language */
+            preferred_language: string;
+            sex: components["schemas"]["SexType"] | null;
+            /** Source */
+            source: string | null;
+            /** Source Detail */
+            source_detail: string | null;
+            stage: components["schemas"]["ClientStage"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ClientSort
+         * @description How the list may be ordered — FR-M1-022.
+         *
+         *     🔒 **A closed enum, because every value must be indexed.** API §6.3
+         *     allowlists sort columns per endpoint precisely so an unindexed sort cannot
+         *     reach production. Free-text `?sort=` would be a full scan on whichever
+         *     column somebody guessed.
+         *
+         *     ⚠️ FR-M1-022 asks for "name, recent activity and creation date". *Recent
+         *     activity* maps to ``updated_at`` in this slice, and that is an approximation
+         *     worth stating: a true activity clock spans appointments, messages and plan
+         *     events, which DDR-13 precomputes into ``client_daily_metrics`` — a table S7
+         *     creates. ``updated_at`` moves on every write to the client record, which is
+         *     the closest honest signal available now, and the enum value is named for the
+         *     intent so the column beneath it can change without breaking callers.
+         * @enum {string}
+         */
+        ClientSort: "name" | "recent_activity" | "created";
+        /**
+         * ClientSortOption
+         * @description One ordering the list offers — API §6.3.
+         *
+         *     🔒 A declared model rather than a bare ``dict[str, str]``, and the reason is
+         *     NFR-079: the generated client is the contract. A dict serialises to
+         *     ``{[key: string]: string}``, which types the *shape* of a map and tells the
+         *     frontend nothing about ``value`` or ``label`` — so a renamed field would
+         *     reach a dropdown as ``undefined`` instead of failing the build.
+         */
+        ClientSortOption: {
+            /** Label */
+            label: string;
+            value: components["schemas"]["ClientSort"];
+        };
+        /**
+         * ClientStage
+         * @description The lifecycle — DB §5.2, M1.4. 🟡 Values PROPOSED pending OD-01.
+         *
+         *     🔒 One entity, seven stages. A ``lead`` and an ``active`` client are the same
+         *     row; the stage is what differs. That is what makes AC-M1-003 ("converting a
+         *     lead retains the original record, its identifier, and all prior history")
+         *     true by construction rather than by careful copying.
+         * @enum {string}
+         */
+        ClientStage: "lead" | "contacted" | "consultation_scheduled" | "active" | "paused" | "churned" | "archived";
+        /**
+         * ClientTagSummary
+         * @description A tag as the list renders it — API §7.1's `{id, name, color}`.
+         *
+         *     ⚠️ Spelled ``colour`` here, matching ``TagColour`` and the rest of the
+         *     codebase. API §7.1 writes `color`; the inconsistency is the spec's, and
+         *     matching the code the frontend already generates types from is worth more
+         *     than matching the prose.
+         */
+        ClientTagSummary: {
+            /** Colour */
+            colour: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ConsultationNoteResponse
+         * @description One consultation note.
+         *
+         *     🔒 **Never reaches a client-facing surface.** There is no portal endpoint
+         *     that returns this model, `consultation_notes` has no client-realm RLS policy,
+         *     and no timeline row is written for one. Three mechanisms, none of which is a
+         *     condition somebody could get wrong (FR-M3-021, AC-M3-006).
+         */
+        ConsultationNoteResponse: {
+            /** Archived At */
+            archived_at: string | null;
+            /**
+             * Author User Id
+             * Format: uuid
+             */
+            author_user_id: string;
+            /** Body */
+            body: string;
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Note Date
+             * Format: date
+             */
+            note_date: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** CreateCustomFoodRequest */
+        CreateCustomFoodRequest: {
+            /**
+             * Category Id
+             * Format: uuid
+             */
+            category_id: string;
+            dietary_class: components["schemas"]["DietaryClass"];
+            /** Name */
+            name: string;
+        };
+        /**
+         * CurrentSessionResponse
+         * @description Who the caller is — identifiers and role, nothing else.
+         *
+         *     🔒 **No name, email or phone** (NFR-033). ``TokenResponse`` says the client
+         *     "fetches its own profile from a dedicated endpoint"; this is that endpoint,
+         *     and it deliberately answers the *authorization* question rather than the
+         *     display one. The UI needs ``user_id`` to know which notes it may edit
+         *     (FR-M3-020) and ``role`` to know whether to offer access management
+         *     (FR-M0-017) — neither needs a name.
+         */
+        CurrentSessionResponse: {
+            role: components["schemas"]["UserRole"];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /** DayCreateRequest */
+        DayCreateRequest: {
+            /** Label */
+            label?: string | null;
+            /** Slot Types */
+            slot_types?: components["schemas"]["MealSlotType"][] | null;
+        };
+        /** DayPatch */
+        DayPatch: {
+            /** Label */
+            label: string;
+        };
+        /** DayResponse */
+        DayResponse: {
+            /** Day Number */
+            day_number: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Plan Version Id
+             * Format: uuid
+             */
+            plan_version_id: string;
+        };
+        /**
+         * DefinitionResponse
+         * @description The structure an administration was captured under — FR-M3-003.
+         */
+        DefinitionResponse: {
+            /** Code */
+            code: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Sections */
+            sections: components["schemas"]["SectionResponse"][];
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
         /**
          * DependencyStatus
          * @description State of one dependency.
@@ -72,6 +2675,544 @@ export interface components {
             status: "ok" | "degraded" | "unavailable" | "not_configured";
         };
         /**
+         * DerivedMetricsResponse
+         * @description Server-computed anthropometry — API §7.3.
+         *
+         *     🔒 **Server-computed, never sent up.** A BMI calculated in the browser is a
+         *     clinical figure the server cannot vouch for, and two clients would disagree
+         *     the first time one rounded differently.
+         *
+         *     ⚠️ 🔒 **``bmi_band``, ``bmi_band_source``, ``estimated_energy_kcal`` and
+         *     ``calculation_method`` are always ``null``, and that is the contract.** OD-08
+         *     (Indian BMI cut-offs differ from WHO) and OD-13 (which energy equation) are
+         *     both unresolved, and the implementation plan's DoD forbids displaying a
+         *     clinical threshold or an equation result without a citation. The fields exist
+         *     so that resolving either needs no contract change; ``bmi_band_source`` is
+         *     where the citation goes, which is why a band can never appear without one.
+         */
+        DerivedMetricsResponse: {
+            /** Bmi */
+            bmi: string | null;
+            /** Bmi Band */
+            bmi_band?: null;
+            /** Bmi Band Source */
+            bmi_band_source?: null;
+            /** Calculation Method */
+            calculation_method?: null;
+            /** Estimated Energy Kcal */
+            estimated_energy_kcal?: null;
+            /** Waist Hip Ratio */
+            waist_hip_ratio: string | null;
+        };
+        /**
+         * DietaryClass
+         * @description What the person eats — DB §8.5, FR-M4-035.
+         *
+         *     🔒 Lives on the *client*, not the plan (DB §5.1): it is a property of the
+         *     person, and it filters food search at authoring time, before a plan exists.
+         *
+         *     ``JAIN`` is not a stricter vegetarian in a way a boolean could express — it
+         *     excludes root vegetables, which is a different axis from animal products
+         *     entirely, and collapsing it would put onion in a Jain client's plan.
+         * @enum {string}
+         */
+        DietaryClass: "vegetarian" | "eggetarian" | "non_vegetarian" | "vegan" | "jain";
+        /**
+         * DispatchResponse
+         * @description One delivery attempt — FR-M8-003, FR-M8-011.
+         *
+         *     ⚠️ ``failure_reason`` is the provider's own text. It is shown to the
+         *     *practitioner*, who needs to know why their client did not receive something,
+         *     and must never be forwarded to a client.
+         */
+        DispatchResponse: {
+            /** Attempt Number */
+            attempt_number: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Delivered At */
+            delivered_at: string | null;
+            /** Failure Code */
+            failure_code: string | null;
+            /** Failure Reason */
+            failure_reason: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Read At */
+            read_at: string | null;
+            /** Recipient Address */
+            recipient_address: string;
+            /** Sent At */
+            sent_at: string | null;
+            status: components["schemas"]["DispatchStatus"];
+            /** Template Code */
+            template_code: string;
+            /** Template Version */
+            template_version: number;
+            transport: components["schemas"]["TransportType"];
+        };
+        /**
+         * DispatchStatus
+         * @description DB §11.3 — the provider-reported lifecycle of one attempt.
+         * @enum {string}
+         */
+        DispatchStatus: "queued" | "sent" | "delivered" | "read" | "failed" | "rejected";
+        /**
+         * DocumentUrlResponse
+         * @description A short-lived URL — FR-M0-038, NFR-035.
+         *
+         *     ⚠️ Delivery, not authorization. It must not be stored, logged or embedded
+         *     anywhere that outlives it.
+         */
+        DocumentUrlResponse: {
+            /** Url */
+            url: string;
+        };
+        /** EditNoteRequest */
+        EditNoteRequest: {
+            /** Body */
+            body: string;
+        };
+        /**
+         * EnquiryFormPatch
+         * @description A partial edit of the form — API §7.2's PATCH.
+         *
+         *     ⚠️ ``intro_text`` uses the model's own "was this key present" information
+         *     rather than a sentinel: ``model_fields_set`` distinguishes "clear the intro"
+         *     (sent as ``null``) from "leave it alone" (absent). Both arrive as ``None``,
+         *     and conflating them means a practitioner editing only the title silently
+         *     loses their intro text.
+         */
+        EnquiryFormPatch: {
+            /** Intro Text */
+            intro_text?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * EnquiryFormResponse
+         * @description The practitioner's own view of their form — API §7.2.
+         */
+        EnquiryFormResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Intro Text */
+            intro_text: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Share Url */
+            share_url: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * EnquiryListItemResponse
+         * @description One enquiry as the practitioner sees it — API §7.2.
+         *
+         *     🔒 Carries the **submitted** values, not the client's current ones (DB §6.2).
+         *     A practitioner triaging an enquiry needs what the prospect actually typed,
+         *     which may since have been corrected on the client record.
+         *
+         *     🔒 ``age_hours`` and ``is_ageing`` are server-computed (Principle 3) — a
+         *     browser deriving them would disagree across a timezone or a clock skew, and
+         *     the number deciding who gets called next would differ per device.
+         */
+        EnquiryListItemResponse: {
+            /** Age Hours */
+            age_hours: number;
+            /** Client Id */
+            client_id: string | null;
+            /** Client Owner User Id */
+            client_owner_user_id: string | null;
+            client_stage: components["schemas"]["ClientStage"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Ageing */
+            is_ageing: boolean;
+            /** Is Duplicate Of Existing */
+            is_duplicate_of_existing: boolean;
+            /** Owner Name */
+            owner_name: string | null;
+            /** Primary Goal */
+            primary_goal: string;
+            /** Responded At */
+            responded_at: string | null;
+            /** Responded By User Id */
+            responded_by_user_id: string | null;
+            source: components["schemas"]["LeadSource"] | null;
+            /** Source Detail */
+            source_detail: string | null;
+            /**
+             * Submitted At
+             * Format: date-time
+             */
+            submitted_at: string;
+            /** Submitted Email */
+            submitted_email: string | null;
+            /** Submitted Mobile */
+            submitted_mobile: string | null;
+            /** Submitted Name */
+            submitted_name: string;
+        };
+        /**
+         * EnquiryListResponse
+         * @description API §5.1's collection envelope.
+         */
+        EnquiryListResponse: {
+            /**
+             * Ageing After Hours
+             * @default 24
+             */
+            ageing_after_hours: number;
+            /** Items */
+            items: components["schemas"]["EnquiryListItemResponse"][];
+            page: components["schemas"]["EnquiryPageInfo"];
+        };
+        /**
+         * EnquiryPageInfo
+         * @description Where the next page resumes — API §6.1.
+         */
+        EnquiryPageInfo: {
+            /** Has More */
+            has_more: boolean;
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /**
+         * EnquirySubmitRequest
+         * @description API §11.2's request body.
+         *
+         *     ⚠️ Every constraint here is duplicated in ``kernel.leads`` and in the database
+         *     CHECKs, and the redundancy is deliberate: this one produces a field-level 422
+         *     the form can render inline (EC-M2-01), the kernel's is what any other caller
+         *     would hit, and the CHECK is what holds if both are bypassed.
+         */
+        EnquirySubmitRequest: {
+            /** Captcha Token */
+            captcha_token?: string | null;
+            /** Company */
+            company?: string | null;
+            /**
+             * Consent Granted
+             * @default false
+             */
+            consent_granted: boolean;
+            /** Consent Notice Id */
+            consent_notice_id?: string | null;
+            /** Elapsed Seconds */
+            elapsed_seconds?: number | null;
+            /** Email */
+            email?: string | null;
+            /** Full Name */
+            full_name: string;
+            /** Mobile */
+            mobile?: string | null;
+            /** Primary Goal */
+            primary_goal: string;
+            /** Source */
+            source?: string | null;
+            /** Source Detail */
+            source_detail?: string | null;
+        };
+        /**
+         * EnquirySubmitResponse
+         * @description 🔒 API §11.2's 202 — and the whole of what a submitter learns.
+         *
+         *     ⚠️ **No identifiers.** Not the client id, not the submission id, not whether
+         *     a record already existed. `message` comes from
+         *     `kernel.leads.acknowledgement()`, which takes no arguments and therefore
+         *     cannot vary on the match (EC-M2-02).
+         */
+        EnquirySubmitResponse: {
+            /** Message */
+            message: string;
+            /**
+             * Submitted
+             * @default true
+             */
+            submitted: boolean;
+        };
+        /**
+         * FieldResponse
+         * @description One question, as the renderer needs it — FR-M3-002.
+         *
+         *     🔒 **The frontend draws this without knowing what it asks.** That is the
+         *     whole of FR-M3-002: adding a question to the definition changes what this
+         *     endpoint returns, and no release is needed on either side.
+         */
+        FieldResponse: {
+            /** Help Text */
+            help_text: string | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Max Value */
+            max_value: string | null;
+            /** Min Value */
+            min_value: string | null;
+            /** Options */
+            options: string[];
+            /** Required */
+            required: boolean;
+            type: components["schemas"]["FieldType"];
+        };
+        /**
+         * FieldType
+         * @description The input types a definition may declare — DB §7.2 ``schema``.
+         *
+         *     🔒 **A closed set, and that is the point of FR-M3-002 being safe.** The
+         *     frontend renders a form from data it has never seen; it can only do that if
+         *     the vocabulary of types is fixed. Adding a *field* needs no release (the
+         *     requirement); adding a *type* needs one on both sides (acceptable, and rare).
+         *
+         *     ⚠️ ``FOOD_REF`` exists but nothing can populate it until S3 seeds the food
+         *     catalogue. It is declared now because DB §7.4 is explicit that allergens are
+         *     captured as food ids and **never as free text** — a missed allergen is a
+         *     clinical incident (FR-M5-006). Declaring the type now means the definition
+         *     that needs it does not also need a code change.
+         * @enum {string}
+         */
+        FieldType: "text" | "long_text" | "number" | "date" | "boolean" | "choice" | "multi_choice" | "scale" | "food_ref";
+        /** FoodItemResponse */
+        FoodItemResponse: {
+            /**
+             * Category Id
+             * Format: uuid
+             */
+            category_id: string;
+            dietary_class: components["schemas"]["DietaryClass"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Tenant Id */
+            tenant_id: string | null;
+        };
+        /**
+         * FoodPortionResponse
+         * @description One household measure a food can be entered in — FR-M4-011.
+         */
+        FoodPortionResponse: {
+            /** Gram Weight */
+            gram_weight: string;
+            /** Is Default */
+            is_default: boolean;
+            /**
+             * Measure Unit Id
+             * Format: uuid
+             */
+            measure_unit_id: string;
+            /** Measure Unit Name */
+            measure_unit_name: string;
+        };
+        /**
+         * GoalType
+         * @description What the client is trying to achieve — DB §7.4, PRD §9.5.
+         *
+         *     ⚠️ 🟡 **PROPOSED**, and taken verbatim from PRD §9.5's own proposed list so
+         *     that a Gate G4 revision has one place to land.
+         * @enum {string}
+         */
+        GoalType: "weight_loss" | "weight_gain" | "muscle_gain" | "manage_condition" | "improve_energy" | "improve_digestion" | "sports_performance" | "general_wellbeing" | "other";
+        /** GrantRequest */
+        GrantRequest: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
+         * GrantResponse
+         * @description One access grant — EC-M0-04.
+         *
+         *     ⚠️ Identifiers only, no names. Resolving a user id to a name is the caller's
+         *     job through the team endpoint; embedding it here would put a second copy of a
+         *     person's name in a response that is already about access control (NFR-033).
+         */
+        GrantResponse: {
+            /**
+             * Granted At
+             * Format: date-time
+             */
+            granted_at: string;
+            /**
+             * Granted By User Id
+             * Format: uuid
+             */
+            granted_by_user_id: string;
+            /** Is Live */
+            is_live: boolean;
+            /** Revoked At */
+            revoked_at: string | null;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HistoryPageInfo
+         * @description Where the next page resumes — API §6.1.
+         */
+        HistoryPageInfo: {
+            /** Has More */
+            has_more: boolean;
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** ItemCreateRequest */
+        ItemCreateRequest: {
+            /** Client Note */
+            client_note?: string | null;
+            /** Food Id */
+            food_id?: string | null;
+            /**
+             * Item Type
+             * @default food
+             */
+            item_type: string;
+            /** Meal Id */
+            meal_id?: string | null;
+            /**
+             * Measure Unit Id
+             * Format: uuid
+             */
+            measure_unit_id: string;
+            /** Notes */
+            notes?: string | null;
+            /** Quantity */
+            quantity: number | string;
+            /** Recipe Id */
+            recipe_id?: string | null;
+            /**
+             * Slot Id
+             * Format: uuid
+             */
+            slot_id: string;
+        };
+        /**
+         * ItemPatch
+         * @description ⚠️ No ``food_id``, and that is the point.
+         *
+         *     Swapping the food under a fixed item id would be a substitution wearing an
+         *     edit's clothes. The practitioner removes the item and adds the one they
+         *     meant, which lands in the audit log as two decisions rather than one silent
+         *     one — the same argument API §8.5 makes about recalculation never
+         *     substituting a food.
+         */
+        ItemPatch: {
+            /** Client Note */
+            client_note?: string | null;
+            /** Is Locked */
+            is_locked?: boolean | null;
+            /** Measure Unit Id */
+            measure_unit_id?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Quantity */
+            quantity?: number | string | null;
+            /** Sort Order */
+            sort_order?: number | null;
+        };
+        /** ItemResponse */
+        ItemResponse: {
+            /** Client Note */
+            client_note: string | null;
+            /** Food Id */
+            food_id: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Locked */
+            is_locked: boolean;
+            /** Item Type */
+            item_type: string;
+            /** Meal Id */
+            meal_id: string | null;
+            /**
+             * Measure Unit Id
+             * Format: uuid
+             */
+            measure_unit_id: string;
+            /** Notes */
+            notes: string | null;
+            /**
+             * Plan Slot Id
+             * Format: uuid
+             */
+            plan_slot_id: string;
+            /** Quantity */
+            quantity: string;
+            /** Recipe Id */
+            recipe_id: string | null;
+            /** Sort Order */
+            sort_order: number;
+        };
+        /**
+         * LeadSource
+         * @description Where an enquiry came from — FR-M2-009, US-M2-04.
+         *
+         *     ⚠️ 🟡 **PROPOSED.** FR-M2-009 requires "a lead source, either selected by the
+         *     prospect or derived from a link parameter" and names no vocabulary; DB §5.1
+         *     types ``clients.source`` as free text. These members are derived from §3.1's
+         *     competitive set and P1's own described channels — Instagram DMs, WhatsApp and
+         *     referrals — plus the two a form cannot avoid needing.
+         *
+         *     🔒 **A closed enum here, stored as text.** The column stays ``text`` (DB §5.1)
+         *     because a practitioner-entered source on a manual lead is legitimate and a
+         *     PostgreSQL enum would need a migration per channel. The closed set governs
+         *     what the *public form* may record — which is the half an attacker controls —
+         *     while :func:`normalise_source` keeps a hand-typed source from becoming a
+         *     second spelling of an existing one.
+         *
+         *     ⚠️ ``OTHER`` is a real answer, not a fallback for parse failure. US-M2-04 is
+         *     "which channel produces enquiries"; a bucket that silently absorbs
+         *     unrecognised values would make that question unanswerable exactly when a new
+         *     channel started working.
+         * @enum {string}
+         */
+        LeadSource: "instagram" | "whatsapp" | "referral" | "google" | "facebook" | "walk_in" | "other";
+        /**
          * LivenessResponse
          * @description Process is alive.
          */
@@ -82,6 +3223,706 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /** LoginRequest */
+        LoginRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Password */
+            password: string;
+        };
+        /** MacroTotalsResponse */
+        MacroTotalsResponse: {
+            /** Carbs G */
+            carbs_g: string;
+            /** Energy Kcal */
+            energy_kcal: string;
+            /** Fat G */
+            fat_g: string;
+            /** Fibre G */
+            fibre_g: string;
+            /** Protein G */
+            protein_g: string;
+        };
+        /**
+         * MealSlotType
+         * @description The meal slots a plan day is divided into — FR-M4-025.
+         *
+         *     🟡 **The vocabulary is PROPOSED and unconfirmed.** FR-M4-025 marks these seven
+         *     as a proposal, and Validation Gate G1 — the three practitioner sessions that
+         *     would settle them — has not been run.
+         *
+         *     ⚠️ **Deliberately not a PostgreSQL enum yet.** ``plan_slots.slot_type`` and
+         *     ``template_slots.slot_type`` stay ``text`` until the vocabulary is confirmed,
+         *     and the database type is created in the slice that also needs it for
+         *     ``foods.meal_suitability`` (DB §8.3). The asymmetry is why: ``ALTER TYPE …
+         *     ADD VALUE`` is cheap, but *removing* a value means rewriting the type and
+         *     every column using it — the same argument migration 0010 makes for
+         *     ``ClientStage.ARCHIVED``. Validating here costs nothing and commits nothing.
+         *
+         *     🔒 **This is a structural type, not a display name.** Renaming a slot
+         *     (FR-M4-025) sets ``plan_slots.custom_label``; it does not need a new member.
+         *     :attr:`CUSTOM` covers a slot a practitioner adds that is none of the seven.
+         * @enum {string}
+         */
+        MealSlotType: "early_morning" | "breakfast" | "mid_morning" | "lunch" | "evening_snack" | "dinner" | "bedtime" | "custom";
+        /**
+         * MeasurementResponse
+         * @description One dated measurement, with what is derived from it — FR-M3-012.
+         *
+         *     🔒 ``bmi`` and ``waist_hip_ratio`` are **computed on read and never stored**.
+         *     A corrected weight corrects them everywhere at once.
+         *
+         *     ⚠️ 🔒 **No band, no label, no colour.** OD-08 is unresolved — Indian BMI
+         *     cut-offs differ from WHO — and the implementation plan's DoD forbids
+         *     displaying a clinical threshold without a citation. A number is a fact;
+         *     "overweight" is a judgement we are not yet entitled to publish.
+         */
+        MeasurementResponse: {
+            /** Bmi */
+            bmi: string | null;
+            /** Body Fat Pct */
+            body_fat_pct: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Height Cm */
+            height_cm: string | null;
+            /** Hip Cm */
+            hip_cm: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Flagged Implausible */
+            is_flagged_implausible: boolean;
+            /**
+             * Measured On
+             * Format: date
+             */
+            measured_on: string;
+            /** Notes */
+            notes: string | null;
+            source: components["schemas"]["MeasurementSource"];
+            /** Waist Cm */
+            waist_cm: string | null;
+            /** Waist Hip Ratio */
+            waist_hip_ratio: string | null;
+            /** Weight Kg */
+            weight_kg: string | null;
+        };
+        /**
+         * MeasurementSource
+         * @description Who recorded a measurement — DB §7.5 ``measurement_source``.
+         *
+         *     🔒 EC-M3-05 — a practitioner and a client may both record a weight on the
+         *     same date, and both are kept. This column is what tells them apart, and what
+         *     the display-precedence rule reads.
+         * @enum {string}
+         */
+        MeasurementSource: "practitioner" | "client" | "device";
+        /**
+         * MessageHistoryResponse
+         * @description API §5.1's collection envelope.
+         */
+        MessageHistoryResponse: {
+            /** Items */
+            items: components["schemas"]["DispatchResponse"][];
+            page: components["schemas"]["HistoryPageInfo"];
+        };
+        /** NextAppointment */
+        NextAppointment: {
+            /** Meeting Link */
+            meeting_link?: string | null;
+            /** Mode */
+            mode: string;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+        };
+        /**
+         * NoteResponse
+         * @description One note — FR-M1-007, "with timestamp and author".
+         */
+        NoteResponse: {
+            /**
+             * Author User Id
+             * Format: uuid
+             */
+            author_user_id: string;
+            /** Body */
+            body: string;
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** NoteWriteRequest */
+        NoteWriteRequest: {
+            /** Body */
+            body: string;
+        };
+        /**
+         * NutritionBudgetResponse
+         * @description 🔒 ADR-A07 / API §8.4 — locking made observable.
+         */
+        NutritionBudgetResponse: {
+            /** Is Within Tolerance */
+            is_within_tolerance: boolean;
+            locked_consumed: components["schemas"]["MacroTotalsResponse"];
+            /** Locked Item Count */
+            locked_item_count: number;
+            /** Locked Slot Count */
+            locked_slot_count: number;
+            remaining_available: components["schemas"]["MacroTotalsResponse"];
+            target: components["schemas"]["MacroTotalsResponse"];
+            /** Tolerance Pct */
+            tolerance_pct: string;
+            unlocked_current: components["schemas"]["MacroTotalsResponse"];
+        };
+        /**
+         * NutritionProfileResponse
+         * @description The typed projection — DDR-08.
+         *
+         *     🔒 What `nutrition` and `ai_drafting` will read (through a kernel port, not
+         *     this endpoint). Exposed to the practitioner UI so a coach can see what the
+         *     assessment actually produced — AC-M3-002's "the result remains usable for
+         *     planning" is a question about *this*, not about section counts.
+         */
+        NutritionProfileResponse: {
+            activity_level: components["schemas"]["ActivityLevel"] | null;
+            /** Allergen Food Ids */
+            allergen_food_ids: string[];
+            /** Date Of Birth */
+            date_of_birth: string | null;
+            dietary_class: components["schemas"]["DietaryClass"] | null;
+            /** Excluded Food Ids */
+            excluded_food_ids: string[];
+            /** Excludes Onion Garlic */
+            excludes_onion_garlic: boolean;
+            /** Excludes Root Vegetables */
+            excludes_root_vegetables: boolean;
+            /** Fasting Patterns */
+            fasting_patterns: string[];
+            /** Height Cm */
+            height_cm: string | null;
+            primary_goal: components["schemas"]["GoalType"] | null;
+            /** Region Cuisine */
+            region_cuisine: string | null;
+            sex: components["schemas"]["SexType"] | null;
+            /** Source Response Id */
+            source_response_id: string | null;
+            /** Staple Grain */
+            staple_grain: string | null;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** PasswordResetConfirm */
+        PasswordResetConfirm: {
+            /** Password */
+            password: string;
+            /** Token */
+            token: string;
+        };
+        /** PasswordResetRequest */
+        PasswordResetRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+        };
+        /**
+         * PendingMessageResponse
+         * @description A message queued but not yet sent — FR-M8-028.
+         *
+         *     🔒 ``preview`` is the rendered body, because "you have three messages
+         *     scheduled" is not something a practitioner can act on. What they need to know
+         *     before it goes out on their behalf is what it *says*.
+         */
+        PendingMessageResponse: {
+            /** Deferred From */
+            deferred_from: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Preview */
+            preview: string;
+            /**
+             * Scheduled For
+             * Format: date-time
+             */
+            scheduled_for: string;
+            state: components["schemas"]["ScheduledState"];
+            /** Template Code */
+            template_code: string;
+        };
+        /** PlanCreateRequest */
+        PlanCreateRequest: {
+            /**
+             * Day Count
+             * @default 1
+             */
+            day_count: number;
+            /** Goal Type */
+            goal_type?: string | null;
+            /** Slot Types */
+            slot_types?: components["schemas"]["MealSlotType"][] | null;
+            /**
+             * Source
+             * @default blank
+             */
+            source: string;
+            /** Source Plan Version Id */
+            source_plan_version_id?: string | null;
+            /** Target Carbs G */
+            target_carbs_g?: number | string | null;
+            /** Target Energy Kcal */
+            target_energy_kcal?: number | string | null;
+            /** Target Fat G */
+            target_fat_g?: number | string | null;
+            /** Target Protein G */
+            target_protein_g?: number | string | null;
+            /** Title */
+            title: string;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+        };
+        /**
+         * PlanCreateResponse
+         * @description 🔒 API §8.2 — a plan and its first draft, never one without the other.
+         */
+        PlanCreateResponse: {
+            draft_version: components["schemas"]["PlanVersionSummary"];
+            plan: components["schemas"]["PlanResponse"];
+        };
+        /** PlanDayResponse */
+        PlanDayResponse: {
+            /** Day Number */
+            day_number: number;
+            day_totals: components["schemas"]["MacroTotalsResponse"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /** Slots */
+            slots: components["schemas"]["PlanSlotResponse"][];
+        };
+        /**
+         * PlanDetailResponse
+         * @description 🔒 AC-M4-008 — prior versions remain retrievable and clearly dated.
+         */
+        PlanDetailResponse: {
+            plan: components["schemas"]["PlanResponse"];
+            /** Versions */
+            versions: components["schemas"]["PlanVersionSummary"][];
+        };
+        /** PlanItemResponse */
+        PlanItemResponse: {
+            /** Alternatives */
+            alternatives?: {
+                [key: string]: string;
+            }[];
+            /** Client Note */
+            client_note: string | null;
+            /** Display Name */
+            display_name: string;
+            /** Food Id */
+            food_id: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Locked */
+            is_locked: boolean;
+            /** Item Is Locked */
+            item_is_locked: boolean;
+            /** Item Type */
+            item_type: string;
+            /** Meal Id */
+            meal_id: string | null;
+            /** Measure Display */
+            measure_display: string;
+            /** Measure Unit Code */
+            measure_unit_code: string;
+            /**
+             * Measure Unit Id
+             * Format: uuid
+             */
+            measure_unit_id: string;
+            /** Notes */
+            notes: string | null;
+            nutrition: components["schemas"]["MacroTotalsResponse"];
+            /** Quantity */
+            quantity: string;
+            /** Recipe Id */
+            recipe_id: string | null;
+            /** Resolved Grams */
+            resolved_grams: string | null;
+            /** Sort Order */
+            sort_order: number;
+        };
+        /** PlanResponse */
+        PlanResponse: {
+            /** Archived At */
+            archived_at: string | null;
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /**
+             * Created By User Id
+             * Format: uuid
+             */
+            created_by_user_id: string;
+            /** Current Version Id */
+            current_version_id: string | null;
+            /** Goal Type */
+            goal_type: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /** PlanSlotResponse */
+        PlanSlotResponse: {
+            /** Custom Label */
+            custom_label: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Locked */
+            is_locked: boolean;
+            /** Items */
+            items: components["schemas"]["PlanItemResponse"][];
+            slot_totals: components["schemas"]["MacroTotalsResponse"];
+            /** Slot Type */
+            slot_type: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Target Time */
+            target_time: string | null;
+        };
+        /**
+         * PlanState
+         * @enum {string}
+         */
+        PlanState: "draft" | "issued" | "superseded" | "discarded";
+        /**
+         * PlanSummaryResponse
+         * @description A plan in a list, with the version a practitioner means by "the plan".
+         */
+        PlanSummaryResponse: {
+            plan: components["schemas"]["PlanResponse"];
+            version: components["schemas"]["PlanVersionSummary"] | null;
+        };
+        /** PlanVersionPatch */
+        PlanVersionPatch: {
+            /** Goal Type */
+            goal_type?: string | null;
+            /** Practitioner Notes */
+            practitioner_notes?: string | null;
+            /** Target Carbs G */
+            target_carbs_g?: number | string | null;
+            /** Target Energy Kcal */
+            target_energy_kcal?: number | string | null;
+            /** Target Fat G */
+            target_fat_g?: number | string | null;
+            /** Target Protein G */
+            target_protein_g?: number | string | null;
+            /** Title */
+            title?: string | null;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+        };
+        /**
+         * PlanVersionResponse
+         * @description API §8.3's contract, in full.
+         */
+        PlanVersionResponse: {
+            /** Days */
+            days: components["schemas"]["PlanDayResponse"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            nutrition_budget: components["schemas"]["NutritionBudgetResponse"];
+            /** Origin */
+            origin: string;
+            /**
+             * Plan Id
+             * Format: uuid
+             */
+            plan_id: string;
+            plan_totals: components["schemas"]["MacroTotalsResponse"];
+            /** Practitioner Notes */
+            practitioner_notes: string | null;
+            /** Row Version */
+            row_version: number;
+            state: components["schemas"]["PlanState"];
+            /** Supplements */
+            supplements?: {
+                [key: string]: string;
+            }[];
+            targets: components["schemas"]["MacroTotalsResponse"];
+            /** Valid From */
+            valid_from: string | null;
+            /** Valid To */
+            valid_to: string | null;
+            /** Version Number */
+            version_number: number;
+            /** Warnings */
+            warnings: components["schemas"]["PlanWarningResponse"][];
+        };
+        /** PlanVersionSummary */
+        PlanVersionSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Issued At */
+            issued_at: string | null;
+            /** Origin */
+            origin: string;
+            /** Row Version */
+            row_version: number;
+            state: components["schemas"]["PlanState"];
+            /** Valid From */
+            valid_from: string | null;
+            /** Valid To */
+            valid_to: string | null;
+            /** Version Number */
+            version_number: number;
+        };
+        /** PlanWarningResponse */
+        PlanWarningResponse: {
+            /** Message */
+            message: string;
+            /** Rule Code */
+            rule_code: string;
+            /** Scope */
+            scope: {
+                [key: string]: string | number;
+            };
+            /** Severity */
+            severity: string;
+        };
+        /** PortalAccessRequest */
+        PortalAccessRequest: {
+            /** Mobile Or Email */
+            mobile_or_email: string;
+        };
+        /** PortalAccessStatusResponse */
+        PortalAccessStatusResponse: {
+            /** Has Access */
+            has_access: boolean;
+            /** Last Accessed At */
+            last_accessed_at: string | null;
+        };
+        /** PortalRedeemRequest */
+        PortalRedeemRequest: {
+            /** Token */
+            token: string;
+        };
+        /** PortalSessionResponse */
+        PortalSessionResponse: {
+            /** Access Token */
+            access_token: string;
+            /** Expires In */
+            expires_in: number;
+            /** Refresh Token */
+            refresh_token: string;
+            target: components["schemas"]["PortalTarget"];
+            /**
+             * Token Type
+             * @default Bearer
+             * @constant
+             */
+            token_type: "Bearer";
+        };
+        /**
+         * PortalTarget
+         * @description 🔒 FR-M7-013 — redemption and navigation in one hop.
+         */
+        PortalTarget: {
+            /** Ref */
+            ref?: string | null;
+            /** Type */
+            type: string;
+        };
+        /**
+         * PractitionerCard
+         * @description Who the client is working with.
+         *
+         *     ⚠️ The **practice** name, not the practitioner's personal one. A client is
+         *     engaged with the practice, and `clients.owner_user_id` can be reassigned
+         *     (FR-M1-009) without the client's relationship changing.
+         *
+         *     ⏳ ``branding`` is null: no branding table exists yet (API §12.2 marks it
+         *     optional).
+         */
+        PractitionerCard: {
+            /** Branding */
+            branding?: {
+                [key: string]: string;
+            } | null;
+            /** Name */
+            name: string;
+        };
+        /**
+         * PreferenceResponse
+         * @description One preference row — DB §11.8.
+         */
+        PreferenceResponse: {
+            /** Client Id */
+            client_id: string | null;
+            /** Is Enabled */
+            is_enabled: boolean;
+            /** Max Messages Per Week */
+            max_messages_per_week: number | null;
+            /** Quiet Hours End */
+            quiet_hours_end: string | null;
+            /** Quiet Hours Start */
+            quiet_hours_start: string | null;
+            /** Template Code */
+            template_code: string | null;
+            transport: components["schemas"]["TransportType"] | null;
+        };
+        /**
+         * PreferenceUpdateRequest
+         * @description A change to a message-type toggle or a quiet window — FR-M8-027.
+         *
+         *     ⚠️ Every field is optional and ``None`` means "leave alone", so a screen that
+         *     submits one section does not clear another. See ``preferences.upsert``.
+         */
+        PreferenceUpdateRequest: {
+            /** Is Enabled */
+            is_enabled?: boolean | null;
+            /** Max Messages Per Week */
+            max_messages_per_week?: number | null;
+            /** Quiet Hours End */
+            quiet_hours_end?: string | null;
+            /** Quiet Hours Start */
+            quiet_hours_start?: string | null;
+            /** Template Code */
+            template_code?: string | null;
+            transport?: components["schemas"]["TransportType"] | null;
+        };
+        /**
+         * PreviewResponse
+         * @description 🔒 FR-M8-026 — the message exactly as the client will receive it.
+         */
+        PreviewResponse: {
+            /** Body */
+            body: string;
+            /** Is Sample */
+            is_sample: boolean;
+            /** Template Code */
+            template_code: string;
+            transport: components["schemas"]["TransportType"];
+            /** Version */
+            version: number;
+        };
+        /**
+         * ProgressTeaser
+         * @description The one number worth putting on a landing page.
+         *
+         *     ``weight_change_kg`` is negative for a loss. ⚠️ No band, no label and no
+         *     judgement — the same restraint ``kernel.clinical`` applies to BMI, and for
+         *     the same reason: OD-08 is unresolved.
+         */
+        ProgressTeaser: {
+            /** Period Days */
+            period_days: number;
+            /** Weight Change Kg */
+            weight_change_kg: string;
+        };
+        /**
+         * PublicConsentNotice
+         * @description The notice a prospect must agree to — API §11.1, FR-M2-004.
+         *
+         *     🔒 The **body** is sent, not just a reference. DPDP requires consent against
+         *     text the person actually saw (NFR-051), and a form that linked to a notice
+         *     elsewhere could not evidence that they saw it.
+         */
+        PublicConsentNotice: {
+            /** Body */
+            body: string;
+            /**
+             * Notice Id
+             * Format: uuid
+             */
+            notice_id: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: string;
+        };
+        /**
+         * PublicFormResponse
+         * @description API §11.1's response.
+         *
+         *     🔒 **An allowlist, not a projection of the row.** API §11.1: "never client
+         *     counts, plan details, or any tenant-internal state". `tenant_id` is
+         *     deliberately absent — the submit endpoint re-resolves it from the slug rather
+         *     than trusting one echoed back, so publishing it would buy nothing and leak an
+         *     internal identifier.
+         */
+        PublicFormResponse: {
+            consent: components["schemas"]["PublicConsentNotice"];
+            /**
+             * Form Id
+             * Format: uuid
+             */
+            form_id: string;
+            /** Intro Text */
+            intro_text: string | null;
+            /** Practice Name */
+            practice_name: string;
+            /** Title */
+            title: string;
         };
         /**
          * ReadinessResponse
@@ -97,6 +3938,656 @@ export interface components {
             /** Ready */
             ready: boolean;
         };
+        /** ReassignRequest */
+        ReassignRequest: {
+            /**
+             * Owner User Id
+             * Format: uuid
+             */
+            owner_user_id: string;
+        };
+        /**
+         * RecordMeasurementRequest
+         * @description FR-M3-011, FR-M3-015, EC-M3-02.
+         *
+         *     ⚠️ ``height_cm`` only. FR-M3-015 accepts feet/inches *at the boundary* and
+         *     normalises on entry — the conversion is `kernel.clinical.
+         *     height_from_feet_inches`, applied by the client before it posts, so no unit
+         *     column exists and a 5 cannot mean five feet in one row and five centimetres
+         *     in another.
+         */
+        RecordMeasurementRequest: {
+            /** Body Fat Pct */
+            body_fat_pct?: number | string | null;
+            /**
+             * Confirm Implausible
+             * @default false
+             */
+            confirm_implausible: boolean;
+            /** Height Cm */
+            height_cm?: number | string | null;
+            /** Hip Cm */
+            hip_cm?: number | string | null;
+            /**
+             * Measured On
+             * Format: date
+             */
+            measured_on: string;
+            /** Notes */
+            notes?: string | null;
+            /** Waist Cm */
+            waist_cm?: number | string | null;
+            /** Weight Kg */
+            weight_kg?: number | string | null;
+        };
+        /** RefreshRequest */
+        RefreshRequest: {
+            /** Refresh Token */
+            refresh_token: string;
+        };
+        /**
+         * RegisterRequest
+         * @description API §2.2. 🔒 Password rules are length plus a denylist, not composition.
+         */
+        RegisterRequest: {
+            /** Accepted Terms Version */
+            accepted_terms_version: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Full Name */
+            full_name: string;
+            /** Mobile */
+            mobile?: string | null;
+            /** Password */
+            password: string;
+            /** Practice Name */
+            practice_name: string;
+        };
+        /**
+         * RegisterResponse
+         * @description 🔒 Carries no tokens and no identifiers.
+         *
+         *     Verification precedes access (FR-M0-002), and the body is byte-identical
+         *     whether or not the address was already registered (NFR-043) — returning a
+         *     `tenant_id` on the success path alone would restore the oracle the flat
+         *     response exists to remove.
+         */
+        RegisterResponse: {
+            /**
+             * Email Verification Required
+             * @default true
+             * @constant
+             */
+            email_verification_required: true;
+        };
+        /**
+         * ResponseStatus
+         * @description Whether an administration is finished — DB §7.3 ``response_status``.
+         *
+         *     ⚠️ Only two. "Abandoned" is not a state: EC-M3-01 says a partial response is
+         *     retained and resumable, so an untouched ``in_progress`` row is exactly what
+         *     an abandonment looks like, and the practitioner reads its completion
+         *     percentage rather than a label somebody had to set.
+         * @enum {string}
+         */
+        ResponseStatus: "in_progress" | "completed";
+        /**
+         * SaveAnswersRequest
+         * @description A partial save — FR-M3-005.
+         *
+         *     🔒 **Merged, not replaced.** The client PWA posts the section it just filled;
+         *     replacing the document would delete every other section (AC-M3-001).
+         */
+        SaveAnswersRequest: {
+            /** Answers */
+            answers?: Record<string, never>;
+            /** Completed Sections */
+            completed_sections?: string[] | null;
+        };
+        /**
+         * SaveAnswersResponse
+         * @description What the save concluded.
+         *
+         *     ⚠️ ``issues`` is advisory here and fatal on submit. A half-typed number must
+         *     persist — losing a section because someone paused mid-field is the failure
+         *     FR-M3-005 exists to prevent.
+         */
+        SaveAnswersResponse: {
+            /** Issues */
+            issues: components["schemas"]["AnswerIssueResponse"][];
+            response: components["schemas"]["AssessmentResponseBody"];
+        };
+        /**
+         * ScheduledMessageResponse
+         * @description What a caller gets back after queueing a message.
+         */
+        ScheduledMessageResponse: {
+            /** Created */
+            created: boolean;
+            /** Id */
+            id: string | null;
+            /**
+             * Scheduled For
+             * Format: date-time
+             */
+            scheduled_for: string;
+            state: components["schemas"]["ScheduledState"];
+            /** Template Code */
+            template_code: string;
+        };
+        /**
+         * ScheduledState
+         * @description DB §11.2. 🔒 ``suppressed`` and ``expired`` are retained, never deleted
+         *     (AC-M8-004) — the reason a message did not arrive is the answer to the
+         *     support question that follows.
+         * @enum {string}
+         */
+        ScheduledState: "pending" | "dispatched" | "suppressed" | "expired" | "cancelled";
+        /**
+         * SectionResponse
+         * @description One page of the form — PRD §9.3.
+         *
+         *     ⚠️ ``is_clinical`` is what FR-M3-006 turns on: the UI offers a skip for these
+         *     and requires nothing in them. AC-M3-002 is a coach skipping every one.
+         */
+        SectionResponse: {
+            /** Description */
+            description: string | null;
+            /** Fields */
+            fields: components["schemas"]["FieldResponse"][];
+            /** Id */
+            id: string;
+            /** Is Clinical */
+            is_clinical: boolean;
+            /** Title */
+            title: string;
+        };
+        /**
+         * SendMessageRequest
+         * @description A practitioner sending a message by hand.
+         *
+         *     ⚠️ ``variables`` carries only what the server cannot know. The recipient's
+         *     name, their practitioner's name and the portal link are filled in server-side
+         *     — a caller-supplied ``client_name`` would let one client's name be sent to
+         *     another, and a caller-supplied URL would be an open redirect delivered over
+         *     WhatsApp.
+         */
+        SendMessageRequest: {
+            /** Scheduled For */
+            scheduled_for?: string | null;
+            /** Template Code */
+            template_code: string;
+            /** Variables */
+            variables?: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * SexType
+         * @description Biological sex, for requirement estimation — DB §5.1.
+         *
+         *     ⚠️ 🟡 **PROPOSED — the value set is not specified in any approved document.**
+         *     DB §5.1 names the column and the type and stops there. These values are my
+         *     proposal and need confirmation.
+         *
+         *     🔒 The column exists for one purpose: BMR equations (Mifflin-St Jeor,
+         *     Harris-Benedict) take a male/female term. It is **nullable**, and ``OTHER``
+         *     is a real answer rather than a gap — but neither NULL nor ``OTHER`` yields a
+         *     defined equation, so both must fall through to the practitioner entering a
+         *     requirement directly. Silently substituting one for the other would put a
+         *     wrong number on a clinical plan, which is the failure this note exists to
+         *     prevent.
+         * @enum {string}
+         */
+        SexType: "male" | "female" | "other";
+        /** SlotCreateRequest */
+        SlotCreateRequest: {
+            /** Custom Label */
+            custom_label?: string | null;
+            /**
+             * Day Id
+             * Format: uuid
+             */
+            day_id: string;
+            slot_type: components["schemas"]["MealSlotType"];
+            /** Target Time */
+            target_time?: string | null;
+        };
+        /** SlotPatch */
+        SlotPatch: {
+            /** Custom Label */
+            custom_label?: string | null;
+            /** Is Locked */
+            is_locked?: boolean | null;
+            slot_type?: components["schemas"]["MealSlotType"] | null;
+            /** Sort Order */
+            sort_order?: number | null;
+            /** Target Time */
+            target_time?: string | null;
+        };
+        /** SlotResponse */
+        SlotResponse: {
+            /** Custom Label */
+            custom_label: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Locked */
+            is_locked: boolean;
+            /**
+             * Plan Day Id
+             * Format: uuid
+             */
+            plan_day_id: string;
+            /** Slot Type */
+            slot_type: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Target Time */
+            target_time: string | null;
+        };
+        /**
+         * StageChangeRequest
+         * @description `POST /app/clients/{id}/stage` — API §7.1.
+         */
+        StageChangeRequest: {
+            /** Reason */
+            reason?: string | null;
+            /**
+             * To Stage
+             * @enum {string}
+             */
+            to_stage: "lead" | "contacted" | "consultation_scheduled" | "active" | "paused" | "churned";
+        };
+        /**
+         * SyncOperation
+         * @description One queued action from the client's device.
+         *
+         *     ⚠️ **``payload`` is an untyped object here, deliberately.** A discriminated
+         *     union would make FastAPI reject the *whole request* with a 422 when one
+         *     operation's payload is malformed — and API §12.4 guarantee 1 says "a single
+         *     bad operation never fails the batch". The payload is parsed inside the
+         *     per-operation savepoint instead, where a failure becomes that operation's
+         *     ``rejected`` result and the rest of the week's queue still applies.
+         */
+        SyncOperation: {
+            /**
+             * Client Timestamp
+             * Format: date-time
+             */
+            client_timestamp: string;
+            /**
+             * Op Id
+             * Format: uuid
+             */
+            op_id: string;
+            /** Payload */
+            payload?: Record<string, never>;
+            /** Type */
+            type: string;
+        };
+        /**
+         * SyncRequest
+         * @description API §12.4's request body.
+         */
+        SyncRequest: {
+            /** Known Plan Hash */
+            known_plan_hash?: string | null;
+            /** Operations */
+            operations?: components["schemas"]["SyncOperation"][];
+        };
+        /**
+         * SyncResponse
+         * @description API §12.4's 200.
+         *
+         *     🔒 ``plan_changed`` tells the PWA to refresh rather than silently swapping
+         *     content while the client is reading it (EC-M7-03).
+         */
+        SyncResponse: {
+            /** Current Plan Hash */
+            current_plan_hash: string | null;
+            /** Plan Changed */
+            plan_changed: boolean;
+            /** Results */
+            results: components["schemas"]["SyncResult"][];
+        };
+        /**
+         * SyncResult
+         * @description What became of one operation.
+         *
+         *     🔒 ``error`` carries a stable machine-readable code (API §16.1), never
+         *     prose: the PWA branches on it to decide whether to drop the operation from
+         *     its queue or retry it, and a localisable sentence cannot be branched on.
+         */
+        SyncResult: {
+            /** Error */
+            error?: string | null;
+            /**
+             * Op Id
+             * Format: uuid
+             */
+            op_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "applied" | "duplicate" | "rejected";
+        };
+        /**
+         * TagColour
+         * @description The palette a tag may use — DB §5.4 ("``color`` for UI").
+         *
+         *     🔒 **A named palette rather than free hex, deliberately.** Three reasons, in
+         *     order of weight:
+         *
+         *     1. **Contrast is a guarantee, not a hope.** Every value here maps to a design
+         *        token whose contrast is asserted by ``tokens/contrast.test.ts`` (NFR-060).
+         *        A practitioner picking ``#ffff00`` would produce a tag nobody can read,
+         *        and no test anywhere would catch it.
+         *     2. ADR-03 — raw colour values live in the design system and nowhere else.
+         *        Free hex in the database is that rule broken through the back door.
+         *     3. A closed set survives a theme change. Hex does not: a dark mode added
+         *        later has to re-interpret every value a user ever chose.
+         *
+         *     ⚠️ 🟡 The *set* is PROPOSED. DB §5.4 names the column and stops there, so
+         *     these eight are my choice — enough to group a caseload without becoming a
+         *     decision the practitioner has to make carefully.
+         * @enum {string}
+         */
+        TagColour: "slate" | "red" | "amber" | "green" | "teal" | "blue" | "violet" | "pink";
+        /** TagCreateRequest */
+        TagCreateRequest: {
+            /** @default slate */
+            colour: components["schemas"]["TagColour"];
+            /** Name */
+            name: string;
+        };
+        /** TagResponse */
+        TagResponse: {
+            colour: components["schemas"]["TagColour"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * TemplateResponse
+         * @description One message type a practitioner can preview or control — FR-M8-026/027.
+         */
+        TemplateResponse: {
+            /** Category */
+            category: string;
+            /** Code */
+            code: string;
+            default_transport: components["schemas"]["TransportType"];
+            /** Is Essential */
+            is_essential: boolean;
+            /** Is Practitioner Disableable */
+            is_practitioner_disableable: boolean;
+            /** Provider Template Status */
+            provider_template_status: string;
+            /** Variables */
+            variables: Record<string, never>;
+            /** Version */
+            version: number;
+        };
+        /**
+         * TimelineActorType
+         * @description Who caused it — DB §5.6 ``actor_type``.
+         *
+         *     🔒 Three kinds, and the distinction matters for reading the timeline rather
+         *     than for authorization. "Priya changed the stage" and "the system archived
+         *     them after 90 days" are different facts, and a timeline that renders both as
+         *     a bare name misattributes automated action to a person.
+         * @enum {string}
+         */
+        TimelineActorType: "practitioner" | "client" | "system";
+        /**
+         * TimelineEntryResponse
+         * @description One timeline entry — DB §5.6.
+         *
+         *     🔒 ``summary`` is a **non-clinical label** written by
+         *     ``kernel.timeline.summarise``. It never contains a measurement, a note body
+         *     or a diagnosis; see that module for why the guarantee is structural rather
+         *     than a review convention.
+         *
+         *     ⚠️ ``source_record_id`` may point at a record that no longer exists — a
+         *     retired tag, a revoked grant. The UI renders it as a link only when it can
+         *     resolve it, rather than the API pre-checking six tables on every read.
+         */
+        TimelineEntryResponse: {
+            /** Actor Id */
+            actor_id: string | null;
+            actor_type: components["schemas"]["TimelineActorType"];
+            event_type: components["schemas"]["TimelineEventType"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Source Module */
+            source_module: string;
+            /** Source Record Id */
+            source_record_id: string | null;
+            /** Summary */
+            summary: string;
+        };
+        /**
+         * TimelineEventType
+         * @description What kind of thing happened — DB §5.6 ``timeline_event_type``.
+         *
+         *     🔒 **A closed enum, because FR-M1-019 makes it a filter.** A free-text
+         *     ``event_type`` would mean the filter list is whatever happens to be in the
+         *     table, which changes per tenant and cannot be translated or ordered.
+         *
+         *     ⚠️ 🟡 **The member set is PROPOSED.** DB §5.6 names the column and its type
+         *     and stops there. These nine are derived from FR-M1-018's own list of what the
+         *     timeline must aggregate — "stage changes, appointments, assessments,
+         *     measurements, plans issued, messages sent, notes, documents and client-side
+         *     activity" — mapped onto what exists today plus what S3–S6 will add.
+         *
+         *     🔒 The members S2 cannot yet produce are declared anyway, and that is
+         *     deliberate: ``timeline_event_type`` is a PostgreSQL enum, and adding a value
+         *     later is a migration that cannot run inside a transaction with other DDL on
+         *     some versions. Declaring the full vocabulary once is cheaper than nine
+         *     migrations, and an unused value costs nothing. What must *not* happen is a
+         *     module inventing a tenth value at runtime — hence the closed set.
+         * @enum {string}
+         */
+        TimelineEventType: "stage_changed" | "note_added" | "tag_applied" | "ownership_changed" | "access_changed" | "client_archived" | "client_restored" | "enquiry_received" | "measurement_recorded" | "assessment_completed" | "plan_issued" | "appointment_scheduled" | "message_sent" | "document_uploaded" | "client_activity";
+        /**
+         * TimelineFilterResponse
+         * @description One filter a practitioner may apply — FR-M1-019.
+         */
+        TimelineFilterResponse: {
+            event_type: components["schemas"]["TimelineEventType"];
+            /** Label */
+            label: string;
+        };
+        /**
+         * TimelinePageInfo
+         * @description Where the next page resumes — API §6.1.
+         *
+         *     ⚠️ ``total`` is absent. API §6.1 omits it by default because a ``COUNT(*)``
+         *     on every request is wasteful, and a timeline is scrolled rather than counted
+         *     — nobody needs to know a client has 431 events.
+         */
+        TimelinePageInfo: {
+            /** Has More */
+            has_more: boolean;
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * TimelineResponse
+         * @description API §5.1's collection envelope.
+         */
+        TimelineResponse: {
+            /** Items */
+            items: components["schemas"]["TimelineEntryResponse"][];
+            page: components["schemas"]["TimelinePageInfo"];
+        };
+        /**
+         * TodayAdherence
+         * @description Whether this slot has been logged today.
+         *
+         *     ⏳ **Always unlogged.** DB §12.1 specifies ``plan_slot_id`` and ``slot_type``
+         *     on ``adherence_logs``; migration ``2eb56b8913d5`` built neither, so nothing
+         *     in the schema can say *which* slot a log belongs to. Reporting a day-level
+         *     score against every slot would be a fabricated per-meal answer, which is
+         *     worse than an honest "not yet". The slice that adds the logging endpoint adds
+         *     the columns, and this reads them without the shape changing.
+         */
+        TodayAdherence: {
+            /**
+             * Logged
+             * @default false
+             */
+            logged: boolean;
+            /** Value */
+            value?: string | null;
+        };
+        TodayItem: Record<string, never>;
+        /** TodayPlan */
+        TodayPlan: {
+            /** Content Hash */
+            content_hash: string | null;
+            /** Day Number */
+            day_number: number;
+            /** Slots */
+            slots: components["schemas"]["TodaySlot"][];
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+        };
+        /** TodayPrompts */
+        TodayPrompts: {
+            /** Assessment Pending Id */
+            assessment_pending_id: string | null;
+            /** Weight Due */
+            weight_due: boolean;
+        };
+        /**
+         * TodayResponse
+         * @description API §12.2 — the single most important endpoint in the portal.
+         */
+        TodayResponse: {
+            capabilities: components["schemas"]["Capabilities"];
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            next_appointment: components["schemas"]["NextAppointment"] | null;
+            /** Notice */
+            notice: string | null;
+            plan: components["schemas"]["TodayPlan"] | null;
+            practitioner: components["schemas"]["PractitionerCard"];
+            progress_teaser: components["schemas"]["ProgressTeaser"] | null;
+            prompts: components["schemas"]["TodayPrompts"];
+        };
+        /** TodaySlot */
+        TodaySlot: {
+            adherence: components["schemas"]["TodayAdherence"];
+            /** Items */
+            items: components["schemas"]["TodayItem"][];
+            /** Label */
+            label: string;
+            /**
+             * Slot Id
+             * Format: uuid
+             */
+            slot_id: string;
+            /** Slot Type */
+            slot_type: string;
+            /** Target Time */
+            target_time?: string | null;
+        };
+        /**
+         * TokenResponse
+         * @description What a client needs to make an authenticated request and to renew.
+         *
+         *     🔒 No user object. The client fetches its own profile from a dedicated
+         *     endpoint; embedding one here would put a name and email in every token
+         *     refresh and in whatever logs the response passes through.
+         */
+        TokenResponse: {
+            /** Access Token */
+            access_token: string;
+            /** Expires In */
+            expires_in: number;
+            /** Refresh Token */
+            refresh_token: string;
+            /**
+             * Token Type
+             * @default Bearer
+             * @constant
+             */
+            token_type: "Bearer";
+        };
+        /**
+         * TransportType
+         * @description Outbound message channels — the PostgreSQL ``transport_type`` enum.
+         *
+         *     🔒 ``LOGGED`` was added by migration 0021 and is what makes S5 shippable
+         *     before Meta Business Verification lands: a real no-op transport that records
+         *     a delivery attempt and sends nothing, so the engine, the schedule, the
+         *     suppression rules and the delivery log all run end to end without pretending
+         *     a WhatsApp message was delivered.
+         *
+         *     ⚠️ ``SMS`` remains declared because the enum value exists in the database
+         *     since 0002 and ``magic_links.issued_via`` can hold it. It has no adapter at
+         *     MVP — approved proposal #7 keeps TRAI DLT registration off the critical path
+         *     — and ``kernel.messaging.TransportType`` (the messaging engine's own,
+         *     narrower vocabulary) deliberately omits it.
+         * @enum {string}
+         */
+        TransportType: "whatsapp" | "sms" | "email" | "logged";
+        /**
+         * UserRole
+         * @description Roles within a tenant (FR-M0-016).
+         * @enum {string}
+         */
+        UserRole: "owner" | "practitioner" | "client" | "platform_operator";
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+        };
+        /** VerifyEmailRequest */
+        VerifyEmailRequest: {
+            /** Token */
+            token: string;
+        };
+        /** WriteNoteRequest */
+        WriteNoteRequest: {
+            /** Body */
+            body: string;
+            /**
+             * Note Date
+             * Format: date
+             */
+            note_date: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -106,6 +4597,2925 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    authLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    authCurrentSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentSessionResponse"];
+                };
+            };
+        };
+    };
+    clientsList: {
+        parameters: {
+            query?: {
+                /** @description Search name, email or the last digits of a mobile (FR-M1-021). */
+                q?: string | null;
+                /** @description Repeat for OR within the field — API §6.2. */
+                stage?: components["schemas"]["ClientStage"][] | null;
+                /** @description Repeat to require ALL named tags — see below. */
+                tag_id?: string[] | null;
+                owner_user_id?: string[] | null;
+                archived?: components["schemas"]["ArchivedFilter"];
+                /** @description `name`, `recent_activity` or `created`; `-` prefix for descending. */
+                sort?: string | null;
+                /** @description Opaque, from a previous page. */
+                cursor?: string | null;
+                limit?: number;
+                /** @description Adds a COUNT — API §6.1. */
+                include_total?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsBulkReassign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkReassignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkReassignResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsSortOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientSortOption"][];
+                };
+            };
+        };
+    };
+    clientsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsUpdate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientAccessList: {
+        parameters: {
+            query?: {
+                include_revoked?: boolean;
+            };
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientAccessGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientAccessRevoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assessmentList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assessmentStartOrResume: {
+        parameters: {
+            query?: {
+                /** @description Force a new administration rather than resuming (FR-M3-007). */
+                restart?: boolean;
+            };
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentResponseBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assessmentRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                response_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentResponseBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assessmentSaveProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                response_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveAnswersRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveAnswersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assessmentComplete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                response_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentCompletionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientCheckinScheduleRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckinScheduleResponse"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientCheckinScheduleUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckinScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckinScheduleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    consultationNoteList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsultationNoteResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    consultationNoteCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WriteNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsultationNoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    consultationNoteEdit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsultationNoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    consultationNoteArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsultationNoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientDocumentList: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientDocumentResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientDocumentAttach: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachDocumentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientDocumentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientDocumentArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientDocumentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientDocumentUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentUrlResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    measurementList: {
+        parameters: {
+            query?: {
+                /** @description One row per date, practitioner value winning — EC-M3-05. */
+                preferred_only?: boolean;
+            };
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    measurementRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordMeasurementRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientMessagePreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientMessagePreferenceUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferenceUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientMessageHistory: {
+        parameters: {
+            query?: {
+                /** @description Opaque, from a previous page. */
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientMessageSend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledMessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientPendingMessages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingMessageResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientNotesList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientNotesCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientNotesArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientNotesUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    nutritionProfileRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NutritionProfileResponse"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientOwnerReassign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanSummaryResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsGetPortalAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalAccessStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsResendPortalAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientsChangeStage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StageChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTagsList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTagsAttach: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTagsDetach: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTimelineList: {
+        parameters: {
+            query?: {
+                /** @description Filter by event type. Repeat for OR — API §6.2. */
+                event_type?: components["schemas"]["TimelineEventType"][] | null;
+                /** @description Opaque, from a previous page. */
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clientTimelineFilters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineFilterResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enquiriesList: {
+        parameters: {
+            query?: {
+                /** @description FR-M2-009 attribution. */
+                source?: components["schemas"]["LeadSource"] | null;
+                /** @description Opaque, from a previous page. */
+                cursor?: string | null;
+                limit?: number;
+                /** @description Adds a COUNT — API §6.1. */
+                include_total?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enquiriesNeedsResponse: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+                include_total?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enquiriesMarkResponded: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enquiryFormsList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryFormResponse"][];
+                };
+            };
+        };
+    };
+    enquiryFormsUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                form_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnquiryFormPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryFormResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    messageFailures: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DispatchResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    messagePreferenceList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceResponse"][];
+                };
+            };
+        };
+    };
+    messagePreferenceUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferenceUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    messageCancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduled_message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledMessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    messageTemplateList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateResponse"][];
+                };
+            };
+        };
+    };
+    messageTemplatePreview: {
+        parameters: {
+            query?: {
+                /** @description Render with this client's own values. */
+                client_id?: string | null;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    searchFoods: {
+        parameters: {
+            query: {
+                q: string;
+                dietary_class?: components["schemas"]["DietaryClass"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodItemResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createCustomFood: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCustomFoodRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listFoodPortions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                food_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodPortionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planDayUpdate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                day_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planItemAdd: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planItemRemove: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planItemUpdate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planSlotRemove: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                slot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planSlotUpdate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                slot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlotPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planVersionRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planVersionUpdate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanVersionPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planDayAdd: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planVersionDiscard: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planVersionIssue: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planSlotAdd: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlotCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    planRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tagsList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResponse"][];
+                };
+            };
+        };
+    };
+    tagsCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tagsArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    portalSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    portalToday: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TodayResponse"];
+                };
+            };
+        };
+    };
+    authLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authPasswordResetConfirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetConfirm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authPasswordResetRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authRegister: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisterResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authVerifyEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publicEnquiryForm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicFormResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publicEnquirySubmit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnquirySubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquirySubmitResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     healthLiveness: {
         parameters: {
             query?: never;
@@ -142,6 +7552,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadinessResponse"];
+                };
+            };
+        };
+    };
+    portalAccessRedeem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalRedeemRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    portalAccessRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalAccessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    webhookVerify: {
+        parameters: {
+            query?: {
+                "hub.mode"?: string | null;
+                "hub.challenge"?: string | null;
+                "hub.verify_token"?: string | null;
+            };
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    webhookReceive: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Hub-Signature-256"?: string | null;
+            };
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

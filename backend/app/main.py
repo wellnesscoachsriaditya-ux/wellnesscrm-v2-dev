@@ -21,6 +21,23 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.kernel.clients import configure_client_directory, configure_client_intake
+from app.kernel.entitlements import configure_entitlement_guard
+from app.kernel.events import configure_deferred_enqueuer, deferred_job_types
+from app.kernel.jobs import configure_job_enqueuer, verify_handlers_exist
+from app.modules.clients import (
+    ClientRepositoryDirectory,
+    ClientRepositoryIntake,
+    register_subscribers,
+)
+from app.modules.messaging import configure_link_base_url
+from app.modules.messaging import register_jobs as register_messaging_jobs
+from app.modules.nutrition import register_jobs as register_nutrition_jobs
+from app.platform.audit import (
+    LoggingAuditSink,
+    SqlAlchemyAuditSink,
+    configure_audit_sink,
+)
 from app.platform.config import Environment, get_settings
 from app.platform.db import (
     dispose_engine,
@@ -28,13 +45,42 @@ from app.platform.db import (
     verify_no_rls_bypass,
     verify_pooler_isolation,
 )
+from app.platform.entitlements import DatabaseEntitlementGuard
 from app.platform.http.errors import register_error_handlers
 from app.platform.http.health import router as health_router
 from app.platform.http.middleware import (
     RequestContextMiddleware,
     SecurityHeadersMiddleware,
 )
+from app.platform.http.pipeline import configure_actor_resolver, verify_route_authorization
+from app.platform.http.routers.auth import app_router as auth_app_router
+from app.platform.http.routers.auth import auth_public as auth_public_router
+from app.platform.http.routers.auth import portal_router as auth_portal_router
+from app.platform.http.routers.clients import router as clients_router
+from app.platform.http.routers.clinical import router as clinical_router
+from app.platform.http.routers.collaboration import client_router as collaboration_client_router
+from app.platform.http.routers.collaboration import tag_router as collaboration_tag_router
+from app.platform.http.routers.discovery import router as discovery_router
+from app.platform.http.routers.enquiries import form_router as enquiry_form_router
+from app.platform.http.routers.enquiries import router as enquiries_router
+from app.platform.http.routers.messaging import client_router as messaging_client_router
+from app.platform.http.routers.messaging import router as messaging_router
+from app.platform.http.routers.nutrition import router as nutrition_router
+from app.platform.http.routers.nutrition_plan_items import day_router as plan_day_router
+from app.platform.http.routers.nutrition_plan_items import item_router as plan_item_router
+from app.platform.http.routers.nutrition_plan_items import slot_router as plan_slot_router
+from app.platform.http.routers.nutrition_plans import plan_read_router
+from app.platform.http.routers.nutrition_plans import plan_router as client_plans_router
+from app.platform.http.routers.nutrition_plans import version_router as plan_version_router
+from app.platform.http.routers.portal import router as portal_router
+from app.platform.http.routers.public_forms import router as public_forms_router
+from app.platform.http.routers.timeline import router as timeline_router
+from app.platform.http.routers.webhooks import router as webhooks_router
+from app.platform.identity.authentication import resolve_actor as authenticate
+from app.platform.identity.credentials import raise_if_credentials_are_local
+from app.platform.jobs import enqueue, enqueue_for_event
 from app.platform.logging import configure_logging, get_logger
+from app.platform.messaging_wiring import configure_messaging
 from app.platform.observability import configure_observability, is_production_like
 
 logger = get_logger(__name__)
@@ -70,10 +116,31 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             await verify_no_rls_bypass(session)
         async with factory() as session:
             await verify_pooler_isolation(session)
+
+        # 🔒 FR-M0-031 — audit rows go to the append-only table. Installed here
+        # rather than at import so the default remains the in-memory sink for
+        # tests, which must never reach a database.
+        configure_audit_sink(SqlAlchemyAuditSink())
+
+        # 🔒 NFR-029 / D1 — credentials belong to the identity provider. The
+        # local store keeps them in process memory: fine for a developer, an
+        # outage and a security incident anywhere else. Refuse to start rather
+        # than run on it, because the failure is otherwise invisible until
+        # someone restarts the process and every password is gone.
+        raise_if_credentials_are_local(settings)
     else:
         logger.warning(
             "Local environment: skipping RLS and pooler verification. "
             "Both are mandatory launch gates and run automatically in staging."
+        )
+        # ⚠️ Logs are not an audit trail — they rotate, they are mutable, and
+        # they are not retained for the statutory period. Acceptable only
+        # because a developer may have no database, and said loudly rather than
+        # degraded quietly.
+        configure_audit_sink(LoggingAuditSink())
+        logger.warning(
+            "Local environment: audit entries are logged, not persisted. "
+            "This is NOT an audit trail (FR-M0-031)."
         )
 
     yield
@@ -93,6 +160,76 @@ def create_app() -> FastAPI:
 
     configure_logging(level=settings.log_level, json_output=production_like)
     configure_observability(settings, component="web")
+
+    # 🔒 Arch §5.1 step 2 — replace Slice A's anonymous placeholder with real
+    # bearer-token verification. Installed here rather than imported by the
+    # middleware so the seam stays a single, greppable line: what authenticates
+    # this process is decided in one place.
+    configure_actor_resolver(authenticate)
+
+    # 🔒 Arch §3.4 / §11.1 — deferred event subscribers enqueue through this.
+    # Installed at the entry point because the kernel must not import platform
+    # (R5): `kernel.events` names the capability, this decides it is the
+    # PostgreSQL queue. Wired in the web process because that is where events
+    # are published; the worker wires it too, since a job handler may publish.
+    configure_deferred_enqueuer(enqueue_for_event)
+
+    # 🔒 The direct-enqueue seam (kernel.jobs). `configure_deferred_enqueuer`
+    # covers jobs an *event* schedules; this covers a module that must queue work
+    # itself with an idempotency key it chooses — S5's scheduler is the first,
+    # and the key is what stops two sweeps queueing one message twice.
+    configure_job_enqueuer(enqueue)
+
+    # 🔒 M8 — the transports this deployment can actually reach, and the deep-link
+    # base URL that goes inside a message. Both are entry-point concerns: the
+    # adapters must not read settings (R5/R4) and the messaging module must not
+    # either.
+    configure_messaging(settings)
+    configure_link_base_url(settings.app_base_url)
+
+    # 🔒 DB §5 — the seam five modules read client identity and stage through.
+    # Installed here for the same reason as the enqueuer: R1 forbids the kernel
+    # importing the `clients` module that satisfies its port, so the entry point
+    # is the one place allowed to know about both.
+    configure_client_directory(ClientRepositoryDirectory())
+
+    # 🔒 FR-M2-005 — the write half of the same seam, and separate from the
+    # directory on purpose. `ClientDirectory` is read-only and says so; folding a
+    # create method into it would hand every module that reads clients the
+    # ability to write them. Only `leads` is wired to this one, and all it can
+    # produce is a client at stage `lead` — never a metered `active` one.
+    configure_client_intake(ClientRepositoryIntake())
+
+    # 🔒 FR-M0-045 — the seam a module enforces a plan limit through. Same reason
+    # as the two above: R5 forbids `app.modules.*` importing `app.platform.*`, so
+    # the kernel declares the protocol and the entry point supplies the
+    # implementation that knows about `subscriptions` and `usage_counters`.
+    configure_entitlement_guard(DatabaseEntitlementGuard())
+
+    # 🔒 DDR-06 — the timeline's subscribers. Wired at the entry point rather
+    # than at import time so the handler set is a deliberate decision rather than
+    # a consequence of which modules a test happened to import. Idempotent, so
+    # the worker calling it too is harmless.
+    #
+    # ⚠️ These are *transactional* handlers: a timeline entry commits with the
+    # change that caused it, and a failure here rolls back that change. That is
+    # DDR-06's explicit choice — an eventually-consistent timeline would show
+    # nothing to a practitioner who just made a change and looked.
+    register_subscribers()
+
+    # 🔒 Fail startup if a deferred subscriber names a job type nothing can run.
+    # Those rows would enqueue, fail on every attempt and dead-letter — found in
+    # production, at the moment the work was actually needed.
+    verify_handlers_exist(deferred_job_types())
+
+    # DDR-06 — same reason as the worker process.
+    register_subscribers()
+    register_nutrition_jobs()
+    # 🔒 M8 — the dispatch handler and the four producers (plan issued, enquiry
+    # received, stage changed, client archived). Registered in the web process
+    # too, because the events that create message intent are published by
+    # requests, not by jobs.
+    register_messaging_jobs()
 
     app = FastAPI(
         title="WellnessCRM V2 API",
@@ -122,14 +259,97 @@ def create_app() -> FastAPI:
     # 🔒 ADR-A01 — health lives under `/public`, the only unauthenticated surface.
     app.include_router(health_router, prefix=f"{API_PREFIX}/public")
 
+    # 🔒 Authentication. These routers carry their own full prefixes because the
+    # exemption list names absolute paths, and a prefix applied here would make
+    # the two disagree silently.
+    app.include_router(auth_public_router)
+    app.include_router(auth_portal_router)
+    app.include_router(auth_app_router)
+
     # Realm routers are registered as their modules land:
-    #   S1  /public/auth        practitioner registration and sign-in
     #   S2  /app/clients        client records; /public/forms  enquiry form
     #   S3  /app/foods          nutrition catalogue
     #   S4  /app/plans          plan authoring
     #   S5  /public/webhooks    provider callbacks
     #   S6  /portal/*           client portal
     #   S12 /admin/*            operator console
+    app.include_router(clients_router)
+    # ⚠️ Registered after `clients_router` and sharing its `/app/clients` prefix.
+    # The paths do not collide — every route here carries a further segment
+    # (`/notes`, `/tags`, `/access`) — and keeping them in a separate module is
+    # what stops one router file growing to cover four unrelated concerns.
+    app.include_router(collaboration_client_router)
+    app.include_router(collaboration_tag_router)
+    # Shares the `/app/clients` prefix for the same reason, and is separate for
+    # the reason its own docstring gives: by S6 the timeline's producers will
+    # outnumber everything in `collaboration.py`.
+    app.include_router(timeline_router)
+    # The collection half of `/app/clients` — list, search, filter and bulk
+    # reassignment. Separate from `clients_router` because that one owns a single
+    # client's lifecycle and this owns the set; they share a prefix and collide
+    # on nothing.
+    app.include_router(discovery_router)
+
+    # 🔒 S2 Slice F — lead capture. The practitioner's enquiry list and form
+    # settings, plus the public form itself.
+    #
+    # ⚠️ `public_forms_router` is the only router in the application on
+    # `PublicRoute`: unauthenticated, transaction-opening, and named in
+    # EXEMPT_PATHS. `verify_route_authorization` below aborts startup if that
+    # last part is ever untrue.
+    app.include_router(enquiries_router)
+    app.include_router(enquiry_form_router)
+    app.include_router(public_forms_router)
+
+    # 🔒 M3 — the clinical workspace. Assessments, measurements, consultation
+    # notes and documents, all nested under `/app/clients/{client_id}` because
+    # every one of them is a fact about a client and authorizes against that
+    # client (AC-M1-006) rather than merely against the action.
+    app.include_router(clinical_router)
+    app.include_router(nutrition_router)
+
+    # 🔒 M4 — plan authoring. Six routers rather than one because API §8.1
+    # addresses a plan's contents at their own top-level paths
+    # (`/app/plan-items/{id}`) rather than nested under the version, so they
+    # cannot share a prefix.
+    #
+    # ⚠️ `client_plans_router` shares the `/app/clients` prefix with four earlier
+    # routers and collides with none of them: every route it declares carries a
+    # further `/plans` segment. Same arrangement as `collaboration` and
+    # `timeline`.
+    app.include_router(client_plans_router)
+    app.include_router(plan_read_router)
+    app.include_router(plan_version_router)
+    app.include_router(plan_day_router)
+    app.include_router(plan_slot_router)
+    app.include_router(plan_item_router)
+
+    # 🔒 M8 — the messaging surface. `messaging_client_router` shares the
+    # `/app/clients` prefix with five earlier routers and collides with none of
+    # them: every route it declares carries a further segment (`/messages`,
+    # `/checkin-schedule`, `/message-preferences`).
+    app.include_router(messaging_client_router)
+    app.include_router(messaging_router)
+
+    # 🔒 Provider delivery-status callbacks (API §11.3). The second router in the
+    # application on `PublicRoute`; its path is named in `EXEMPT_PATHS`, and
+    # `verify_route_authorization` below aborts startup if that stops being true.
+    app.include_router(webhooks_router)
+
+    # 🔒 M7 / S6 — the client realm. The only router in the application whose
+    # actor is a client rather than a practitioner, and the first consumer of
+    # Pattern C row-level security (migration 0025). Isolation between two
+    # clients of one practice is enforced in the database; nothing about that
+    # depends on this line being in the right place.
+    app.include_router(portal_router)
+
+    # 🔒 ADR-05 — last, after every router is registered, so it sees the whole
+    # route table. A route that declares no authorization action, declares one
+    # nobody registered, or declares one correctly while bypassing the pipeline
+    # aborts startup here. Deliberately at import time rather than in `lifespan`:
+    # the check needs no I/O, and a failure should be visible to whoever runs
+    # the process rather than to whoever first calls the endpoint.
+    verify_route_authorization(app)
 
     logger.info(
         "Application configured",

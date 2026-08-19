@@ -16,6 +16,19 @@ dependencies = [
     "psycopg[binary]==3.2.3",
     "python-json-logger==3.2.1",
     "sentry-sdk==2.19.2",
+    # 🔒 NFR-078 justification: JWT verification is where hand-rolled
+    # implementations fail — algorithm confusion (`alg: none`, HS256 verified
+    # against an RS256 public key), non-constant-time signature comparison, and
+    # unvalidated `exp`. PyJWT is small, maintained, and gets those right.
+    # Password hashing needs no dependency: the practitioner realm's credentials
+    # live in the identity provider (NFR-029), and the local adapter uses
+    # `hashlib.scrypt` from the standard library.
+    "pyjwt==2.13.0",
+    # NFR-078 justification: `EmailStr` needs it, and the alternative is a
+    # hand-written pattern. Email regexes reject valid addresses far more often
+    # than they catch invalid ones, and doing that on the registration path
+    # turns a correctness bug into lost signups.
+    "email-validator==2.3.0",
 ]
 
 [project.optional-dependencies]

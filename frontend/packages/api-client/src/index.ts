@@ -163,11 +163,86 @@ export interface ApiClientOptions {
 }
 
 export interface RequestOptions {
-  /** Query parameters. `undefined` values are dropped rather than sent as "undefined". */
-  query?: Record<string, string | number | boolean | undefined>
+  /**
+   * Path parameters, by the name inside the braces in the path key.
+   *
+   * 🔒 Required for any path containing `{...}`. The generated keys are
+   * templates — `/api/v1/app/clients/{client_id}` — and `request` refuses to
+   * send one with a placeholder still in it. Without that check the browser
+   * would request a URL containing a literal `{client_id}`, the API would answer
+   * 404, and the symptom would read as "the client does not exist" rather than
+   * "the call site forgot an argument".
+   */
+  path?: Record<string, string | number>
+  /**
+   * Query parameters. `undefined` values are dropped rather than sent as
+   * "undefined".
+   *
+   * 🔒 An **array becomes repeated keys** — `?stage=active&stage=paused` — which
+   * is API §6.2's filter encoding ("repeated params are OR within a field").
+   * Anything else would need the backend to parse a delimiter out of one value,
+   * and a tag name containing that delimiter would then silently split.
+   * An empty array sends nothing, so "filter by none" and "no filter" agree.
+   */
+  query?: Record<
+    string,
+    | string
+    | number
+    | boolean
+    | undefined
+    | readonly (string | number | boolean | undefined)[]
+  >
   /** JSON request body. Serialised here so callers never set Content-Type. */
   body?: unknown
+  /**
+   * Extra request headers, merged after the defaults.
+   *
+   * 🔒 This is how a caller sends `If-Match` for optimistic concurrency
+   * (ADR-14): the plan aggregate is versioned by a counter, and a mutation must
+   * state the revision it believes it is editing. Merged last, so a caller adds
+   * to the defaults rather than having to reconstruct them — but it means a
+   * caller *could* override `Authorization`, which no call site has reason to.
+   */
+  headers?: Record<string, string>
   signal?: AbortSignal
+}
+
+// ─── Session credential — ADR-A02 ─────────────────────────────────────────
+//
+// 🔒 The access token is held in module scope, not in `localStorage`: anything
+// in storage is readable by any script the page loads, and ADR-A02 keeps the
+// access token in memory for exactly that reason. It is sent as a bearer header
+// (`Authorization: Bearer …`), which is what
+// `app.platform.identity.authentication.bearer_token` reads — never a cookie,
+// never a query parameter. Where the *refresh* token lives is the app's
+// decision, made in its AuthProvider; this layer only knows the access token
+// and how to ask for a new one.
+let accessToken: string | null = null
+
+type RefreshHandler = () => Promise<string | null>
+let refreshHandler: RefreshHandler | null = null
+let refreshing = false
+
+/** Set (or clear, with `null`) the bearer token sent on every request. */
+export function setAccessToken(token: string | null): void {
+  accessToken = token
+}
+
+export function getAccessToken(): string | null {
+  return accessToken
+}
+
+/**
+ * Register the callback that renews an expired access token.
+ *
+ * 🔒 On a 401 the client invokes this **once** and retries the request with the
+ * token it returns (DDR-05 — the refresh rotates). Left unset, a 401 surfaces to
+ * the caller unchanged, which is why installing it is the AuthProvider's job and
+ * not this module's default: a refresh implemented before a session exists could
+ * only be guesswork, and a client with no session must behave exactly as before.
+ */
+export function configureRefreshHandler(handler: RefreshHandler | null): void {
+  refreshHandler = handler
 }
 
 const DEFAULT_BASE_URL = '/api'
@@ -195,33 +270,83 @@ function resolveBaseUrl(explicit?: string): string {
  */
 export function createApiClient(options: ApiClientOptions = {}) {
   const baseUrl = resolveBaseUrl(options.baseUrl)
-  const doFetch = options.fetch ?? globalThis.fetch
+
+  /**
+   * The transport, resolved **per request** rather than captured at
+   * construction.
+   *
+   * ⚠️ `const doFetch = options.fetch ?? globalThis.fetch` looks equivalent and
+   * is not. A module-scope `createApiClient()` — which is how a feature's api.ts
+   * is written — runs at import time, so it would snapshot whatever `fetch` was
+   * bound then. Anything installing a wrapper afterwards is silently bypassed:
+   * a test's stub, and equally a production tracing or offline-queue wrapper
+   * added at app start. Reading it at call time costs one property lookup.
+   */
+  const transport = () => options.fetch ?? globalThis.fetch
 
   async function request<P extends ApiPath, M extends MethodsOf<P>>(
     method: M,
     path: P,
     init: RequestOptions = {},
   ): Promise<ResponseOf<P, M>> {
-    const url = new URL(joinPath(baseUrl, path as string), currentOrigin())
+    const url = new URL(
+      joinPath(baseUrl, expandPath(path as string, init.path)),
+      currentOrigin(),
+    )
 
     for (const [key, value] of Object.entries(init.query ?? {})) {
-      if (value !== undefined) url.searchParams.set(key, String(value))
+      if (value === undefined) continue
+      // `append`, not `set` — an array becomes repeated keys (API §6.2).
+      // ⚠️ Entries are filtered as well as the array itself: `String(undefined)`
+      // is the literal `"undefined"`, which is the same defect the scalar branch
+      // avoids by skipping. A sparse filter list is easy to produce from a UI
+      // holding optional values, and the symptom would be a 422 naming an enum
+      // member nobody chose.
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item !== undefined) url.searchParams.append(key, String(item))
+        }
+      } else {
+        url.searchParams.set(key, String(value))
+      }
     }
 
     const hasBody = init.body !== undefined
-    const response = await doFetch(url.toString(), {
-      method: (method as string).toUpperCase(),
-      headers: {
-        Accept: 'application/json',
-        ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
-      },
-      ...(hasBody ? { body: JSON.stringify(init.body) } : {}),
-      ...(init.signal ? { signal: init.signal } : {}),
-      // 🔒 ADR-A02 — the refresh token is an HttpOnly cookie. `same-origin`
-      // rather than `include`: the API is same-origin by design, and `include`
-      // would send credentials to any base URL someone misconfigures.
-      credentials: 'same-origin',
-    })
+    const send = (token: string | null) =>
+      transport()(url.toString(), {
+        method: (method as string).toUpperCase(),
+        headers: {
+          Accept: 'application/json',
+          ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+          // 🔒 The bearer credential, when a session exists. Omitted entirely
+          // otherwise, so an unauthenticated call sends no empty `Authorization`.
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          // Caller headers last — this is where `If-Match` lands (ADR-14).
+          ...(init.headers ?? {}),
+        },
+        ...(hasBody ? { body: JSON.stringify(init.body) } : {}),
+        ...(init.signal ? { signal: init.signal } : {}),
+        // 🔒 ADR-A02 — the refresh token is an HttpOnly cookie. `same-origin`
+        // rather than `include`: the API is same-origin by design, and `include`
+        // would send credentials to any base URL someone misconfigures.
+        credentials: 'same-origin',
+      })
+
+    let response = await send(accessToken)
+
+    // 🔒 One silent renewal on expiry (ADR-A02, DDR-05). A 401 is the only
+    // status a refresh can address; anything else is returned untouched. The
+    // `refreshing` guard stops the refresh call's own failure from recursing,
+    // and the whole block is inert until an AuthProvider registers a handler.
+    if (response.status === 401 && refreshHandler !== null && !refreshing) {
+      refreshing = true
+      try {
+        const renewed = await refreshHandler()
+        if (renewed !== null) response = await send(renewed)
+      } finally {
+        refreshing = false
+      }
+    }
 
     return (await decode(response)) as ResponseOf<P, M>
   }
@@ -242,6 +367,29 @@ export type PathsWith<M extends HttpMethod> = {
 export type ApiClient = ReturnType<typeof createApiClient>
 
 // ─── Internals ───────────────────────────────────────────────────────────
+
+/**
+ * Substitute `{name}` placeholders in a generated path key.
+ *
+ * 🔒 Throws rather than sending an unresolved template. Every value is
+ * `encodeURIComponent`'d: an id is normally a UUID, but a path segment built by
+ * concatenation is the classic way a `/` or `?` in a value silently changes
+ * which endpoint gets called.
+ */
+function expandPath(template: string, params: Record<string, string | number> | undefined): string {
+  const expanded = template.replace(/\{([^}]+)\}/g, (_match, name: string) => {
+    const value = params?.[name]
+    if (value === undefined) {
+      throw new TypeError(
+        `Missing path parameter '${name}' for '${template}'. Pass it as ` +
+          `{ path: { ${name}: … } } — sending the template unresolved would request a ` +
+          `URL containing a literal '{${name}}' and read back as a 404.`,
+      )
+    }
+    return encodeURIComponent(String(value))
+  })
+  return expanded
+}
 
 function joinPath(baseUrl: string, path: string): string {
   // The generated key carries the full `/api/v1/...`. If the base URL already

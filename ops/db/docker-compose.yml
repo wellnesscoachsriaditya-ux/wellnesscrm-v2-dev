@@ -1,0 +1,68 @@
+# WellnessCRM V2 — a local PostgreSQL for the isolation gate.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# 🔒 This exists so AC-M0-003 can actually run. Nothing more.
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# ⚠️ Not a development environment and not a model of production. The app still
+# talks to Supabase; this container exists because the tenant-isolation and
+# audit-immutability suites need a database where we control the *roles*, and
+# a hosted Supabase project hands you a superuser-ish owner by default — the
+# one configuration under which the gate silently passes without testing
+# anything (see tests/integration/conftest.py, precondition 2).
+#
+# ⚠️ 🔒 **This container cannot prove the pooler is in transaction mode.** It has
+# no PgBouncer in front of it, so `verify_pooler_isolation` passing here says
+# only that `SET LOCAL` behaves correctly on a direct connection — which was
+# never in doubt. DB §2.3 remains open until it is confirmed against the real
+# Supabase pooler. Running this suite green must not be read as closing it.
+#
+# ─── Usage ────────────────────────────────────────────────────────────────
+#
+#   docker compose -f ops/db/docker-compose.yml up -d
+#   ops/db/provision-test-db.sh          # roles, passwords, migrations
+#   cd backend && .venv/Scripts/python -m pytest tests/integration -q
+#   docker compose -f ops/db/docker-compose.yml down -v
+#
+# The `-v` matters on teardown: without it the volume persists and the next
+# `up` starts with the previous run's rows, which makes the uniqueness
+# assertions in `seeded_tenants` fail for a reason that has nothing to do with
+# isolation.
+
+services:
+  postgres:
+    # 🔒 Pinned to the major version the project targets (PostgreSQL 15+, per
+    # ops/db/README.md). `postgres:latest` would move under us and RLS
+    # behaviour is exactly the kind of thing where a silent major-version bump
+    # is worth catching deliberately rather than discovering in a failed gate.
+    image: postgres:16.4-alpine
+    container_name: wellnesscrm-test-db
+
+    environment:
+      # ⚠️ Throwaway credentials for a throwaway container. NFR-034 forbids
+      # secrets in source control; these are not secrets — this database is
+      # created empty, is destroyed by `down -v`, and must never hold real data.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: wellnesscrm_test
+
+    ports:
+      # 5433, not 5432: a developer with a native PostgreSQL already listening
+      # on the default port would otherwise get a bind failure, or worse, have
+      # the provisioning script silently target their real cluster.
+      - '5433:5432'
+
+    # 🔒 The provisioning script waits on this. Without a healthcheck, `up -d`
+    # returns as soon as the container starts, and the first `psql` races the
+    # server's own initialisation — an intermittent failure that looks like a
+    # bad script rather than a missing wait.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d wellnesscrm_test']
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 3s
+
+    # No volume mapping. The database is disposable by design: every run starts
+    # from an empty cluster, so a passing gate cannot depend on state some
+    # earlier run happened to leave behind.

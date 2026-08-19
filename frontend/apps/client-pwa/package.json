@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@wellnesscrm/api-client": "*",
     "@wellnesscrm/design-system": "*",
     "@wellnesscrm/ia": "*",
     "react": "18.3.1",
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@testing-library/jest-dom": "6.6.3",
     "@testing-library/react": "16.1.0",
+    "@testing-library/user-event": "14.5.2",
     "jsdom": "25.0.1",
     "vitest": "2.1.8"
   }

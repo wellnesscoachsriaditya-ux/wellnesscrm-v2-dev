@@ -136,6 +136,112 @@ jobs:
         # 🔒 A linter never seen to fail is indistinguishable from one that
         # cannot. The negative tests are part of the gate, not a nicety.
 
+  # ─── Isolation gate ────────────────────────────────────────────────────
+  # 🔒 AC-M0-003, the S1 sprint gate, plus DDR-15 audit immutability.
+  #
+  # Separate from `backend` for the same reason `boundaries` is: a failure here
+  # is not a code defect, it is the tenancy model not holding, and that must be
+  # legible from the job list alone.
+  #
+  # These suites need a database whose *roles* we control. `backend` runs without
+  # one and they skip there; this job is where they actually execute.
+  #
+  # ⚠️ 🔒 **This job does not close DB §2.3.** There is no PgBouncer in front of
+  # the service container, so it proves `SET LOCAL` isolation on a direct
+  # connection — which was never the doubt. The launch gate is whether the
+  # *Supabase pooler* runs in transaction mode, and that can only be confirmed
+  # against a deployed environment. Do not read a green tick here as closing it.
+  integration:
+    name: Isolation gate — AC-M0-003 · DDR-15
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        # 🔒 Pinned to match ops/db/docker-compose.yml. RLS semantics are exactly
+        # what this job asserts, so the major version must not drift silently.
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: localdev
+          POSTGRES_DB: wellnesscrm_test
+        ports:
+          - 5432:5432
+        # Without this the first psql races initdb — an intermittent red that
+        # looks like a broken script rather than a startup ordering problem.
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wellnesscrm_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+
+    env:
+      # 🔒 The whole point of this job. With this set, a missing database turns
+      # the suites into failures instead of skips — see
+      # backend/tests/integration/conftest.py. A skip is green, so without this
+      # the gate could quietly stop running and nothing would say so.
+      REQUIRE_LIVE_DATABASE: '1'
+      TEST_DB_PORT: '5432'   # the service maps to the default port, not 5433
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend
+        working-directory: backend
+        run: pip install -e ".[dev]"
+
+      # Roles → passwords → migrations → grant verification, in that order. The
+      # ordering is load-bearing: `alembic upgrade head` connects as
+      # `app_migrator` and revision 0003 issues `REVOKE ... FROM app_user`, so
+      # both roles must exist before migrations run.
+      #
+      # ⚠️ Invoked via `bash`, not as `./provision-test-db.sh`. The script is
+      # committed mode 100755, but it is authored on Windows where Git does not
+      # track the executable bit — one `git add` from a workstation with
+      # `core.filemode=false` silently drops it, and this job would then fail
+      # with "permission denied" for a reason unrelated to anything it tests.
+      - name: Provision database
+        run: bash ops/db/provision-test-db.sh
+
+      - name: Run the isolation and immutability gate
+        working-directory: backend
+        run: |
+          eval "$(bash ../ops/db/provision-test-db.sh --export)"
+          pytest tests/integration -v
+
+      # 🔒 A gate that has never been seen to fail is indistinguishable from one
+      # that cannot fail — the same argument the `boundaries` job makes for its
+      # negative tests. Granting UPDATE back must make 002_verify_grants.sql
+      # abort; if it exits 0 here, the script is not actually checking anything.
+      - name: Verify the grant check still catches a re-granted UPDATE
+        run: |
+          PGPASSWORD=localdev psql "postgresql://postgres:localdev@localhost:5432/wellnesscrm_test" \
+            -v ON_ERROR_STOP=1 -c 'GRANT UPDATE ON TABLE audit_log TO app_user'
+          if PGPASSWORD=localdev psql "postgresql://postgres:localdev@localhost:5432/wellnesscrm_test" \
+               -v ON_ERROR_STOP=1 -f ops/db/002_verify_grants.sql; then
+            echo '::error::002_verify_grants.sql passed with UPDATE granted on audit_log. The DDR-15 check is inert.'
+            exit 1
+          fi
+          echo 'Grant check correctly rejected the re-granted UPDATE.'
+
+      # Proves the migration chain reverses cleanly, so a bad deploy can be
+      # rolled back. Runs last because it destroys the schema above.
+      - name: Migration round-trip — downgrade to base and re-apply
+        working-directory: backend
+        env:
+          DATABASE_MIGRATION_URL: postgresql+psycopg://app_migrator:localdev@localhost:5432/wellnesscrm_test
+          DATABASE_URL: postgresql+psycopg://app_user:localdev@localhost:5432/wellnesscrm_test
+        run: |
+          alembic downgrade base
+          alembic upgrade head
+
   # ─── Frontend ──────────────────────────────────────────────────────────
   # DoD §4.1: lint · types · build · bundle budget · API-client freshness.
   #
@@ -244,7 +350,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [backend, boundaries, frontend]
+    needs: [backend, boundaries, integration, frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 5
 

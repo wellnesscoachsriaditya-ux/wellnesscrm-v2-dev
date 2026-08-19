@@ -116,6 +116,9 @@ export type { AppShellProps, NavItem } from './layout/AppShell'
 export { MobileShell } from './layout/MobileShell'
 export type { MobileShellProps, MobileNavItem } from './layout/MobileShell'
 
+export { PublicShell } from './layout/PublicShell'
+export type { PublicShellProps } from './layout/PublicShell'
+
 export { AdminShell } from './layout/AdminShell'
 export type { AdminShellProps, AdminNavItem } from './layout/AdminShell'
 

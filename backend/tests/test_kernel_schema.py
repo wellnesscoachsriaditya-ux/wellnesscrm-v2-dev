@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import ast
 import re
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -32,6 +33,10 @@ from app.kernel import Base
 from app.kernel.models import (
     AccessStatus,
     AuthRealm,
+    IdempotencyState,
+    JobClass,
+    JobOutcome,
+    JobStatus,
     LinkPurpose,
     Operator,
     Session,
@@ -43,13 +48,14 @@ from app.kernel.models import (
 )
 
 _BACKEND = Path(__file__).resolve().parents[1]
-_MIGRATION = _BACKEND / "migrations" / "versions" / "20260805_0002_platform_kernel.py"
+_VERSIONS = _BACKEND / "migrations" / "versions"
+_MIGRATION = _VERSIONS / "20260805_0002_platform_kernel.py"
 
 #: Tables carrying `tenant_id` and therefore requiring Pattern A RLS.
 _TENANT_SCOPED = ("users", "client_access_grants", "magic_links")
 
 #: Platform tables (DB §2.2 Pattern D) — deliberately without RLS.
-_PLATFORM_TABLES = ("tenants", "operators", "sessions")
+_PLATFORM_TABLES = ("tenants", "operators", "sessions", "audit_log")
 
 
 @pytest.fixture(scope="module")
@@ -57,6 +63,21 @@ def migration_source() -> str:
     if not _MIGRATION.is_file():
         pytest.fail(f"platform kernel migration is missing: {_MIGRATION}")
     return _MIGRATION.read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def all_migrations_source() -> str:
+    """Every revision, concatenated.
+
+    Model/migration drift is a property of the whole chain, not of one file: a
+    table introduced in a later revision is still a table the models must agree
+    with. Reading only the revision that happens to be under discussion is how
+    a drift check silently stops covering new work.
+    """
+    sources = sorted(p for p in _VERSIONS.glob("*.py") if p.name != "__init__.py")
+    if not sources:
+        pytest.fail(f"no migrations found in {_VERSIONS}")
+    return "\n".join(p.read_text(encoding="utf-8") for p in sources)
 
 
 def _ddl(table_name: str) -> str:
@@ -297,6 +318,10 @@ def test_every_timestamp_is_timezone_aware(table: str) -> None:
         (LinkPurpose, "link_purpose"),
         (TransportType, "transport_type"),
         (AuthRealm, "auth_realm"),
+        (JobClass, "job_class"),
+        (JobStatus, "job_status"),
+        (JobOutcome, "job_outcome"),
+        (IdempotencyState, "idempotency_state"),
     ],
 )
 def test_enum_types_are_named_per_convention(python_enum: type, type_name: str) -> None:
@@ -346,7 +371,7 @@ def test_operator_two_factor_defaults_to_enabled() -> None:
 
 
 @pytest.mark.parametrize("table", sorted(Base.metadata.tables))
-def test_migration_creates_every_model_table(migration_source: str, table: str) -> None:
+def test_migration_creates_every_model_table(all_migrations_source: str, table: str) -> None:
     """The hand-written migration and the ORM models must not drift.
 
     ⚠️ This is the cost of hand-writing the migration instead of autogenerating
@@ -354,34 +379,161 @@ def test_migration_creates_every_model_table(migration_source: str, table: str) 
     because it cannot see RLS, FORCE, or grant revocations — all load-bearing.
     """
     assert (
-        f'op.create_table(\n        "{table}"' in migration_source
-    ), f"model declares table `{table}` but the migration does not create it"
+        f'op.create_table(\n        "{table}"' in all_migrations_source
+    ), f"model declares table `{table}` but no migration creates it"
 
 
-def test_migration_columns_match_models(migration_source: str) -> None:
-    """Every model column appears in the migration, and vice versa.
+def _string_arg(call: ast.Call, index: int) -> str | None:
+    """The `index`-th positional argument, if it is a string literal."""
+    if len(call.args) <= index:
+        return None
+    argument = call.args[index]
+    if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+        return argument.value
+    return None
+
+
+def _replay_upgrades(source: str) -> dict[str, set[str]]:
+    """The column set every table ends up with after the whole chain has run.
+
+    ⚠️ Only ``upgrade()`` bodies are read. A revision's ``downgrade()`` drops
+    exactly what its ``upgrade()`` added, so walking the module as a whole would
+    cancel every additive revision out and report drift on work that is correct.
+
+    Revisions are replayed in filename order, which
+    ``test_migration_filenames_sort_chronologically`` pins to chain order — so an
+    ``add_column`` in a later revision lands after the ``create_table`` it
+    extends, and a ``drop_column`` after the column it removes.
+
+    ⚠️ Names only, and only these four operations. Anything else that changes a
+    column's *name* would go unnoticed, and the check would have to grow again.
+
+    ⚠️ ``alter_column(..., new_column_name=...)`` was added when revision
+    ``0026`` performed the chain's first rename. Without it the replay kept the
+    old name and reported the model as drifted — a false positive on a correct
+    migration, which is exactly how a drift check gets weakened rather than
+    fixed. The rename is read as "discard the old name, add the new one",
+    because that is what it does to a column set.
+    """
+    tables: dict[str, set[str]] = {}
+
+    for node in ast.walk(ast.parse(source)):
+        if not (isinstance(node, ast.FunctionDef) and node.name == "upgrade"):
+            continue
+
+        for call in ast.walk(node):
+            if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)):
+                continue
+
+            operation = call.func.attr
+            table_name = _string_arg(call, 0)
+            if table_name is None:
+                continue
+
+            if operation == "create_table":
+                tables[table_name] = {
+                    name
+                    for argument in call.args[1:]
+                    if isinstance(argument, ast.Call)
+                    and getattr(argument.func, "attr", "") == "Column"
+                    and (name := _string_arg(argument, 0)) is not None
+                }
+            elif operation == "add_column":
+                column = call.args[1] if len(call.args) > 1 else None
+                if (
+                    isinstance(column, ast.Call)
+                    and getattr(column.func, "attr", "") == "Column"
+                    and (name := _string_arg(column, 0)) is not None
+                ):
+                    tables.setdefault(table_name, set()).add(name)
+            elif operation == "drop_column":
+                dropped = _string_arg(call, 1)
+                if dropped is not None:
+                    tables.setdefault(table_name, set()).discard(dropped)
+            elif operation == "alter_column":
+                renamed_to = _keyword_string(call, "new_column_name")
+                previous = _string_arg(call, 1)
+                if renamed_to is not None and previous is not None:
+                    columns = tables.setdefault(table_name, set())
+                    columns.discard(previous)
+                    columns.add(renamed_to)
+
+    return tables
+
+
+def _keyword_string(call: ast.Call, name: str) -> str | None:
+    """A string-literal keyword argument, or ``None``."""
+    for keyword in call.keywords:
+        if keyword.arg == name and isinstance(keyword.value, ast.Constant):
+            value = keyword.value.value
+            return value if isinstance(value, str) else None
+    return None
+
+
+def test_the_replay_follows_additive_revisions() -> None:
+    """🔒 The drift check's own check.
+
+    A replay that silently returned the creation-time columns would make
+    ``test_migration_columns_match_models`` pass for the wrong reason on every
+    additive revision from here on. This feeds it a two-revision chain and
+    asserts it tracks the add, the drop, and the ``downgrade()`` it must ignore.
+    """
+    source = textwrap.dedent(
+        """
+        def upgrade():
+            op.create_table("t", sa.Column("a"), sa.Column("b"))
+
+        def downgrade():
+            op.drop_table("t")
+
+        def upgrade():
+            op.add_column("t", sa.Column("c"))
+            op.drop_column("t", "b")
+
+        def downgrade():
+            op.add_column("t", sa.Column("b"))
+            op.drop_column("t", "c")
+
+        def upgrade():
+            op.alter_column("t", "a", new_column_name="renamed")
+
+        def downgrade():
+            op.alter_column("t", "renamed", new_column_name="a")
+        """
+    )
+
+    assert _replay_upgrades(source) == {"t": {"renamed", "c"}}
+
+
+def test_the_replay_ignores_an_alter_that_is_not_a_rename() -> None:
+    """``alter_column`` is mostly used for types and nullability.
+
+    ⚠️ Only the ``new_column_name`` form touches the column *set*. Treating every
+    ``alter_column`` as a rename would drop a column from the replay on any type
+    change and report drift that is not there.
+    """
+    source = textwrap.dedent(
+        """
+        def upgrade():
+            op.create_table("t", sa.Column("a"))
+            op.alter_column("t", "a", nullable=False)
+        """
+    )
+
+    assert _replay_upgrades(source) == {"t": {"a"}}
+
+
+def test_migration_columns_match_models(all_migrations_source: str) -> None:
+    """Every model column appears in the migration chain, and vice versa.
 
     Compares names only — types are checked by the compiled-DDL tests above.
-    """
-    tree = ast.parse(migration_source)
-    in_migration: dict[str, set[str]] = {}
 
-    for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "create_table"):
-            continue
-        if not (node.args and isinstance(node.args[0], ast.Constant)):
-            continue
-        table_name = node.args[0].value
-        columns: set[str] = set()
-        for arg in node.args[1:]:
-            if (
-                isinstance(arg, ast.Call)
-                and getattr(arg.func, "attr", "") == "Column"
-                and arg.args
-                and isinstance(arg.args[0], ast.Constant)
-            ):
-                columns.add(arg.args[0].value)
-        in_migration[table_name] = columns
+    🔒 The whole *chain*, replayed, rather than the `create_table` calls alone.
+    A table's shape is what the last revision left it as, and reading only
+    creations would report every additive revision as drift — which is how a
+    drift check gets deleted rather than fixed.
+    """
+    in_migration = _replay_upgrades(all_migrations_source)
 
     for table_name, table in Base.metadata.tables.items():
         model_columns = {c.name for c in table.columns}
