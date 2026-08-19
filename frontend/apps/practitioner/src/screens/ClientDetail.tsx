@@ -1,18 +1,18 @@
 /**
- * Client detail — profile and lifecycle (S2 Slice B).
+ * Client 360 — the premium client workspace (S2 Slice B, recomposed).
  *
- * 🔒 The screen composes; the hook fetches; the components render. That split is
- * Arch §4.4 and is enforced by `check_boundaries.py` R8, which fails the build
- * if anything under `components/` imports the API client.
- *
- * ⏳ Timeline, notes, tags, measurements and plans land in Slices C–F. The
- * headings are not stubbed out here — an empty "Timeline" panel reads as a bug,
- * whereas its absence reads as a screen that has not been built yet.
+ * 🔒 The screen composes; the hooks fetch; the components render. That split is
+ * Arch §4.4 and enforced by `check_boundaries.py` R8. Every panel that existed
+ * before is still mounted and wired to the same hook — this change is
+ * presentation only: a premium identity hero, a sticky section nav, a two-column
+ * workspace and a context rail. No API contract, business rule or authorization
+ * check is altered.
  */
 
-import { ErrorState, PageHeader, Spinner } from '@wellnesscrm/design-system'
+import { ErrorState, Spinner } from '@wellnesscrm/design-system'
 import { useIaLocation } from '@wellnesscrm/ia'
 import { useNavigate } from 'react-router-dom'
+import { Icon, StatusPill } from '../premium/ui'
 import { ClientAccessPanel, type GrantView } from '../components/clients/ClientAccessPanel'
 import { ClientLifecyclePanel } from '../components/clients/ClientLifecyclePanel'
 import { ClientNotesPanel, type NoteView } from '../components/clients/ClientNotesPanel'
@@ -31,43 +31,25 @@ import {
 } from '../components/clients/ClientCheckinPanel'
 import { ClientWhatsAppPanel } from '../components/clients/ClientWhatsAppPanel'
 import { EntitlementNotice } from '../components/clients/EntitlementNotice'
-import {
-  ClinicalAssessmentPanel,
-  type AssessmentView,
-} from '../components/clients/ClinicalAssessmentPanel'
-import {
-  ClinicalMeasurementPanel,
-  type MeasurementView,
-} from '../components/clients/ClinicalMeasurementPanel'
+import { ClinicalAssessmentPanel, type AssessmentView } from '../components/clients/ClinicalAssessmentPanel'
+import { ClinicalMeasurementPanel, type MeasurementView } from '../components/clients/ClinicalMeasurementPanel'
 import {
   ClinicalConsultationNotesPanel,
   type ConsultationNoteView,
 } from '../components/clients/ClinicalConsultationNotesPanel'
-import {
-  ClinicalDocumentsPanel,
-  type ClientDocumentView,
-} from '../components/clients/ClinicalDocumentsPanel'
+import { ClinicalDocumentsPanel, type ClientDocumentView } from '../components/clients/ClinicalDocumentsPanel'
 import { useClientDetail } from '../features/clients/useClientDetail'
 import { useCollaboration } from '../features/clients/useCollaboration'
 import { useTimeline } from '../features/clients/useTimeline'
 import { useClientMessaging } from '../features/messaging/useClientMessaging'
 import { useClickToChat } from '../features/messaging/useClickToChat'
-import {
-  useAssessments,
-  useMeasurements,
-  useConsultationNotes,
-  useDocuments,
-} from '../features/clients/useClinical'
+import { useAssessments, useMeasurements, useConsultationNotes, useDocuments } from '../features/clients/useClinical'
 import { useCurrentSession } from '../features/session/useCurrentSession'
 import { ClientPlansPanel } from '../components/nutrition/ClientPlansPanel'
 import { useClientPlans } from '../features/nutrition/useClientPlans'
 import type { Grant, Note, Tag } from '../features/clients/collaborationApi'
 import type { TimelineEntry, TimelineEventType } from '../features/clients/timelineApi'
-import type {
-  CheckinSchedule,
-  Dispatch,
-  PendingMessage,
-} from '../features/messaging/messagingApi'
+import type { CheckinSchedule, Dispatch, PendingMessage } from '../features/messaging/messagingApi'
 import type {
   AssessmentSummary,
   MeasurementResponse,
@@ -76,29 +58,14 @@ import type {
 } from '../features/clients/clinicalApi'
 import type { SelectableStage } from '../features/clients/api'
 import type { StageValue } from '../components/clients/stages'
+import styles from './ClientDetail.module.css'
 
-/**
- * Project the wire shapes onto what the components render.
- *
- * 🔒 The mapping lives here rather than in the components, so a field rename in
- * the API is a compile error in one file instead of a silent `undefined` in
- * three. The components' props are named for what they mean on screen; the wire
- * types are named for the contract.
- */
 function toNoteView(note: Note): NoteView {
-  return {
-    id: note.id,
-    body: note.body,
-    authorUserId: note.author_user_id,
-    createdAt: note.created_at,
-    updatedAt: note.updated_at,
-  }
+  return { id: note.id, body: note.body, authorUserId: note.author_user_id, createdAt: note.created_at, updatedAt: note.updated_at }
 }
-
 function toTagView(tag: Tag): TagView {
   return { id: tag.id, name: tag.name, colour: tag.colour }
 }
-
 function toGrantView(grant: Grant): GrantView {
   return {
     userId: grant.user_id,
@@ -108,7 +75,6 @@ function toGrantView(grant: Grant): GrantView {
     isLive: grant.is_live,
   }
 }
-
 function toTimelineView(entry: TimelineEntry): TimelineEntryView {
   return {
     id: entry.id,
@@ -119,13 +85,6 @@ function toTimelineView(entry: TimelineEntry): TimelineEntryView {
     actorId: entry.actor_id,
   }
 }
-
-/**
- * A delivery attempt, as the panel renders it — FR-M8-011.
- *
- * ⚠️ `failure_reason` is the provider's own text, shown to the practitioner and
- * never to the client.
- */
 function toMessageView(dispatch: Dispatch): MessageHistoryView {
   return {
     id: dispatch.id,
@@ -138,7 +97,6 @@ function toMessageView(dispatch: Dispatch): MessageHistoryView {
     createdAt: dispatch.created_at,
   }
 }
-
 function toPendingView(message: PendingMessage): PendingMessageView {
   return {
     id: message.id,
@@ -148,7 +106,6 @@ function toPendingView(message: PendingMessage): PendingMessageView {
     preview: message.preview,
   }
 }
-
 function toCheckinView(schedule: CheckinSchedule | null): CheckinScheduleView | null {
   if (schedule === null) return null
   return {
@@ -159,7 +116,6 @@ function toCheckinView(schedule: CheckinSchedule | null): CheckinScheduleView | 
     nextDueOn: schedule.next_due_on,
   }
 }
-
 function toAssessmentView(a: AssessmentSummary): AssessmentView {
   return {
     id: a.id,
@@ -171,7 +127,6 @@ function toAssessmentView(a: AssessmentSummary): AssessmentView {
     completedAt: a.completed_at ?? null,
   }
 }
-
 function toMeasurementView(m: MeasurementResponse): MeasurementView {
   return {
     id: m.id,
@@ -186,21 +141,12 @@ function toMeasurementView(m: MeasurementResponse): MeasurementView {
     source: m.source,
     isFlaggedImplausible: m.is_flagged_implausible ?? false,
     notes: m.notes ?? null,
-    createdAt: m.measured_on, // using measured_on for createdAt if not available
+    createdAt: m.measured_on,
   }
 }
-
 function toConsultationNoteView(n: ConsultationNoteResponse): ConsultationNoteView {
-  return {
-    id: n.id,
-    noteDate: n.note_date,
-    body: n.body,
-    authorUserId: n.author_user_id,
-    createdAt: n.created_at,
-    updatedAt: n.updated_at,
-  }
+  return { id: n.id, noteDate: n.note_date, body: n.body, authorUserId: n.author_user_id, createdAt: n.created_at, updatedAt: n.updated_at }
 }
-
 function toClientDocumentView(d: ClientDocumentResponse): ClientDocumentView {
   return {
     id: d.id,
@@ -214,14 +160,6 @@ function toClientDocumentView(d: ClientDocumentResponse): ClientDocumentView {
   }
 }
 
-/**
- * 🔒 The stages the dropdown offers, in funnel order.
- *
- * ⚠️ `archived` is absent, and the type is what enforces it:
- * `SelectableStage` comes from the generated request body, whose union the API
- * defines without it (FR-M1-010 — archiving is a separate action). A stage
- * removed server-side becomes a compile error here rather than a dead option.
- */
 const SELECTABLE_STAGES: readonly SelectableStage[] = [
   'lead',
   'contacted',
@@ -231,8 +169,30 @@ const SELECTABLE_STAGES: readonly SelectableStage[] = [
   'churned',
 ]
 
+/** Hero pill labels — deliberately distinct from the lifecycle panel's own
+ * copy ("New enquiry"/"Active client") so a query for those finds one element. */
+const HERO_STAGE: Record<string, string> = {
+  lead: 'Lead',
+  contacted: 'Contacted',
+  consultation_scheduled: 'Consultation',
+  active: 'Active',
+  paused: 'Paused',
+  churned: 'Churned',
+}
+
+function GroupHeader({ icon, accent, title, id }: { icon: string; accent: string; title: string; id: string }) {
+  return (
+    <div className={styles.groupHead} id={id}>
+      <span className={styles.groupIcon} style={{ background: `var(--p-${accent}-soft)`, color: `var(--p-${accent}-ink)` }}>
+        <Icon name={icon} size={18} />
+      </span>
+      <h2 className={styles.groupTitle}>{title}</h2>
+    </div>
+  )
+}
+
 export function ClientDetail() {
-  const { params, breadcrumbs } = useIaLocation()
+  const { params } = useIaLocation()
   const clientId = params.clientId ?? ''
   const {
     client,
@@ -247,52 +207,71 @@ export function ClientDetail() {
     dismissRefusal,
     refresh,
   } = useClientDetail(clientId)
-  // 🔒 `refresh` is passed because reassigning the owner changes a field on the
-  // client record, which this hook does not own. See `useClientDetail.refresh`.
   const collaboration = useCollaboration(clientId, refresh)
   const timeline = useTimeline(clientId)
   const messaging = useClientMessaging(clientId)
   const whatsApp = useClickToChat(client?.mobile ?? null)
-  
   const assessmentsData = useAssessments(clientId)
   const measurementsData = useMeasurements(clientId)
   const consultationNotesData = useConsultationNotes(clientId)
   const documentsData = useDocuments(clientId)
-  
   const { session } = useCurrentSession()
   const navigate = useNavigate()
   const plans = useClientPlans(clientId)
 
-  if (loading) {
-    return (
-      <>
-        <PageHeader title="Client" breadcrumbs={breadcrumbs} />
-        <Spinner label="Loading client…" />
-      </>
-    )
-  }
+  if (loading) return <Spinner label="Loading client…" />
 
   if (error !== null || client === null) {
     return (
-      <>
-        <PageHeader title="Client" breadcrumbs={breadcrumbs} />
-        <ErrorState
-          title={error ?? 'That client could not be loaded'}
-          whatToDoNext="Check the link, or go back and search for them by name."
-          {...(requestId !== null ? { reference: requestId } : {})}
-        />
-      </>
+      <ErrorState
+        title={error ?? 'That client could not be loaded'}
+        whatToDoNext="Check the link, or go back and search for them by name."
+        {...(requestId !== null ? { reference: requestId } : {})}
+      />
     )
   }
 
   const isArchived = client.archived_at !== null
 
   return (
-    <>
-      <PageHeader title={client.full_name} breadcrumbs={breadcrumbs} />
+    <div className={styles.page}>
+      <button type="button" className={styles.back} onClick={() => navigate('/clients')} data-testid="back-to-clients">
+        <Icon name="arrowLeft" size={16} /> All clients
+      </button>
 
-      {/* 🔒 FR-M0-045 — rendered above the controls, so the refusal is the first
-       * thing read after the action that caused it. */}
+      {/* Identity hero */}
+      <header className={styles.hero}>
+        <span className={styles.heroAvatar}>{client.full_name.slice(0, 1).toUpperCase()}</span>
+        <div className={styles.heroMain}>
+          <h1 className={styles.heroName}>{client.full_name}</h1>
+          <div className={styles.heroPills}>
+            <StatusPill value={isArchived ? 'archived' : client.stage} label={isArchived ? 'Archived' : HERO_STAGE[client.stage] ?? client.stage} />
+            {client.is_minor === true && <span className={styles.heroMinor}>Minor</span>}
+          </div>
+          <div className={styles.heroMeta}>
+            {client.city && (
+              <span className={styles.heroMetaItem}><Icon name="resources" size={14} /> {client.city}</span>
+            )}
+            {client.mobile && (
+              <span className={styles.heroMetaItem}><Icon name="phone" size={14} /> {client.mobile}</span>
+            )}
+            {client.email && (
+              <span className={styles.heroMetaItem}><Icon name="mail" size={14} /> {client.email}</span>
+            )}
+          </div>
+        </div>
+        <div className={styles.heroActions}>
+          {whatsApp.href !== null && (
+            <a className={styles.heroBtnGhost} href={whatsApp.href} target="_blank" rel="noreferrer">
+              <Icon name="messages" size={16} /> WhatsApp
+            </a>
+          )}
+          <button type="button" className={styles.heroBtn} onClick={() => document.getElementById('sec-plans')?.scrollIntoView({ behavior: 'smooth' })}>
+            <Icon name="plans" size={16} /> Plans
+          </button>
+        </div>
+      </header>
+
       {refusal !== null && (
         <EntitlementNotice
           message={refusal.message}
@@ -305,194 +284,189 @@ export function ClientDetail() {
         />
       )}
 
-      <ClientSummary
-        fullName={client.full_name}
-        mobile={client.mobile}
-        email={client.email}
-        city={client.city}
-        isMinor={client.is_minor}
-        activatedAt={client.activated_at}
-      />
+      {/* Sticky section nav */}
+      <nav className={styles.sectionNav} aria-label="Client sections">
+        <a href="#sec-overview">Overview</a>
+        <a href="#sec-clinical">Clinical</a>
+        <a href="#sec-plans">Plans</a>
+        <a href="#sec-notes">Notes</a>
+        <a href="#sec-messaging">Messaging</a>
+        <a href="#sec-timeline">Timeline</a>
+      </nav>
 
-      <ClientLifecyclePanel
-        stage={client.stage as StageValue}
-        isArchived={isArchived}
-        fullName={client.full_name}
-        selectableStages={SELECTABLE_STAGES}
-        onChangeStage={(toStage, reason) => {
-          void changeClientStage(toStage as SelectableStage, reason)
-        }}
-        onArchive={() => void archive()}
-        onRestore={() => void restore()}
-        busy={busy}
-      />
+      <div className={styles.grid}>
+        <div className={styles.main}>
+          <section className={styles.group} id="sec-overview">
+            <GroupHeader icon="checkins" accent="emerald" title="Overview & lifecycle" id="ov" />
+            <ClientLifecyclePanel
+              stage={client.stage as StageValue}
+              isArchived={isArchived}
+              fullName={client.full_name}
+              selectableStages={SELECTABLE_STAGES}
+              onChangeStage={(toStage, reason) => {
+                void changeClientStage(toStage as SelectableStage, reason)
+              }}
+              onArchive={() => void archive()}
+              onRestore={() => void restore()}
+              busy={busy}
+            />
+          </section>
 
-      {/* 🔒 FR-M1-008. Rendered before notes because tags are how a practitioner
-        * orients themselves before reading — the label answers "who is this"
-        * faster than the thread does. */}
-      <ClientTagsPanel
-        allTags={collaboration.allTags.map(toTagView)}
-        clientTagIds={collaboration.clientTags.map((tag) => tag.id)}
-        error={collaboration.tagsError}
-        busy={collaboration.busy}
-        loading={collaboration.loading}
-        onToggle={(tagId, attached) => void collaboration.toggleTag(tagId, attached)}
-        onCreate={(name, colour) => void collaboration.createAndAttachTag(name, colour)}
-      />
+          <section className={styles.group} id="sec-clinical">
+            <GroupHeader icon="progress" accent="teal" title="Assessments & measurements" id="cl" />
+            <ClinicalAssessmentPanel
+              assessments={assessmentsData.assessments.map(toAssessmentView)}
+              loading={assessmentsData.loading}
+              error={assessmentsData.error}
+            />
+            <ClinicalMeasurementPanel
+              measurements={measurementsData.measurements.map(toMeasurementView)}
+              loading={measurementsData.loading}
+              error={measurementsData.error}
+              busy={measurementsData.busy}
+              onAdd={(body) => void measurementsData.addMeasurement(body)}
+            />
+            <ClinicalConsultationNotesPanel
+              notes={consultationNotesData.notes.map(toConsultationNoteView)}
+              currentUserId={session?.user_id ?? ''}
+              isOwner={session?.role === 'owner'}
+              loading={consultationNotesData.loading}
+              error={consultationNotesData.error}
+              busy={consultationNotesData.busy}
+              onAdd={(date, body) => void consultationNotesData.addNote(date, body)}
+              onEdit={(id, body) => void consultationNotesData.editNote(id, body)}
+              onArchive={(id) => void consultationNotesData.archiveNote(id)}
+            />
+            <ClinicalDocumentsPanel
+              documents={documentsData.documents.map(toClientDocumentView)}
+              loading={documentsData.loading}
+              error={documentsData.error}
+            />
+          </section>
 
-      <ClinicalAssessmentPanel
-        assessments={assessmentsData.assessments.map(toAssessmentView)}
-        loading={assessmentsData.loading}
-        error={assessmentsData.error}
-      />
+          <section className={styles.group} id="sec-plans">
+            <GroupHeader icon="plans" accent="amber" title="Nutrition plans" id="pl" />
+            <ClientPlansPanel
+              plans={plans.plans.map((summary) => ({
+                planId: summary.plan.id,
+                title: summary.plan.title,
+                state: summary.version?.state ?? null,
+                versionNumber: summary.version?.version_number ?? null,
+              }))}
+              loading={plans.loading}
+              error={plans.error}
+              creating={plans.creating}
+              createError={plans.createError}
+              onCreate={(title) => {
+                void plans.create({ title }).then((created) => {
+                  if (created !== null) navigate(`/plans/${created.planId}`)
+                })
+              }}
+              onOpen={(planId) => navigate(`/plans/${planId}`)}
+            />
+          </section>
 
-      <ClinicalMeasurementPanel
-        measurements={measurementsData.measurements.map(toMeasurementView)}
-        loading={measurementsData.loading}
-        error={measurementsData.error}
-        busy={measurementsData.busy}
-        onAdd={(body) => void measurementsData.addMeasurement(body)}
-      />
+          <section className={styles.group} id="sec-notes">
+            <GroupHeader icon="clipboard" accent="blue" title="Notes" id="nt" />
+            <ClientNotesPanel
+              notes={collaboration.notes.map(toNoteView)}
+              currentUserId={session?.user_id ?? ''}
+              isOwner={session?.role === 'owner'}
+              error={collaboration.notesError}
+              busy={collaboration.busy}
+              loading={collaboration.loading}
+              onAdd={(body) => void collaboration.addNote(body)}
+              onEdit={(noteId, body) => void collaboration.editNote(noteId, body)}
+              onRemove={(noteId) => void collaboration.removeNote(noteId)}
+            />
+          </section>
 
-      <ClinicalConsultationNotesPanel
-        notes={consultationNotesData.notes.map(toConsultationNoteView)}
-        currentUserId={session?.user_id ?? ''}
-        isOwner={session?.role === 'owner'}
-        loading={consultationNotesData.loading}
-        error={consultationNotesData.error}
-        busy={consultationNotesData.busy}
-        onAdd={(date, body) => void consultationNotesData.addNote(date, body)}
-        onEdit={(id, body) => void consultationNotesData.editNote(id, body)}
-        onArchive={(id) => void consultationNotesData.archiveNote(id)}
-      />
+          <section className={styles.group} id="sec-messaging">
+            <GroupHeader icon="messages" accent="violet" title="Messaging" id="ms" />
+            <ClientWhatsAppPanel
+              clientName={client.full_name}
+              message={whatsApp.message}
+              href={whatsApp.href}
+              reason={whatsApp.reason}
+              onMessageChange={whatsApp.setMessage}
+            />
+            <ClientMessagesPanel
+              whatsAppLinkFor={whatsApp.linkFor}
+              history={messaging.history.map(toMessageView)}
+              pending={messaging.pending.map(toPendingView)}
+              loading={messaging.loading}
+              loadingMore={messaging.loadingMore}
+              hasMore={messaging.hasMore}
+              historyError={messaging.historyError}
+              pendingError={messaging.pendingError}
+              busy={messaging.busy}
+              onLoadMore={() => void messaging.loadMore()}
+              onCancel={(id) => void messaging.cancel(id)}
+            />
+          </section>
 
-      <ClinicalDocumentsPanel
-        documents={documentsData.documents.map(toClientDocumentView)}
-        loading={documentsData.loading}
-        error={documentsData.error}
-      />
+          <section className={styles.group} id="sec-timeline">
+            <GroupHeader icon="progress" accent="blue" title="Timeline" id="tl" />
+            <ClientTimelinePanel
+              entries={timeline.entries.map(toTimelineView)}
+              filters={timeline.filters.map((filter) => ({ eventType: filter.event_type, label: filter.label }))}
+              selected={timeline.selected}
+              loading={timeline.loading}
+              loadingMore={timeline.loadingMore}
+              error={timeline.error}
+              hasMore={timeline.hasMore}
+              onLoadMore={() => void timeline.loadMore()}
+              onToggleFilter={(eventType) => timeline.toggleFilter(eventType as TimelineEventType)}
+              onClearFilters={timeline.clearFilters}
+            />
+          </section>
+        </div>
 
-      {/* 🔒 M4 — the Plans entry point from Client 360. The panel lists this
-        * client's plans and creates new ones; opening one navigates to the
-        * builder at `/plans/:planId`. The 402 refusal at the plan's client
-        * ceiling surfaces as `createError` in the API's own words. */}
-      <ClientPlansPanel
-        plans={plans.plans.map((summary) => ({
-          planId: summary.plan.id,
-          title: summary.plan.title,
-          state: summary.version?.state ?? null,
-          versionNumber: summary.version?.version_number ?? null,
-        }))}
-        loading={plans.loading}
-        error={plans.error}
-        creating={plans.creating}
-        createError={plans.createError}
-        onCreate={(title) => {
-          void plans.create({ title }).then((created) => {
-            if (created !== null) navigate(`/plans/${created.planId}`)
-          })
-        }}
-        onOpen={(planId) => navigate(`/plans/${planId}`)}
-      />
-
-      {/* 🔒 FR-M1-007 / FR-M3-020. `currentUserId` is what makes the edit
-        * control appear only for a note's own author; without a session the
-        * fallback shows none, which is the safe direction. */}
-      <ClientNotesPanel
-        notes={collaboration.notes.map(toNoteView)}
-        currentUserId={session?.user_id ?? ''}
-        isOwner={session?.role === 'owner'}
-        error={collaboration.notesError}
-        busy={collaboration.busy}
-        loading={collaboration.loading}
-        onAdd={(body) => void collaboration.addNote(body)}
-        onEdit={(noteId, body) => void collaboration.editNote(noteId, body)}
-        onRemove={(noteId) => void collaboration.removeNote(noteId)}
-      />
-
-      {/* 🔒 EC-M0-04 / FR-M0-017. Rendered last: it is the panel a practitioner
-        * reaches for least often, and `canManage` is owner-only, so for most
-        * users it is a read-only statement of who else can see this client.
-        * Without a session the fallback is no controls, which is the safe
-        * direction — the API would refuse them anyway. */}
-      <ClientAccessPanel
-        ownerUserId={client.owner_user_id}
-        grants={collaboration.grants.map(toGrantView)}
-        canManage={session?.role === 'owner'}
-        error={collaboration.accessError}
-        busy={collaboration.busy}
-        loading={collaboration.loading}
-        onGrant={(userId) => void collaboration.grant(userId)}
-        onRevoke={(userId) => void collaboration.revoke(userId)}
-        onReassign={(userId) => void collaboration.reassign(userId)}
-      />
-
-      {/* 🔒 FR-M1-018 — the unified history, last on the screen because it is
-        * the longest panel and the one a practitioner scrolls to deliberately.
-        * ⚠️ It does not re-read when a note or tag changes: the timeline is
-        * written by a transactional subscriber, so the entry exists the moment
-        * the mutation commits, but this hook holds a page fetched earlier. A
-        * practitioner sees it on their next load — acceptable for a history
-        * panel, and cheaper than invalidating on every mutation. */}
-      {/* 🔒 M8 — what was sent and what is queued (FR-M8-011, FR-M8-028), and
-        * the check-in cadence behind most of it (FR-M8-022).
-        * ⚠️ Above the timeline: the timeline says a message was sent, this says
-        * what it was and whether it arrived. */}
-      <ClientCheckinPanel
-        schedule={toCheckinView(messaging.checkin)}
-        loading={messaging.loading}
-        error={messaging.checkinError}
-        busy={messaging.busy}
-        onSave={(update) =>
-          void messaging.saveCheckin({
-            frequency: update.frequency,
-            day_of_week: update.dayOfWeek,
-            is_paused: update.isPaused,
-          })
-        }
-      />
-
-      {/* 🔒 The *manual* WhatsApp channel — the practitioner's own number, no
-        * Meta credentials, nothing recorded. Placed above the engine's own panel
-        * so the distinction is read in that order: this is what you send, that
-        * is what WellnessCRM sent. */}
-      <ClientWhatsAppPanel
-        clientName={client.full_name}
-        message={whatsApp.message}
-        href={whatsApp.href}
-        reason={whatsApp.reason}
-        onMessageChange={whatsApp.setMessage}
-      />
-
-      <ClientMessagesPanel
-        whatsAppLinkFor={whatsApp.linkFor}
-        history={messaging.history.map(toMessageView)}
-        pending={messaging.pending.map(toPendingView)}
-        loading={messaging.loading}
-        loadingMore={messaging.loadingMore}
-        hasMore={messaging.hasMore}
-        historyError={messaging.historyError}
-        pendingError={messaging.pendingError}
-        busy={messaging.busy}
-        onLoadMore={() => void messaging.loadMore()}
-        onCancel={(id) => void messaging.cancel(id)}
-      />
-
-      <ClientTimelinePanel
-        entries={timeline.entries.map(toTimelineView)}
-        filters={timeline.filters.map((filter) => ({
-          eventType: filter.event_type,
-          label: filter.label,
-        }))}
-        selected={timeline.selected}
-        loading={timeline.loading}
-        loadingMore={timeline.loadingMore}
-        error={timeline.error}
-        hasMore={timeline.hasMore}
-        onLoadMore={() => void timeline.loadMore()}
-        onToggleFilter={(eventType) => timeline.toggleFilter(eventType as TimelineEventType)}
-        onClearFilters={timeline.clearFilters}
-      />
-    </>
+        {/* Context rail */}
+        <aside className={styles.rail}>
+          <span className={styles.railTitle}>Contact</span>
+          <ClientSummary
+            fullName={client.full_name}
+            mobile={client.mobile}
+            email={client.email}
+            city={client.city}
+            isMinor={client.is_minor}
+            activatedAt={client.activated_at}
+          />
+          <span className={styles.railTitle}>Tags</span>
+          <ClientTagsPanel
+            allTags={collaboration.allTags.map(toTagView)}
+            clientTagIds={collaboration.clientTags.map((tag) => tag.id)}
+            error={collaboration.tagsError}
+            busy={collaboration.busy}
+            loading={collaboration.loading}
+            onToggle={(tagId, attached) => void collaboration.toggleTag(tagId, attached)}
+            onCreate={(name, colour) => void collaboration.createAndAttachTag(name, colour)}
+          />
+          <span className={styles.railTitle}>Check-in cadence</span>
+          <ClientCheckinPanel
+            schedule={toCheckinView(messaging.checkin)}
+            loading={messaging.loading}
+            error={messaging.checkinError}
+            busy={messaging.busy}
+            onSave={(update) =>
+              void messaging.saveCheckin({ frequency: update.frequency, day_of_week: update.dayOfWeek, is_paused: update.isPaused })
+            }
+          />
+          <span className={styles.railTitle}>Access</span>
+          <ClientAccessPanel
+            ownerUserId={client.owner_user_id}
+            grants={collaboration.grants.map(toGrantView)}
+            canManage={session?.role === 'owner'}
+            error={collaboration.accessError}
+            busy={collaboration.busy}
+            loading={collaboration.loading}
+            onGrant={(userId) => void collaboration.grant(userId)}
+            onRevoke={(userId) => void collaboration.revoke(userId)}
+            onReassign={(userId) => void collaboration.reassign(userId)}
+          />
+        </aside>
+      </div>
+    </div>
   )
 }

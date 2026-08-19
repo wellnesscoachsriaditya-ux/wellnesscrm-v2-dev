@@ -35,6 +35,14 @@ def sql_superuser(statement: str) -> None:
     )
 
 
+def sql_file_superuser(path: str) -> None:
+    subprocess.run(
+        ["su", "-", "postgres", "-c", f"psql -d wellnesscrm -v ON_ERROR_STOP=1 -f {path}"],
+        check=True,
+        capture_output=True,
+    )
+
+
 def call(method: str, path: str, *, token: str | None = None, body: dict | None = None) -> dict:
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(BASE + path, data=data, method=method)
@@ -72,6 +80,11 @@ CLIENTS = [
 def main() -> None:
     print("Resetting tenant graph…", flush=True)
     sql_superuser("TRUNCATE tenants CASCADE")
+
+    # 🔒 TRUNCATE ... CASCADE also empties the curated catalogue tables (they FK
+    # to tenants), so restore it here — every seed leaves a usable food catalogue.
+    print("Restoring curated food catalogue…", flush=True)
+    sql_file_superuser("/app/ops/db/seed_food_catalogue.sql")
 
     print("Registering practice…", flush=True)
     call(
