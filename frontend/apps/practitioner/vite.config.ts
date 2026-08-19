@@ -12,8 +12,13 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: true,
     port: 5173,
     open: false,
+    // Preview runs behind the Emergent ingress on a dynamic host over TLS.
+    // @ts-expect-error allowedHosts is honoured by Vite 6 at runtime.
+    allowedHosts: true,
+    hmr: { clientPort: 443, protocol: 'wss' },
   },
   build: {
     manifest: true,

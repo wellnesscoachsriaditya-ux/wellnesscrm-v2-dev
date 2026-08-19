@@ -1,56 +1,42 @@
-# WellnessCRM V2 — Coach Workspace (agent working notes)
+# WellnessCRM V2 — Coach Portal Premium Redesign
 
-> The authoritative product/architecture docs are in `/app/docs/` (PRD, ARCHITECTURE,
-> DATABASE, API, IMPLEMENTATION-PLAN). This file is the agent's running log.
+## Problem statement
+Recompose and visually redesign the **Coach/Practitioner** frontend of the existing
+WellnessCRM monorepo (Vite React + FastAPI + PostgreSQL + RLS) into a premium,
+mobile-first SaaS experience — WITHOUT changing backend architecture, API contracts,
+auth, RLS, tenant isolation, or business rules. Reference screenshots (Desktop
+Dashboard, Desktop Client/360, Mobile Dashboard) are the **visual quality bar**; the
+PRD/architecture are the **functional source of truth**. Real data only — no fabricated
+metrics; honest empty/dependency states where an endpoint is missing.
 
-## Repo state
-- Branch: `worktree-s1-identity-auth` (per user instruction; do NOT merge/rename/push).
-- Stack (authoritative, do not migrate): FastAPI modular monolith + PostgreSQL/RLS +
-  SQLAlchemy/Alembic; npm-workspaces Vite React monorepo (practitioner SPA, client PWA,
-  operator) + shared design-system + generated OpenAPI client.
-- Commit `bc17b57` is NOT present; the equivalent Plan Authoring slice IS present under
-  other SHAs (20cac06 etc). Treat repo state as authoritative.
+## Architecture (unchanged)
+- Monorepo `frontend/` (apps: practitioner, client-pwa, operator; packages: design-system, ia, api-client).
+- SCREEN → HOOK → api-client → FastAPI → authz → RLS → PostgreSQL. Preserved.
+- Backend `backend/` FastAPI, Alembic, SQLAlchemy, `/api/v1/{public,app,portal,admin}`.
 
-## Phase 1 — Coach/Practitioner Workspace (DONE — 2026-06)
-Scope agreed with user: shell/nav + dashboard + client mgmt/360 polish + Plan Authoring UI.
-Workouts OUT (PRD non-goal). PDF renderer OUT (Phase 2). Leads/WhatsApp not rebuilt.
-Client PWA untouched.
+## Preview environment (this container)
+- PostgreSQL 15 provisioned locally; all migrations applied; grants + append-only immutability verified.
+- Backend served via `server.py` shim (re-exports `app.main:app`) on the API path; practitioner Vite app on port 3000.
+- Reproducible DB provisioning: `/app/scripts/provision_local_db.sh`. Real-data seed: `/app/scripts/dev_seed.py`.
+- One ops-only correction: identity SECURITY DEFINER functions reassigned to a superuser owner so they bypass RLS for login exactly as on Supabase (migrations there run as superuser). No app/security change.
 
-Implemented:
-- **Auth (real, ADR-A02)**: login screen, in-memory access token + bearer injection in the
-  api-client, silent 401 refresh, refresh token persisted for reload, route guard, logout.
-  Files: `packages/api-client/src/index.ts` (token store + `headers` support),
-  `apps/practitioner/src/features/auth/*`, `screens/Login.tsx`, `App.tsx`.
-- **Backend lock/unlock (Task 4)**: `is_locked` added to `ItemPatch`/`SlotPatch` and the
-  `update_item`/`update_slot` module fns — smallest compatible change, reuses authz +
-  tenant/client isolation + `If-Match` + audit + draft-only. Tests: `test_plan_locking.py`.
-- **Backend food portions (missing API)**: `GET /nutrition/foods/{id}/portions` +
-  `list_food_portions()` — the builder needs measure_unit_ids to add a food.
-  Tests: `test_food_portions.py`.
-- **Plan Builder UI (Task 5 — flagship)**: `features/nutrition/{plansApi,usePlanBuilder,
-  useClientPlans}`, `components/nutrition/{NutritionBudgetPanel,FoodPicker,PlanSlotCard,
-  PlanVersionHistory,ClientPlansPanel}`, `screens/{PlanBuilder,Plans}.tsx`. Budget,
-  household-measure food add, lock/unlock, day nav, add meal/day, discard, issue,
-  version history, ETag/409 conflict surfacing, loading/empty/error states.
-- **Client 360 Plans entry point**: `ClientPlansPanel` wired into `ClientDetail.tsx`
-  (list + create + open → `/plans/:planId`). IA manifest `plans`/`plan-detail` now render
-  the real screens (were S4 placeholders).
+## Implemented (2026-06)
+- **Premium visual layer** (`apps/practitioner/src/premium/`): design tokens (`theme.css`, extends DS tokens, Manrope), shared components (`ui.tsx`: Icon set, Avatar, StatusPill, KpiCard, Donut, SectionCard, QuickAction, Skeleton, PremiumPlaceholder), and `AppShell` (navy Coach-Portal sidebar + command bar; mobile bottom nav + drawer). Reuses design-system as foundation; DS primitives/contracts untouched.
+- **Coach shell** wired via IA (`ia/manifest.ts` extended to full nav: Dashboard, Clients, Leads, Appointments, Nutrition Plans, Progress, Messages, Reports, Resources, Settings). Nav semantics (`<nav aria-label="Main">`, `<a aria-current>`) preserved.
+- **Dashboard** (desktop + mobile): greeting, real KPIs (active/leads/total via `include_total`, waiting enquiries), Needs-attention queue, Recently-active, real Caseload-by-stage donut, quick actions. No fabricated trends/sparklines.
+- **Clients** (desktop table + mobile cards): stage chips, search, sort, avatars, status pills, load-more — all via existing `useClientList`.
+- **Extension screens** (Appointments, Progress, Reports, Resources, Settings): on-brand premium screens that name their backend dependency instead of faking data.
+- Verified: typecheck ✓, ESLint ✓, 188/188 vitest ✓, production build ✓. (Fixed a pre-existing broken test dep: installed `@testing-library/dom`.)
 
-Quality gates (all GREEN, run against a locally-provisioned Postgres):
-- backend `pytest` (all), `ruff`, `mypy`, `check_boundaries` (be+fe)
-- frontend all-workspace `vitest`, `tsc` typecheck, `eslint`, production `build`, bundle budget
-- OpenAPI freshness + generated client freshness
+## Backend dependencies (features with no endpoint yet — reported, not faked)
+- Appointments (M6): scheduling endpoints.
+- Progress & Retention: tenant-level progress/adherence aggregate.
+- Reports; Resources library; Settings/usage (M10) reads.
+- Nutrition **food catalogue** seed (foods/portions/nutrients) — Plan Builder meal *items* need it; structure/targets already work.
+- Dashboard trend metrics (time-series), appointments, adherence, revenue.
 
-## Known limitation (local sandbox)
-The app boots and the full test suites pass against a locally-installed Postgres. Ad-hoc
-*manual* practitioner login does not complete locally because `identity_lookup_by_subject`
-(SECURITY DEFINER over `users` with FORCE RLS) returns no row without the login bootstrap
-context, and the credential store is the in-memory `LocalCredentialStore` (GoTrue/Supabase
-adapter is intentionally unimplemented — see `credentials.py`). This is pre-existing S1
-identity infra, not Phase 1 code; the integration tests exercise these paths via their own
-session/actor fixtures. Not modified per the user's Phase 0 constraint.
-
-## Deferred to Phase 2 (do NOT build yet)
-PDF renderer (architecture is PDF-ready), plan alternatives/supplements UI, templates UI,
-revise-issued-plan flow, Leads/WhatsApp automation, appointments, billing, operator/SaaS
-admin, Client PWA expansion.
+## Backlog / Next
+- P0: Client 360 premium recomposition; Nutrition Plan Builder premium workspace (plan hero, day nav, meal slots, sticky nutrition rail) using existing plan APIs.
+- P1: Leads + Messages premium screens (endpoints exist); mobile Client-360 tabbed layout.
+- P1: Re-add client bulk reassign to the new Clients list (deferred; old component retained).
+- P2: Command palette (⌘K) behaviour; real Appointments/Reports once backend lands.
